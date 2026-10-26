@@ -1,0 +1,85 @@
+{{define "head"}}<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.}} · pad</title>
+<style>
+:root{color-scheme:light dark;--bg:#fafaf7;--fg:#222;--mut:#777;--line:#ddd;--acc:#2b6cb0;--err:#c53030}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1b1e;--fg:#ddd;--mut:#888;--line:#333;--acc:#7aa7e0;--err:#f08080}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+a{color:var(--acc)} .mut{color:var(--mut)} .err{color:var(--err)} .sp{flex:1}
+header{display:flex;flex-wrap:wrap;gap:.4rem 1rem;align-items:center;padding:.5rem 1rem;border-bottom:1px solid var(--line)}
+main{padding:1rem;max-width:50rem;margin:auto}
+input,select,button{font:inherit;padding:.3rem .5rem}
+form.inline{display:inline} button.link{background:none;border:0;color:var(--acc);cursor:pointer;padding:0}
+table{width:100%;border-collapse:collapse;margin-top:1rem} td{padding:.35rem 0;border-bottom:1px solid var(--line)}
+body.ed{display:flex;flex-direction:column;height:100dvh}
+textarea{flex:1;width:100%;border:0;padding:1rem;font:14px/1.5 ui-monospace,monospace;background:var(--bg);color:var(--fg);resize:none;outline:none}
+details{position:relative} summary{cursor:pointer;color:var(--acc)}
+.pop{position:absolute;right:0;top:1.8rem;z-index:1;width:22rem;max-width:90vw;padding:1rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
+.pop ul{padding-left:1.2rem}
+</style></head>
+{{end}}
+
+{{define "logout"}}<form method="post" action="/_logout" class="inline"><button class="link">sair</button></form>{{end}}
+
+{{define "msg"}}{{template "head" "aviso"}}<body><main><p>{{.}}</p><p><a href="/">voltar</a></p></main></body></html>{{end}}
+
+{{define "login"}}{{template "head" "entrar"}}<body><main style="max-width:20rem">
+<h1>pad</h1>
+{{if .Err}}<p class="err">{{.Err}}</p>{{end}}
+<form method="post" action="/_login">
+<input type="hidden" name="next" value="{{.Next}}">
+<p><input name="name" placeholder="usuário" autocomplete="username" required autofocus></p>
+<p><input name="pass" type="password" placeholder="senha" autocomplete="current-password" required></p>
+<button>entrar</button>
+</form></main></body></html>{{end}}
+
+{{define "home"}}{{template "head" "documentos"}}<body>
+<header><b>pad</b><span class="sp"></span><span class="mut">{{.Me}}</span>{{template "logout"}}</header>
+<main>
+<form onsubmit="location='/'+this.n.value.trim();return false">
+<input name="n" placeholder="nome do documento (ex.: projetos/ideias)" required size="36"> <button>abrir ou criar</button>
+</form>
+{{if .Docs}}<table>{{range .Docs}}
+<tr><td><a href="/{{.Name}}">{{.Name}}</a>{{if .Owner}} <span class="mut">de {{.Owner}}</span>{{end}}</td><td class="mut" style="text-align:right">{{.Updated}}</td></tr>
+{{end}}</table>{{else}}<p class="mut">Nenhum documento ainda.</p>{{end}}
+</main></body></html>{{end}}
+
+{{define "doc"}}{{template "head" .Name}}<body class="ed">
+<header>
+<a href="/">← documentos</a><b>{{.Name}}</b>
+<span id="st" class="mut">{{if not .Exists}}novo: salva quando você digitar{{end}}</span>
+<span class="sp"></span>
+{{if .Owner}}<details {{if .NotFound}}open{{end}}><summary>compartilhar</summary><div class="pop">
+{{if .NotFound}}<p class="err">Usuário ou grupo não encontrado.</p>{{end}}
+<form method="post" action="/_share/{{.Name}}">
+<select name="tipo"><option value="user">usuário</option><option value="group">grupo</option></select>
+<input name="alvo" placeholder="nome" required size="10"> <button>adicionar</button>
+</form>
+<ul>
+{{range .Users}}<li>{{.}} <form method="post" action="/_unshare/{{$.Name}}" class="inline"><input type="hidden" name="tipo" value="user"><input type="hidden" name="alvo" value="{{.}}"><button class="link">remover</button></form></li>{{end}}
+{{range .Groups}}<li>grupo {{.}} <form method="post" action="/_unshare/{{$.Name}}" class="inline"><input type="hidden" name="tipo" value="group"><input type="hidden" name="alvo" value="{{.}}"><button class="link">remover</button></form></li>{{end}}
+</ul>
+<form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="link err">apagar documento</button></form>
+</div></details>{{else if .Exists}}<span class="mut">de {{.OwnerName}}</span>{{end}}
+<span class="mut">{{.Me}}</span>{{template "logout"}}
+</header>
+<textarea id="t" spellcheck="false" autofocus>{{.Body}}</textarea>
+<script>
+const t = document.getElementById('t'), st = document.getElementById('st');
+let timer, dirty = false, queue = Promise.resolve();
+t.addEventListener('input', () => { dirty = true; st.textContent = '…'; clearTimeout(timer); timer = setTimeout(save, 700); });
+// salvamentos em fila, para chegarem ao servidor na ordem em que foram feitos
+function save() {
+  dirty = false;
+  const body = t.value;
+  queue = queue.then(() => fetch(location.pathname, {method: 'POST', body}))
+    .then(r => {
+      if (!r.ok) throw new Error(r.status === 401 ? 'sessão expirada: recarregue e entre de novo' : 'erro ao salvar (' + r.status + ')');
+      if (!dirty) st.textContent = 'salvo';
+    })
+    .catch(e => { dirty = true; st.textContent = e.message; });
+}
+addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
+</script>
+</body></html>{{end}}
