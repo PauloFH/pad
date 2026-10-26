@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: gofmt
+        run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      - run: go vet ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+  test:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - run: go test -race -count=1 ./...
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy-vpsarm
+    env:
+      SSH_TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: chave ssh
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+      - name: build e subida na vpsarm
+        run: |
+          tar czf - --exclude=.git . | ssh "$SSH_TARGET" \
+            'mkdir -p ~/pad && tar xzf - -C ~/pad && cd ~/pad && docker compose -f compose.yaml -f compose.traefik.yaml up -d --build'
+      - name: conferir que responde pelo Traefik
+        run: |
+          ssh "$SSH_TARGET" 'for i in $(seq 10); do
+            code=$(curl -sk -o /dev/null -w "%{http_code}" --resolve pad.pauloholanda.com.br:443:127.0.0.1 https://pad.pauloholanda.com.br/_login)
+            [ "$code" = 200 ] && exit 0; sleep 3
+          done; echo "status $code"; docker logs --tail 20 pad-pad-1; exit 1'
