@@ -1,6 +1,6 @@
 # pad
 
-Bloco de notas estilo dontpad, com login. `/qualquer/nome` abre o documento; quem cria vira dono e pode compartilhar com usuários ou grupos (quem recebe pode ler e editar). O dono também pode tornar um documento público: aí o endereço abre sem login, só para leitura. Salva sozinho enquanto você digita.
+Bloco de notas estilo dontpad, com login. Cada usuário tem seu espaço: `/paulo/notas`, `/paulo/pessoal/cpf` (subpastas sem limite, cada uma é um documento à parte, com acesso próprio). Quem cria vira dono e pode compartilhar com usuários ou grupos (quem recebe pode ler e editar). O dono também pode tornar um documento público: aí o endereço abre sem login, só para leitura. Salva sozinho enquanto você digita.
 
 - Acessos, grupos e sessões: SQLite em `/data/pad.db`
 - Texto dos documentos: `/data/docs/<nome>.txt`

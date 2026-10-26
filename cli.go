@@ -32,6 +32,9 @@ func runCLI(db *sql.DB, args []string, stdin io.Reader) error {
 	a := args[1:]
 	switch args[0] {
 	case "useradd", "passwd":
+		if args[0] == "useradd" && !validUser.MatchString(a[0]) {
+			return errors.New("nome: de 2 a 40 letras minúsculas, números, - ou _")
+		}
 		hash, err := readPassword(stdin)
 		if err != nil {
 			return err

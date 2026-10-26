@@ -57,8 +57,8 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 {{define "home"}}{{template "head" "documentos"}}<body>
 <header><b>pad</b><span class="sp"></span>{{if .Admin}}<a href="/_convite">convidar</a>{{end}}<span class="mut">{{.Me}}</span>{{template "logout"}}</header>
 <main>
-<form onsubmit="location='/'+this.n.value.trim();return false">
-<input name="n" placeholder="nome do documento (ex.: projetos/ideias)" required size="36"> <button>abrir ou criar</button>
+<form onsubmit="location='/{{.Me}}/'+this.n.value.trim();return false">
+<label><span class="mut">/{{.Me}}/</span><input name="n" placeholder="nome-do-documento (ex.: projetos/ideias)" required size="32"></label> <button>abrir ou criar</button>
 </form>
 {{if .Docs}}<table>{{range .Docs}}
 <tr><td><a href="/{{.Name}}">{{.Name}}</a>{{if .Owner}} <span class="mut">de {{.Owner}}</span>{{end}}</td><td class="mut" style="text-align:right">{{.Updated}}</td></tr>

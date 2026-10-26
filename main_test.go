@@ -62,20 +62,35 @@ func TestAcessoECompartilhamento(t *testing.T) {
 		}
 	}
 	check(status(login("ana", "errada"), "GET", "/", ""), 401, "senha errada")
-	check(status(ana, "POST", "/notas/hoje", "oi <b>"), 204, "ana cria")
-	if b, _ := os.ReadFile(filepath.Join(dir, "docs", "notas", "hoje.txt")); string(b) != "oi <b>" {
+	check(status(ana, "POST", "/ana/hoje", "oi <b>"), 204, "ana cria")
+	if b, _ := os.ReadFile(filepath.Join(dir, "docs", "ana", "hoje.txt")); string(b) != "oi <b>" {
 		t.Errorf("arquivo = %q", b)
 	}
-	check(status(bia, "GET", "/notas/hoje", ""), 403, "bia sem acesso lê")
-	check(status(bia, "POST", "/notas/hoje", "x"), 403, "bia sem acesso grava")
-	check(status(bia, "POST", "/_share/notas/hoje", "tipo=user&alvo=bia"), 403, "bia compartilha doc alheio")
-	check(status(ana, "POST", "/_share/notas/hoje", "tipo=user&alvo=bia"), 200, "ana compartilha com bia")
-	check(status(bia, "POST", "/notas/hoje", "editado"), 204, "bia grava")
-	check(status(caio, "GET", "/notas/hoje", ""), 403, "caio antes do grupo")
-	check(status(ana, "POST", "/_share/notas/hoje", "tipo=group&alvo=time"), 200, "ana compartilha com time")
-	check(status(caio, "GET", "/notas/hoje", ""), 200, "caio pelo grupo")
-	check(status(ana, "POST", "/_unshare/notas/hoje", "tipo=group&alvo=time"), 200, "ana remove time")
-	check(status(caio, "GET", "/notas/hoje", ""), 403, "caio depois de remover")
+	// cada um só cria dentro do próprio usuário; mesmo nome em usuários diferentes não colide
+	check(status(bia, "POST", "/ana/novo", "x"), 403, "bia cria no espaço da ana")
+	check(status(bia, "GET", "/ana/novo", ""), 404, "bia abre doc inexistente da ana")
+	check(status(ana, "POST", "/solto", "x"), 403, "doc fora de qualquer usuário")
+	check(status(bia, "POST", "/bia/hoje", "da bia"), 204, "bia cria o seu hoje")
+	check(status(ana, "GET", "/bia/hoje", ""), 404, "ana não vê o hoje da bia")
+	// subpastas: /ana/pessoal e /ana/pessoal/cpf são documentos independentes
+	check(status(ana, "POST", "/ana/pessoal", "pai"), 204, "ana cria pessoal")
+	check(status(ana, "POST", "/ana/pessoal/cpf", "filho"), 204, "ana cria pessoal/cpf")
+	check(status(ana, "POST", "/_share/ana/pessoal", "tipo=user&alvo=bia"), 200, "ana compartilha só o pai")
+	check(status(bia, "GET", "/ana/pessoal", ""), 200, "bia lê o pai")
+	check(status(bia, "GET", "/ana/pessoal/cpf", ""), 404, "compartilhar o pai não abre o filho")
+	if b, _ := os.ReadFile(filepath.Join(dir, "docs", "ana", "pessoal", "cpf.txt")); string(b) != "filho" {
+		t.Errorf("pessoal/cpf.txt = %q", b)
+	}
+	check(status(bia, "GET", "/ana/hoje", ""), 404, "bia sem acesso lê")
+	check(status(bia, "POST", "/ana/hoje", "x"), 403, "bia sem acesso grava")
+	check(status(bia, "POST", "/_share/ana/hoje", "tipo=user&alvo=bia"), 403, "bia compartilha doc alheio")
+	check(status(ana, "POST", "/_share/ana/hoje", "tipo=user&alvo=bia"), 200, "ana compartilha com bia")
+	check(status(bia, "POST", "/ana/hoje", "editado"), 204, "bia grava")
+	check(status(caio, "GET", "/ana/hoje", ""), 404, "caio antes do grupo")
+	check(status(ana, "POST", "/_share/ana/hoje", "tipo=group&alvo=time"), 200, "ana compartilha com time")
+	check(status(caio, "GET", "/ana/hoje", ""), 200, "caio pelo grupo")
+	check(status(ana, "POST", "/_unshare/ana/hoje", "tipo=group&alvo=time"), 200, "ana remove time")
+	check(status(caio, "GET", "/ana/hoje", ""), 404, "caio depois de remover")
 	// "/../" puro o ServeMux já limpa; codificado chega ao handler e precisa ser barrado
 	check(status(ana, "GET", "/..%2F..%2Fetc%2Fpasswd", ""), 404, "path traversal")
 	check(status(ana, "POST", "/a%2F..%2F..%2Fx", "x"), 404, "path traversal na gravação")
@@ -83,7 +98,7 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	check(status(ana, "GET", "/", ""), 401, "depois do logout")
 
 	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	for next, want := range map[string]string{"/notas/hoje": "/notas/hoje", "/\t/evil.com": "/", "//evil.com": "/", "/\\evil.com": "/", "https://evil.com": "/"} {
+	for next, want := range map[string]string{"/ana/hoje": "/ana/hoje", "/\t/evil.com": "/", "//evil.com": "/", "/\\evil.com": "/", "https://evil.com": "/"} {
 		res, err := noFollow.PostForm(srv.URL+"/_login", url.Values{"name": {"bia"}, "pass": {"senha-forte"}, "next": {next}})
 		if err != nil {
 			t.Fatal(err)
@@ -97,11 +112,11 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	// público: qualquer um lê sem login, ninguém de fora edita
 	ana = login("ana", "senha-forte")
 	anon := &http.Client{}
-	check(status(anon, "GET", "/notas/hoje", ""), 401, "anônimo em doc privado")
+	check(status(anon, "GET", "/ana/hoje", ""), 401, "anônimo em doc privado")
 	check(status(anon, "GET", "/nao/existe", ""), 401, "anônimo em doc inexistente")
-	check(status(caio, "POST", "/_public/notas/hoje", "public=1"), 403, "não dono publica")
-	check(status(ana, "POST", "/_public/notas/hoje", "public=1"), 200, "ana publica")
-	res, err := anon.Get(srv.URL + "/notas/hoje")
+	check(status(caio, "POST", "/_public/ana/hoje", "public=1"), 403, "não dono publica")
+	check(status(ana, "POST", "/_public/ana/hoje", "public=1"), 200, "ana publica")
+	res, err := anon.Get(srv.URL + "/ana/hoje")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,11 +125,11 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	if res.StatusCode != 200 || !strings.Contains(string(pub), "editado") || !strings.Contains(string(pub), "readonly") {
 		t.Errorf("anônimo em doc público: status %d, página %q", res.StatusCode, pub)
 	}
-	check(status(anon, "POST", "/notas/hoje", "pichado"), 401, "anônimo grava em doc público")
-	check(status(caio, "GET", "/notas/hoje", ""), 200, "caio lê doc público")
-	check(status(caio, "POST", "/notas/hoje", "pichado"), 403, "caio grava em doc público")
-	check(status(ana, "POST", "/_public/notas/hoje", "public=0"), 200, "ana despublica")
-	check(status(anon, "GET", "/notas/hoje", ""), 401, "anônimo depois de despublicar")
+	check(status(anon, "POST", "/ana/hoje", "pichado"), 401, "anônimo grava em doc público")
+	check(status(caio, "GET", "/ana/hoje", ""), 200, "caio lê doc público")
+	check(status(caio, "POST", "/ana/hoje", "pichado"), 403, "caio grava em doc público")
+	check(status(ana, "POST", "/_public/ana/hoje", "public=0"), 200, "ana despublica")
+	check(status(anon, "GET", "/ana/hoje", ""), 401, "anônimo depois de despublicar")
 
 	// convites: só admin gera; o link cria uma conta, uma vez só
 	check(status(ana, "POST", "/_convite", ""), 403, "não admin convida")
@@ -147,7 +162,7 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	if code, _ := form(davi, url.Values{"name": {"davi"}, "pass": {"curta"}, "pass2": {"curta"}}); code != 400 {
 		t.Errorf("senha curta: status %d", code)
 	}
-	if code, path := form(davi, url.Values{"name": {"davi"}, "pass": {"senha-forte"}, "pass2": {"senha-forte"}}); code != 200 || path != "/" {
+	if code, path := form(davi, url.Values{"name": {" Davi "}, "pass": {"senha-forte"}, "pass2": {"senha-forte"}}); code != 200 || path != "/" {
 		t.Errorf("cadastro: status %d em %s", code, path)
 	}
 	check(status(davi, "GET", "/", ""), 200, "davi entra logado")

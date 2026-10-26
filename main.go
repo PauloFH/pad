@@ -36,7 +36,8 @@ var (
 	tmpl = template.Must(template.ParseFS(tmplFS, "templates.html"))
 	// o nome vira caminho de arquivo: sem "..", "/" inicial, "//" ou ponto
 	validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9_-]+)*$`)
-	validUser = regexp.MustCompile(`^[A-Za-z0-9_.-]{2,40}$`)
+	// o usuário é o primeiro trecho do endereço (/paulo/notas): só minúsculas, para Paulo e paulo não coexistirem
+	validUser = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,39}$`)
 	// usado quando o usuário não existe, para o login levar o mesmo tempo
 	dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy"), bcrypt.DefaultCost)
 )
@@ -210,7 +211,7 @@ func (a *app) loginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) login(w http.ResponseWriter, r *http.Request) {
-	name, pass, next := r.FormValue("name"), r.FormValue("pass"), r.FormValue("next")
+	name, pass, next := normUser(r.FormValue("name")), r.FormValue("pass"), r.FormValue("next")
 	var id int64
 	hash := dummyHash
 	err := a.db.QueryRow(`SELECT id, hash FROM users WHERE name = ?`, name).Scan(&id, &hash)
@@ -295,10 +296,10 @@ func (a *app) join(w http.ResponseWriter, r *http.Request) {
 		render(w, http.StatusOK, "join", joinData{})
 		return
 	}
-	name, pass := r.FormValue("name"), r.FormValue("pass")
+	name, pass := normUser(r.FormValue("name")), r.FormValue("pass")
 	bad := func(msg string) { render(w, http.StatusBadRequest, "join", joinData{name, msg}) }
 	if !validUser.MatchString(name) {
-		bad("nome: de 2 a 40 letras, números, ponto, - ou _")
+		bad("nome: de 2 a 40 letras minúsculas, números, - ou _ (sem acento nem espaço)")
 		return
 	}
 	if err := checkPassword(pass); err != nil {
@@ -355,6 +356,8 @@ func (a *app) join(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
+
+func normUser(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
 func checkPassword(p string) error {
 	if len(p) < 8 || len(p) > 72 {
@@ -495,8 +498,8 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
-	case allowed, logged && !exists:
-		// editor, logo abaixo
+	case allowed, logged && !exists && strings.HasPrefix(name, u.Name+"/"):
+		// editor, logo abaixo (documento novo só dentro do próprio usuário)
 	case public:
 		body, err := a.readDoc(name)
 		if err != nil {
@@ -510,7 +513,8 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 		toLogin(w, r)
 		return
 	default:
-		fail(w, http.StatusForbidden, "você não tem acesso a este documento")
+		// mesma resposta para privado e inexistente: ninguém descobre os nomes dos outros
+		fail(w, http.StatusNotFound, "documento não encontrado ou sem acesso. Seus documentos ficam em /"+u.Name+"/...")
 		return
 	}
 	p := docPage{Name: name, Me: u.Name, Exists: exists, Owner: owner, Public: public, NotFound: r.URL.Query().Has("erro")}
@@ -552,14 +556,18 @@ func (a *app) save(w http.ResponseWriter, r *http.Request, u user) {
 	}
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
-	// tenta criar (quem cria vira dono); se já existe, confere a permissão
-	res, err := a.db.Exec(`INSERT INTO docs (name, owner_id, updated) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
-		name, u.ID, time.Now().Unix())
-	if err != nil {
-		serverError(w, err)
-		return
+	// dentro do próprio usuário tenta criar; fora dele, ou se já existe, confere a permissão
+	var created int64
+	if strings.HasPrefix(name, u.Name+"/") {
+		res, err := a.db.Exec(`INSERT INTO docs (name, owner_id, updated) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
+			name, u.ID, time.Now().Unix())
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		created, _ = res.RowsAffected()
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if created == 0 {
 		_, allowed, _, _, err := a.access(name, u.ID)
 		if err != nil {
 			serverError(w, err)
