@@ -137,6 +137,12 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	check(status(caio, "POST", "/publico/recado", "oi do caio"), 204, "logado grava em /publico")
 	check(status(anon, "POST", "/publico", "raiz"), 204, "anônimo grava na raiz /publico")
 	check(status(anon, "POST", "/publico/grande", strings.Repeat("x", maxPublicoDoc+1)), 413, "documento público grande demais")
+	check(status(anon, "POST", "/publico/1/2/3/4/5", "fundo"), 204, "5 níveis de pasta")
+	check(status(anon, "POST", "/publico/1/2/3/4/5/6", "fundo"), 404, "6 níveis de pasta")
+	check(status(ana, "POST", "/ana/1/2/3/4/5/6", "fundo"), 404, "6 níveis no espaço do usuário")
+	if n := countEntries(filepath.Join(dir, "docs", "publico")); n != 6 { // recado.txt + pastas 1..4 + 4/5.txt
+		t.Errorf("itens em /publico = %d, queria 6", n)
+	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "docs", "publico", "recado.txt")); string(b) != "oi do caio" {
 		t.Errorf("publico/recado.txt = %q", b)
 	}

@@ -25,11 +25,12 @@ import (
 )
 
 const (
-	maxDoc         = 2 << 20 // 2 MiB por documento
-	maxPublicoDoc  = 256 << 10
-	maxPublicoDocs = 2000
-	sessionTTL     = 30 * 24 * time.Hour
-	inviteTTL      = 7 * 24 * time.Hour
+	maxDoc          = 2 << 20 // 2 MiB por documento
+	maxPublicoDoc   = 256 << 10
+	maxPublicoItems = 2000 // documentos + pastas na área /publico
+	maxDepth        = 5    // níveis de pasta abaixo do usuário (ou de /publico)
+	sessionTTL      = 30 * 24 * time.Hour
+	inviteTTL       = 7 * 24 * time.Hour
 )
 
 //go:embed templates.html
@@ -437,6 +438,10 @@ func docName(w http.ResponseWriter, r *http.Request) (string, bool) {
 		fail(w, http.StatusNotFound, "nome de documento inválido (use letras, números, - e _ separados por /)")
 		return "", false
 	}
+	if strings.Count(name, "/") > maxDepth {
+		fail(w, http.StatusNotFound, fmt.Sprintf("no máximo %d níveis de pasta", maxDepth))
+		return "", false
+	}
 	return name, true
 }
 
@@ -677,9 +682,9 @@ func (a *app) savePublico(w http.ResponseWriter, name string, body []byte) {
 		http.Error(w, "documento da área pública passa de 256 KB", http.StatusRequestEntityTooLarge)
 		return
 	}
-	// teto de documentos: a área é aberta para qualquer um, sem isso dá para encher o disco
+	// teto de documentos + pastas: a área é aberta para qualquer um, sem isso dá para encher o disco
 	if _, err := os.Stat(a.docPath(name)); errors.Is(err, os.ErrNotExist) &&
-		countFiles(filepath.Join(a.docsDir, publico)) >= maxPublicoDocs {
+		countEntries(filepath.Join(a.docsDir, publico)) >= maxPublicoItems {
 		http.Error(w, "a área pública está cheia", http.StatusInsufficientStorage)
 		return
 	}
@@ -691,9 +696,9 @@ func (a *app) savePublico(w http.ResponseWriter, name string, body []byte) {
 }
 
 // shortcut: percorre a pasta a cada documento público novo; se a área crescer muito, guardar o total no SQLite
-func countFiles(dir string) (n int) {
-	filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
+func countEntries(dir string) (n int) {
+	filepath.WalkDir(dir, func(p string, _ fs.DirEntry, err error) error {
+		if err == nil && p != dir {
 			n++
 		}
 		return nil
