@@ -1,12 +1,14 @@
 package main
 
 import (
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -91,6 +93,44 @@ func TestAcessoECompartilhamento(t *testing.T) {
 			t.Errorf("next=%q redirecionou para %q, queria %q", next, got, want)
 		}
 	}
+
+	// convites: só admin gera; o link cria uma conta, uma vez só
+	ana = login("ana", "senha-forte")
+	check(status(ana, "POST", "/_convite", ""), 403, "não admin convida")
+	if err := runCLI(a.db, []string{"admin", "ana"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	res, err := ana.Post(srv.URL+"/_convite", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	join := regexp.MustCompile(`/_join/[A-Z0-9]+`).FindString(string(page))
+	if join == "" {
+		t.Fatalf("link de convite não apareceu: %s", page)
+	}
+	form := func(c *http.Client, v url.Values) (int, string) {
+		res, err := c.PostForm(srv.URL+join, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode, res.Request.URL.Path
+	}
+	jar, _ := cookiejar.New(nil)
+	davi := &http.Client{Jar: jar}
+	if code, _ := form(davi, url.Values{"name": {"bia"}, "pass": {"senha-forte"}, "pass2": {"senha-forte"}}); code != 400 {
+		t.Errorf("nome repetido: status %d", code)
+	}
+	if code, _ := form(davi, url.Values{"name": {"davi"}, "pass": {"curta"}, "pass2": {"curta"}}); code != 400 {
+		t.Errorf("senha curta: status %d", code)
+	}
+	if code, path := form(davi, url.Values{"name": {"davi"}, "pass": {"senha-forte"}, "pass2": {"senha-forte"}}); code != 200 || path != "/" {
+		t.Errorf("cadastro: status %d em %s", code, path)
+	}
+	check(status(davi, "GET", "/", ""), 200, "davi entra logado")
+	check(status(davi, "GET", join, ""), 404, "convite reusado")
 
 	if err := runCLI(a.db, []string{"userdel", "ana"}, nil); err == nil {
 		t.Error("apagou usuária que ainda é dona de documento")

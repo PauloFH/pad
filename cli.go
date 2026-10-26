@@ -17,6 +17,7 @@ const usage = `uso:
   pad useradd NOME         cria usuário (senha pelo stdin)
   pad passwd NOME          troca a senha (senha pelo stdin) e encerra as sessões
   pad userdel NOME         apaga usuário (falha se ele ainda for dono de documentos)
+  pad admin NOME           torna o usuário administrador (pode gerar convites em /_convite)
   pad groupadd GRUPO       cria grupo
   pad groupdel GRUPO       apaga grupo
   pad join GRUPO NOME      põe o usuário no grupo
@@ -24,7 +25,7 @@ const usage = `uso:
   pad list                 lista usuários e seus grupos`
 
 func runCLI(db *sql.DB, args []string, stdin io.Reader) error {
-	arity := map[string]int{"useradd": 1, "passwd": 1, "userdel": 1, "groupadd": 1, "groupdel": 1, "join": 2, "leave": 2, "list": 0}
+	arity := map[string]int{"useradd": 1, "passwd": 1, "userdel": 1, "admin": 1, "groupadd": 1, "groupdel": 1, "join": 2, "leave": 2, "list": 0}
 	if n, ok := arity[args[0]]; !ok || len(args)-1 != n {
 		return errors.New(usage)
 	}
@@ -45,6 +46,8 @@ func runCLI(db *sql.DB, args []string, stdin io.Reader) error {
 		return err
 	case "userdel":
 		return exec1(db, `DELETE FROM users WHERE name = ?`, a[0])
+	case "admin":
+		return exec1(db, `UPDATE users SET admin = 1 WHERE name = ?`, a[0])
 	case "groupadd":
 		return exec1(db, `INSERT INTO groups (name) VALUES (?)`, a[0])
 	case "groupdel":
@@ -84,8 +87,8 @@ func readPassword(r io.Reader) ([]byte, error) {
 		return nil, err
 	}
 	p := strings.TrimRight(line, "\r\n")
-	if len(p) < 8 {
-		return nil, errors.New("a senha precisa de pelo menos 8 caracteres")
+	if err := checkPassword(p); err != nil {
+		return nil, err
 	}
 	return bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
 }

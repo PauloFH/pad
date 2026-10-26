@@ -10,7 +10,10 @@ Bloco de notas estilo dontpad, com login. `/qualquer/nome` abre o documento; que
 ```sh
 docker compose up -d --build
 docker compose exec pad /pad useradd ana      # pede a senha (8+ caracteres)
+docker compose exec pad /pad admin ana        # ana passa a gerar convites
 ```
+
+Os outros usuários entram por convite: o admin abre **convidar** (`/_convite`), gera um link e manda para a pessoa. Cada link cria uma conta, vale uma vez só e vence em 7 dias.
 
 O serviço escuta só em `127.0.0.1:8080`. Ponha o proxy da VPS na frente para ter HTTPS, por exemplo no Caddy:
 
@@ -30,6 +33,7 @@ docker compose exec pad /pad <comando>
 |---|---|
 | `useradd NOME` / `passwd NOME` | cria usuário / troca a senha (e derruba as sessões dele) |
 | `userdel NOME` | apaga usuário; falha se ele ainda for dono de documentos |
+| `admin NOME` | torna o usuário administrador (gera convites) |
 | `groupadd GRUPO` / `groupdel GRUPO` | cria / apaga grupo |
 | `join GRUPO NOME` / `leave GRUPO NOME` | põe / tira usuário do grupo |
 | `list` | usuários e seus grupos |

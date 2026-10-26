@@ -34,8 +34,28 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 <button>entrar</button>
 </form></main></body></html>{{end}}
 
+{{define "invite"}}{{template "head" "convidar"}}<body>
+<header><a href="/">← documentos</a><b>convidar</b><span class="sp"></span><span class="mut">{{.Me}}</span>{{template "logout"}}</header>
+<main>
+<p>Cada link cria uma conta, vale uma vez só e vence em 7 dias.</p>
+<form method="post" action="/_convite"><button>gerar link de convite</button></form>
+{{if .Link}}<p><input value="{{.Link}}" readonly style="width:100%" onclick="this.select()" aria-label="link de convite"></p>
+<p class="mut">Mande esse link para a pessoa.</p>{{end}}
+</main></body></html>{{end}}
+
+{{define "join"}}{{template "head" "criar conta"}}<body><main style="max-width:20rem">
+<h1>pad</h1>
+<p class="mut">Você recebeu um convite. Escolha seu nome de usuário e uma senha.</p>
+{{if .Err}}<p class="err">{{.Err}}</p>{{end}}
+<form method="post">
+<p><input name="name" value="{{.Name}}" placeholder="usuário" autocomplete="username" required autofocus></p>
+<p><input name="pass" type="password" placeholder="senha (8+ caracteres)" autocomplete="new-password" required minlength="8" maxlength="72"></p>
+<p><input name="pass2" type="password" placeholder="repita a senha" autocomplete="new-password" required></p>
+<button>criar conta</button>
+</form></main></body></html>{{end}}
+
 {{define "home"}}{{template "head" "documentos"}}<body>
-<header><b>pad</b><span class="sp"></span><span class="mut">{{.Me}}</span>{{template "logout"}}</header>
+<header><b>pad</b><span class="sp"></span>{{if .Admin}}<a href="/_convite">convidar</a>{{end}}<span class="mut">{{.Me}}</span>{{template "logout"}}</header>
 <main>
 <form onsubmit="location='/'+this.n.value.trim();return false">
 <input name="n" placeholder="nome do documento (ex.: projetos/ideias)" required size="36"> <button>abrir ou criar</button>

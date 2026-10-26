@@ -26,6 +26,7 @@ import (
 const (
 	maxDoc     = 2 << 20 // 2 MiB por documento
 	sessionTTL = 30 * 24 * time.Hour
+	inviteTTL  = 7 * 24 * time.Hour
 )
 
 //go:embed templates.html
@@ -35,12 +36,23 @@ var (
 	tmpl = template.Must(template.ParseFS(tmplFS, "templates.html"))
 	// o nome vira caminho de arquivo: sem "..", "/" inicial, "//" ou ponto
 	validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9_-]+)*$`)
+	validUser = regexp.MustCompile(`^[A-Za-z0-9_.-]{2,40}$`)
 	// usado quando o usuário não existe, para o login levar o mesmo tempo
 	dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy"), bcrypt.DefaultCost)
 )
 
 const schema = `
-CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, hash BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS users (
+	id INTEGER PRIMARY KEY,
+	name TEXT NOT NULL UNIQUE,
+	hash BLOB NOT NULL,
+	admin INTEGER NOT NULL DEFAULT 0);
+-- used é flag e não FK: apagar quem usou o convite não pode reabri-lo
+CREATE TABLE IF NOT EXISTS invites (
+	token TEXT PRIMARY KEY,
+	created_by INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
+	expires INTEGER NOT NULL,
+	used INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS members (
 	group_id INTEGER NOT NULL REFERENCES groups ON DELETE CASCADE,
@@ -73,8 +85,9 @@ type app struct {
 }
 
 type user struct {
-	ID   int64
-	Name string
+	ID    int64
+	Name  string
+	Admin bool
 }
 
 func main() {
@@ -116,6 +129,12 @@ func openApp(dataDir string) (*app, error) {
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
 	}
+	// bancos criados antes dos convites não têm a coluna admin
+	if _, err := db.Exec(`SELECT admin FROM users LIMIT 0`); err != nil {
+		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN admin INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return nil, err
+		}
+	}
 	return &app{db: db, docsDir: docsDir}, nil
 }
 
@@ -124,6 +143,10 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("GET /_login", a.loginPage)
 	mux.HandleFunc("POST /_login", a.login)
 	mux.HandleFunc("POST /_logout", a.logout)
+	mux.HandleFunc("GET /_join/{token}", a.join)
+	mux.HandleFunc("POST /_join/{token}", a.join)
+	mux.HandleFunc("GET /_convite", a.auth(a.invite))
+	mux.HandleFunc("POST /_convite", a.auth(a.invite))
 	mux.HandleFunc("GET /{$}", a.auth(a.home))
 	mux.HandleFunc("GET /{name...}", a.auth(a.view))
 	mux.HandleFunc("POST /{name...}", a.auth(a.save))
@@ -144,8 +167,8 @@ func (a *app) auth(h func(http.ResponseWriter, *http.Request, user)) http.Handle
 		var u user
 		err := sql.ErrNoRows
 		if c, cerr := r.Cookie("sid"); cerr == nil {
-			err = a.db.QueryRow(`SELECT u.id, u.name FROM sessions s JOIN users u ON u.id = s.user_id
-				WHERE s.token = ? AND s.expires > ?`, c.Value, time.Now().Unix()).Scan(&u.ID, &u.Name)
+			err = a.db.QueryRow(`SELECT u.id, u.name, u.admin FROM sessions s JOIN users u ON u.id = s.user_id
+				WHERE s.token = ? AND s.expires > ?`, c.Value, time.Now().Unix()).Scan(&u.ID, &u.Name, &u.Admin)
 		}
 		switch {
 		case err == nil:
@@ -179,26 +202,145 @@ func (a *app) login(w http.ResponseWriter, r *http.Request) {
 		render(w, http.StatusUnauthorized, "login", loginData{next, "usuário ou senha incorretos"})
 		return
 	}
-	token, now := rand.Text(), time.Now()
-	if _, err := a.db.Exec(`DELETE FROM sessions WHERE expires <= ?`, now.Unix()); err != nil {
+	if err := a.startSession(w, r, id); err != nil {
 		serverError(w, err)
 		return
 	}
-	if _, err := a.db.Exec(`INSERT INTO sessions (token, user_id, expires) VALUES (?, ?, ?)`,
-		token, id, now.Add(sessionTTL).Unix()); err != nil {
-		serverError(w, err)
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name: "sid", Value: token, Path: "/", Expires: now.Add(sessionTTL),
-		HttpOnly: true, SameSite: http.SameSiteLaxMode,
-		Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
-	})
 	// só caminhos de documento: "//x", "/\x" ou "/\t/x" levariam para outro site
 	if next != "/" && !validName.MatchString(strings.TrimPrefix(next, "/")) {
 		next = "/"
 	}
 	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
+func (a *app) startSession(w http.ResponseWriter, r *http.Request, uid int64) error {
+	token, now := rand.Text(), time.Now()
+	if _, err := a.db.Exec(`DELETE FROM sessions WHERE expires <= ?`, now.Unix()); err != nil {
+		return err
+	}
+	if _, err := a.db.Exec(`INSERT INTO sessions (token, user_id, expires) VALUES (?, ?, ?)`,
+		token, uid, now.Add(sessionTTL).Unix()); err != nil {
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: "sid", Value: token, Path: "/", Expires: now.Add(sessionTTL),
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isHTTPS(r),
+	})
+	return nil
+}
+
+func isHTTPS(r *http.Request) bool {
+	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+// --- convites ---
+
+func (a *app) invite(w http.ResponseWriter, r *http.Request, u user) {
+	if !u.Admin {
+		fail(w, http.StatusForbidden, "só administradores podem convidar")
+		return
+	}
+	data := struct{ Me, Link string }{Me: u.Name}
+	if r.Method == http.MethodPost {
+		token := rand.Text()
+		if _, err := a.db.Exec(`INSERT INTO invites (token, created_by, expires) VALUES (?, ?, ?)`,
+			token, u.ID, time.Now().Add(inviteTTL).Unix()); err != nil {
+			serverError(w, err)
+			return
+		}
+		scheme := "http"
+		if isHTTPS(r) {
+			scheme = "https"
+		}
+		data.Link = scheme + "://" + r.Host + "/_join/" + token
+	}
+	render(w, http.StatusOK, "invite", data)
+}
+
+type joinData struct{ Name, Err string }
+
+func (a *app) join(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	const valid = `SELECT 1 FROM invites WHERE token = ? AND used = 0 AND expires > ?`
+	err := a.db.QueryRow(valid, token, time.Now().Unix()).Scan(new(int))
+	if errors.Is(err, sql.ErrNoRows) {
+		fail(w, http.StatusNotFound, "convite inválido, vencido ou já usado")
+		return
+	}
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if r.Method == http.MethodGet {
+		render(w, http.StatusOK, "join", joinData{})
+		return
+	}
+	name, pass := r.FormValue("name"), r.FormValue("pass")
+	bad := func(msg string) { render(w, http.StatusBadRequest, "join", joinData{name, msg}) }
+	if !validUser.MatchString(name) {
+		bad("nome: de 2 a 40 letras, números, ponto, - ou _")
+		return
+	}
+	if err := checkPassword(pass); err != nil {
+		bad(err.Error())
+		return
+	}
+	if pass != r.FormValue("pass2") {
+		bad("as senhas não conferem")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	tx, err := a.db.Begin()
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	defer tx.Rollback()
+	// marca o convite antes de criar a conta: dois envios simultâneos não criam duas contas
+	res, err := tx.Exec(`UPDATE invites SET used = 1 WHERE token = ? AND used = 0 AND expires > ?`, token, time.Now().Unix())
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		fail(w, http.StatusNotFound, "convite inválido, vencido ou já usado")
+		return
+	}
+	var taken bool
+	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM users WHERE name = ?)`, name).Scan(&taken); err != nil {
+		serverError(w, err)
+		return
+	}
+	if taken {
+		bad("esse nome já existe, escolha outro")
+		return
+	}
+	res, err = tx.Exec(`INSERT INTO users (name, hash) VALUES (?, ?)`, name, hash)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	uid, _ := res.LastInsertId()
+	if err := tx.Commit(); err != nil {
+		serverError(w, err)
+		return
+	}
+	if err := a.startSession(w, r, uid); err != nil {
+		serverError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func checkPassword(p string) error {
+	if len(p) < 8 || len(p) > 72 {
+		return errors.New("a senha precisa ter de 8 a 72 caracteres")
+	}
+	return nil
 }
 
 func (a *app) logout(w http.ResponseWriter, r *http.Request) {
@@ -303,9 +445,10 @@ func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 		return
 	}
 	render(w, http.StatusOK, "home", struct {
-		Me   string
-		Docs []docRow
-	}{u.Name, docs})
+		Me    string
+		Admin bool
+		Docs  []docRow
+	}{u.Name, u.Admin, docs})
 }
 
 type docPage struct {
