@@ -94,13 +94,34 @@ func TestAcessoECompartilhamento(t *testing.T) {
 		}
 	}
 
-	// convites: só admin gera; o link cria uma conta, uma vez só
+	// público: qualquer um lê sem login, ninguém de fora edita
 	ana = login("ana", "senha-forte")
+	anon := &http.Client{}
+	check(status(anon, "GET", "/notas/hoje", ""), 401, "anônimo em doc privado")
+	check(status(anon, "GET", "/nao/existe", ""), 401, "anônimo em doc inexistente")
+	check(status(caio, "POST", "/_public/notas/hoje", "public=1"), 403, "não dono publica")
+	check(status(ana, "POST", "/_public/notas/hoje", "public=1"), 200, "ana publica")
+	res, err := anon.Get(srv.URL + "/notas/hoje")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 200 || !strings.Contains(string(pub), "editado") || !strings.Contains(string(pub), "readonly") {
+		t.Errorf("anônimo em doc público: status %d, página %q", res.StatusCode, pub)
+	}
+	check(status(anon, "POST", "/notas/hoje", "pichado"), 401, "anônimo grava em doc público")
+	check(status(caio, "GET", "/notas/hoje", ""), 200, "caio lê doc público")
+	check(status(caio, "POST", "/notas/hoje", "pichado"), 403, "caio grava em doc público")
+	check(status(ana, "POST", "/_public/notas/hoje", "public=0"), 200, "ana despublica")
+	check(status(anon, "GET", "/notas/hoje", ""), 401, "anônimo depois de despublicar")
+
+	// convites: só admin gera; o link cria uma conta, uma vez só
 	check(status(ana, "POST", "/_convite", ""), 403, "não admin convida")
 	if err := runCLI(a.db, []string{"admin", "ana"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	res, err := ana.Post(srv.URL+"/_convite", "", nil)
+	res, err = ana.Post(srv.URL+"/_convite", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

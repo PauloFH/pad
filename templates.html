@@ -65,9 +65,15 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 {{end}}</table>{{else}}<p class="mut">Nenhum documento ainda.</p>{{end}}
 </main></body></html>{{end}}
 
+{{define "public"}}{{template "head" .Name}}<body class="ed">
+<header><b>{{.Name}}</b><span class="mut">somente leitura</span><span class="sp"></span>
+{{if .Me}}<a href="/">documentos</a>{{else}}<a href="/_login?next=/{{.Name}}">entrar</a>{{end}}</header>
+<textarea readonly spellcheck="false" aria-label="{{.Name}}">{{.Body}}</textarea>
+</body></html>{{end}}
+
 {{define "doc"}}{{template "head" .Name}}<body class="ed">
 <header>
-<a href="/">← documentos</a><b>{{.Name}}</b>
+<a href="/">← documentos</a><b>{{.Name}}</b>{{if .Public}}<span class="mut">público</span>{{end}}
 <span id="st" class="mut">{{if not .Exists}}novo: salva quando você digitar{{end}}</span>
 <span class="sp"></span>
 {{if .Owner}}<details {{if .NotFound}}open{{end}}><summary>compartilhar</summary><div class="pop">
@@ -80,6 +86,10 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 {{range .Users}}<li>{{.}} <form method="post" action="/_unshare/{{$.Name}}" class="inline"><input type="hidden" name="tipo" value="user"><input type="hidden" name="alvo" value="{{.}}"><button class="link">remover</button></form></li>{{end}}
 {{range .Groups}}<li>grupo {{.}} <form method="post" action="/_unshare/{{$.Name}}" class="inline"><input type="hidden" name="tipo" value="group"><input type="hidden" name="alvo" value="{{.}}"><button class="link">remover</button></form></li>{{end}}
 </ul>
+<form method="post" action="/_public/{{.Name}}">
+{{if .Public}}<input type="hidden" name="public" value="0"><p>Público: qualquer pessoa com o endereço lê sem login. <button class="link">tornar privado</button></p>
+{{else}}<input type="hidden" name="public" value="1"><p class="mut">Privado. <button class="link">tornar público (só leitura)</button></p>{{end}}
+</form>
 <form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="link err">apagar documento</button></form>
 </div></details>{{else if .Exists}}<span class="mut">de {{.OwnerName}}</span>{{end}}
 <span class="mut">{{.Me}}</span>{{template "logout"}}

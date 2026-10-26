@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS docs (
 	name TEXT PRIMARY KEY,
 	owner_id INTEGER NOT NULL REFERENCES users,
-	updated INTEGER NOT NULL);
+	updated INTEGER NOT NULL,
+	public INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS user_shares (
 	doc TEXT NOT NULL REFERENCES docs ON DELETE CASCADE,
 	user_id INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
@@ -129,10 +130,15 @@ func openApp(dataDir string) (*app, error) {
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
 	}
-	// bancos criados antes dos convites não têm a coluna admin
-	if _, err := db.Exec(`SELECT admin FROM users LIMIT 0`); err != nil {
-		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN admin INTEGER NOT NULL DEFAULT 0`); err != nil {
-			return nil, err
+	// colunas que chegaram depois da primeira versão: bancos antigos ganham elas aqui
+	for _, m := range [][2]string{
+		{`SELECT admin FROM users LIMIT 0`, `ALTER TABLE users ADD COLUMN admin INTEGER NOT NULL DEFAULT 0`},
+		{`SELECT public FROM docs LIMIT 0`, `ALTER TABLE docs ADD COLUMN public INTEGER NOT NULL DEFAULT 0`},
+	} {
+		if _, err := db.Exec(m[0]); err != nil {
+			if _, err := db.Exec(m[1]); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return &app{db: db, docsDir: docsDir}, nil
@@ -148,8 +154,9 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("GET /_convite", a.auth(a.invite))
 	mux.HandleFunc("POST /_convite", a.auth(a.invite))
 	mux.HandleFunc("GET /{$}", a.auth(a.home))
-	mux.HandleFunc("GET /{name...}", a.auth(a.view))
+	mux.HandleFunc("GET /{name...}", a.view) // sem auth: documento público abre sem login
 	mux.HandleFunc("POST /{name...}", a.auth(a.save))
+	mux.HandleFunc("POST /_public/{name...}", a.auth(a.setPublic))
 	mux.HandleFunc("POST /_share/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_unshare/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_delete/{name...}", a.auth(a.del))
@@ -164,23 +171,36 @@ func (a *app) routes() http.Handler {
 
 func (a *app) auth(h func(http.ResponseWriter, *http.Request, user)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var u user
-		err := sql.ErrNoRows
-		if c, cerr := r.Cookie("sid"); cerr == nil {
-			err = a.db.QueryRow(`SELECT u.id, u.name, u.admin FROM sessions s JOIN users u ON u.id = s.user_id
-				WHERE s.token = ? AND s.expires > ?`, c.Value, time.Now().Unix()).Scan(&u.ID, &u.Name, &u.Admin)
-		}
+		u, ok, err := a.currentUser(r)
 		switch {
-		case err == nil:
-			h(w, r, u)
-		case !errors.Is(err, sql.ErrNoRows):
+		case err != nil:
 			serverError(w, err)
+		case ok:
+			h(w, r, u)
 		case r.Method == http.MethodGet:
-			http.Redirect(w, r, "/_login?next="+url.QueryEscape(r.URL.Path), http.StatusSeeOther)
+			toLogin(w, r)
 		default:
 			http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
 		}
 	}
+}
+
+// currentUser lê a sessão do cookie; ok é false quando não há sessão válida.
+func (a *app) currentUser(r *http.Request) (u user, ok bool, err error) {
+	c, err := r.Cookie("sid")
+	if err != nil {
+		return u, false, nil
+	}
+	err = a.db.QueryRow(`SELECT u.id, u.name, u.admin FROM sessions s JOIN users u ON u.id = s.user_id
+		WHERE s.token = ? AND s.expires > ?`, c.Value, time.Now().Unix()).Scan(&u.ID, &u.Name, &u.Admin)
+	if errors.Is(err, sql.ErrNoRows) {
+		return u, false, nil
+	}
+	return u, err == nil, err
+}
+
+func toLogin(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/_login?next="+url.QueryEscape(r.URL.Path), http.StatusSeeOther)
 }
 
 type loginData struct{ Next, Err string }
@@ -353,18 +373,19 @@ func (a *app) logout(w http.ResponseWriter, r *http.Request) {
 
 // --- documentos ---
 
-// access diz se o documento existe, se u pode abri-lo/editá-lo e se u é o dono.
-func (a *app) access(doc string, uid int64) (exists, allowed, owner bool, err error) {
+// access diz se o documento existe, se u pode abri-lo/editá-lo, se u é o dono e se
+// qualquer um pode lê-lo. uid 0 é o visitante sem login.
+func (a *app) access(doc string, uid int64) (exists, allowed, owner, public bool, err error) {
 	var ownerID int64
-	err = a.db.QueryRow(`SELECT owner_id, owner_id = ?2
+	err = a.db.QueryRow(`SELECT owner_id, public, owner_id = ?2
 		OR EXISTS (SELECT 1 FROM user_shares WHERE doc = ?1 AND user_id = ?2)
 		OR EXISTS (SELECT 1 FROM group_shares g JOIN members m ON m.group_id = g.group_id
 			WHERE g.doc = ?1 AND m.user_id = ?2)
-		FROM docs WHERE name = ?1`, doc, uid).Scan(&ownerID, &allowed)
+		FROM docs WHERE name = ?1`, doc, uid).Scan(&ownerID, &public, &allowed)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, false, false, nil
+		return false, false, false, false, nil
 	}
-	return err == nil, allowed, ownerID == uid, err
+	return err == nil, allowed, ownerID == uid, public, err
 }
 
 func (a *app) docPath(name string) string {
@@ -453,25 +474,46 @@ func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 
 type docPage struct {
 	Name, Body, Me, OwnerName string
-	Exists, Owner, NotFound   bool
+	Exists, Owner, Public     bool
+	NotFound                  bool
 	Users, Groups             []string
 }
 
-func (a *app) view(w http.ResponseWriter, r *http.Request, u user) {
-	name, ok := docName(w, r)
-	if !ok {
-		return
-	}
-	exists, allowed, owner, err := a.access(name, u.ID)
+func (a *app) view(w http.ResponseWriter, r *http.Request) {
+	u, logged, err := a.currentUser(r)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	if exists && !allowed {
+	name, ok := docName(w, r)
+	if !ok {
+		return
+	}
+	exists, allowed, owner, public, err := a.access(name, u.ID)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	switch {
+	case allowed, logged && !exists:
+		// editor, logo abaixo
+	case public:
+		body, err := a.readDoc(name)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		render(w, http.StatusOK, "public", struct{ Name, Body, Me string }{name, body, u.Name})
+		return
+	case !logged:
+		// mesma resposta para privado e inexistente: visitante não descobre quais nomes existem
+		toLogin(w, r)
+		return
+	default:
 		fail(w, http.StatusForbidden, "você não tem acesso a este documento")
 		return
 	}
-	p := docPage{Name: name, Me: u.Name, Exists: exists, Owner: owner, NotFound: r.URL.Query().Has("erro")}
+	p := docPage{Name: name, Me: u.Name, Exists: exists, Owner: owner, Public: public, NotFound: r.URL.Query().Has("erro")}
 	if exists {
 		if err := a.db.QueryRow(`SELECT u.name FROM docs d JOIN users u ON u.id = d.owner_id WHERE d.name = ?`,
 			name).Scan(&p.OwnerName); err != nil {
@@ -518,7 +560,7 @@ func (a *app) save(w http.ResponseWriter, r *http.Request, u user) {
 		return
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		_, allowed, _, err := a.access(name, u.ID)
+		_, allowed, _, _, err := a.access(name, u.ID)
 		if err != nil {
 			serverError(w, err)
 			return
@@ -593,8 +635,23 @@ func (a *app) del(w http.ResponseWriter, r *http.Request, u user) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+func (a *app) setPublic(w http.ResponseWriter, r *http.Request, u user) {
+	name, ok := docName(w, r)
+	if !ok {
+		return
+	}
+	if !a.mustOwn(w, name, u) {
+		return
+	}
+	if _, err := a.db.Exec(`UPDATE docs SET public = ? WHERE name = ?`, r.FormValue("public") == "1", name); err != nil {
+		serverError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/"+name, http.StatusSeeOther)
+}
+
 func (a *app) mustOwn(w http.ResponseWriter, name string, u user) bool {
-	exists, _, owner, err := a.access(name, u.ID)
+	exists, _, owner, _, err := a.access(name, u.ID)
 	if err != nil {
 		serverError(w, err)
 		return false
