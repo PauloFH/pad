@@ -3,6 +3,8 @@
 services:
   pad:
     ports: !reset []
+    # dados numa pasta comum da VPS: limpezas do Docker (volume prune) não alcançam
+    volumes: !override ["/srv/pad:/data"]
     networks: [traefik]
     labels:
       traefik.enable: "true"

@@ -40,12 +40,12 @@ docker compose exec pad /pad <comando>
 
 ## Backup
 
-Pare o serviço antes, para o SQLite não ser copiado no meio de uma escrita:
+Na vpsarm os dados ficam em `/srv/pad` (fora dos volumes do Docker, para nenhuma limpeza alcançá-los). Pare o serviço antes, para o SQLite não ser copiado no meio de uma escrita:
 
 ```sh
-docker compose stop
-docker run --rm -v pad_pad-data:/data -v "$PWD":/out alpine tar czf /out/pad-backup.tgz -C /data .
-docker compose start
+docker compose -f compose.yaml -f compose.traefik.yaml stop
+sudo tar czf pad-backup.tgz -C /srv/pad .
+docker compose -f compose.yaml -f compose.traefik.yaml start
 ```
 
 ## Desenvolver
