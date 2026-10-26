@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"net/url"
@@ -24,9 +25,11 @@ import (
 )
 
 const (
-	maxDoc     = 2 << 20 // 2 MiB por documento
-	sessionTTL = 30 * 24 * time.Hour
-	inviteTTL  = 7 * 24 * time.Hour
+	maxDoc         = 2 << 20 // 2 MiB por documento
+	maxPublicoDoc  = 256 << 10
+	maxPublicoDocs = 2000
+	sessionTTL     = 30 * 24 * time.Hour
+	inviteTTL      = 7 * 24 * time.Hour
 )
 
 //go:embed templates.html
@@ -155,8 +158,8 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("GET /_convite", a.auth(a.invite))
 	mux.HandleFunc("POST /_convite", a.auth(a.invite))
 	mux.HandleFunc("GET /{$}", a.auth(a.home))
-	mux.HandleFunc("GET /{name...}", a.view) // sem auth: documento público abre sem login
-	mux.HandleFunc("POST /{name...}", a.auth(a.save))
+	mux.HandleFunc("GET /{name...}", a.view)  // sem auth: documento público abre sem login
+	mux.HandleFunc("POST /{name...}", a.save) // confere a sessão por dentro: /publico grava sem login
 	mux.HandleFunc("POST /_public/{name...}", a.auth(a.setPublic))
 	mux.HandleFunc("POST /_share/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_unshare/{name...}", a.auth(a.share))
@@ -298,8 +301,8 @@ func (a *app) join(w http.ResponseWriter, r *http.Request) {
 	}
 	name, pass := normUser(r.FormValue("name")), r.FormValue("pass")
 	bad := func(msg string) { render(w, http.StatusBadRequest, "join", joinData{name, msg}) }
-	if !validUser.MatchString(name) {
-		bad("nome: de 2 a 40 letras minúsculas, números, - ou _ (sem acento nem espaço)")
+	if !validUserName(name) {
+		bad("nome: de 2 a 40 letras minúsculas, números, - ou _, sem acento nem espaço (e não pode ser \"publico\")")
 		return
 	}
 	if err := checkPassword(pass); err != nil {
@@ -437,10 +440,11 @@ func docName(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return name, true
 }
 
-type docRow struct{ Name, Owner, Updated string }
+// Label é o nome sem "/eu/" na frente: na própria interface o usuário não precisa ver o próprio nome.
+type docRow struct{ Name, Label, Updated string }
 
 func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
-	rows, err := a.db.Query(`SELECT d.name, o.name, d.updated FROM docs d JOIN users o ON o.id = d.owner_id
+	rows, err := a.db.Query(`SELECT d.name, d.updated FROM docs d
 		WHERE d.owner_id = ?1
 		OR d.name IN (SELECT doc FROM user_shares WHERE user_id = ?1)
 		OR d.name IN (SELECT g.doc FROM group_shares g JOIN members m ON m.group_id = g.group_id WHERE m.user_id = ?1)
@@ -454,13 +458,11 @@ func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 	for rows.Next() {
 		var d docRow
 		var t int64
-		if err := rows.Scan(&d.Name, &d.Owner, &t); err != nil {
+		if err := rows.Scan(&d.Name, &t); err != nil {
 			serverError(w, err)
 			return
 		}
-		if d.Owner == u.Name {
-			d.Owner = ""
-		}
+		d.Label = strings.TrimPrefix(d.Name, u.Name+"/")
 		d.Updated = time.Unix(t, 0).Format("02/01/2006 15:04")
 		docs = append(docs, d)
 	}
@@ -476,10 +478,10 @@ func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 }
 
 type docPage struct {
-	Name, Body, Me, OwnerName string
-	Exists, Owner, Public     bool
-	NotFound                  bool
-	Users, Groups             []string
+	Name, Label, Body, Me string
+	Exists, Owner, Public bool
+	NotFound              bool
+	Users, Groups         []string
 }
 
 func (a *app) view(w http.ResponseWriter, r *http.Request) {
@@ -490,6 +492,15 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 	}
 	name, ok := docName(w, r)
 	if !ok {
+		return
+	}
+	if isPublico(name) {
+		body, err := a.readDoc(name)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		render(w, http.StatusOK, "doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Exists: body != ""})
 		return
 	}
 	exists, allowed, owner, public, err := a.access(name, u.ID)
@@ -517,13 +528,9 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "documento não encontrado ou sem acesso. Seus documentos ficam em /"+u.Name+"/...")
 		return
 	}
-	p := docPage{Name: name, Me: u.Name, Exists: exists, Owner: owner, Public: public, NotFound: r.URL.Query().Has("erro")}
+	p := docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Me: u.Name,
+		Exists: exists, Owner: owner, Public: public, NotFound: r.URL.Query().Has("erro")}
 	if exists {
-		if err := a.db.QueryRow(`SELECT u.name FROM docs d JOIN users u ON u.id = d.owner_id WHERE d.name = ?`,
-			name).Scan(&p.OwnerName); err != nil {
-			serverError(w, err)
-			return
-		}
 		if p.Body, err = a.readDoc(name); err != nil {
 			serverError(w, err)
 			return
@@ -544,7 +551,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 	render(w, http.StatusOK, "doc", p)
 }
 
-func (a *app) save(w http.ResponseWriter, r *http.Request, u user) {
+func (a *app) save(w http.ResponseWriter, r *http.Request) {
 	name, ok := docName(w, r)
 	if !ok {
 		return
@@ -556,6 +563,19 @@ func (a *app) save(w http.ResponseWriter, r *http.Request, u user) {
 	}
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
+	if isPublico(name) {
+		a.savePublico(w, name, body)
+		return
+	}
+	u, logged, err := a.currentUser(r)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if !logged {
+		http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
+		return
+	}
 	// dentro do próprio usuário tenta criar; fora dele, ou se já existe, confere a permissão
 	var created int64
 	if strings.HasPrefix(name, u.Name+"/") {
@@ -641,6 +661,44 @@ func (a *app) del(w http.ResponseWriter, r *http.Request, u user) {
 		log.Print(err)
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// --- área /publico: sem dono, sem login, qualquer um lê e grava ---
+
+const publico = "publico"
+
+func isPublico(name string) bool { return name == publico || strings.HasPrefix(name, publico+"/") }
+
+// validUserName barra "publico", que é a área aberta e não pode virar espaço de alguém.
+func validUserName(s string) bool { return validUser.MatchString(s) && s != publico }
+
+func (a *app) savePublico(w http.ResponseWriter, name string, body []byte) {
+	if len(body) > maxPublicoDoc {
+		http.Error(w, "documento da área pública passa de 256 KB", http.StatusRequestEntityTooLarge)
+		return
+	}
+	// teto de documentos: a área é aberta para qualquer um, sem isso dá para encher o disco
+	if _, err := os.Stat(a.docPath(name)); errors.Is(err, os.ErrNotExist) &&
+		countFiles(filepath.Join(a.docsDir, publico)) >= maxPublicoDocs {
+		http.Error(w, "a área pública está cheia", http.StatusInsufficientStorage)
+		return
+	}
+	if err := a.writeDoc(name, body); err != nil {
+		serverError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// shortcut: percorre a pasta a cada documento público novo; se a área crescer muito, guardar o total no SQLite
+func countFiles(dir string) (n int) {
+	filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			n++
+		}
+		return nil
+	})
+	return n
 }
 
 func (a *app) setPublic(w http.ResponseWriter, r *http.Request, u user) {

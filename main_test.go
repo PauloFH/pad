@@ -131,6 +131,21 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	check(status(ana, "POST", "/_public/ana/hoje", "public=0"), 200, "ana despublica")
 	check(status(anon, "GET", "/ana/hoje", ""), 401, "anônimo depois de despublicar")
 
+	// área /publico: sem login, qualquer um lê e grava; não vira nome de usuário
+	check(status(anon, "GET", "/publico/recado", ""), 200, "anônimo abre /publico novo")
+	check(status(anon, "POST", "/publico/recado", "oi de fora"), 204, "anônimo grava em /publico")
+	check(status(caio, "POST", "/publico/recado", "oi do caio"), 204, "logado grava em /publico")
+	check(status(anon, "POST", "/publico", "raiz"), 204, "anônimo grava na raiz /publico")
+	check(status(anon, "POST", "/publico/grande", strings.Repeat("x", maxPublicoDoc+1)), 413, "documento público grande demais")
+	if b, _ := os.ReadFile(filepath.Join(dir, "docs", "publico", "recado.txt")); string(b) != "oi do caio" {
+		t.Errorf("publico/recado.txt = %q", b)
+	}
+	check(status(anon, "POST", "/_delete/publico/recado", ""), 401, "anônimo apaga em /publico")
+	check(status(ana, "POST", "/_delete/publico/recado", ""), 403, "ninguém é dono de /publico")
+	if err := runCLI(a.db, []string{"useradd", "publico"}, strings.NewReader("senha-forte\n")); err == nil {
+		t.Error("criou usuário publico")
+	}
+
 	// convites: só admin gera; o link cria uma conta, uma vez só
 	check(status(ana, "POST", "/_convite", ""), 403, "não admin convida")
 	if err := runCLI(a.db, []string{"admin", "ana"}, nil); err != nil {
@@ -156,6 +171,9 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	}
 	jar, _ := cookiejar.New(nil)
 	davi := &http.Client{Jar: jar}
+	if code, _ := form(davi, url.Values{"name": {"publico"}, "pass": {"senha-forte"}, "pass2": {"senha-forte"}}); code != 400 {
+		t.Errorf("convite com nome publico: status %d", code)
+	}
 	if code, _ := form(davi, url.Values{"name": {"bia"}, "pass": {"senha-forte"}, "pass2": {"senha-forte"}}); code != 400 {
 		t.Errorf("nome repetido: status %d", code)
 	}

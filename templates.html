@@ -32,6 +32,7 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 <p><input name="name" placeholder="usuário" autocomplete="username" required autofocus></p>
 <p><input name="pass" type="password" placeholder="senha" autocomplete="current-password" required></p>
 <button>entrar</button>
+<p class="mut">Sem conta? Use a <a href="/publico">área pública</a>: qualquer um lê e escreve, sem login.</p>
 </form></main></body></html>{{end}}
 
 {{define "invite"}}{{template "head" "convidar"}}<body>
@@ -55,13 +56,13 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 </form></main></body></html>{{end}}
 
 {{define "home"}}{{template "head" "documentos"}}<body>
-<header><b>pad</b><span class="sp"></span>{{if .Admin}}<a href="/_convite">convidar</a>{{end}}<span class="mut">{{.Me}}</span>{{template "logout"}}</header>
+<header><b>pad</b><span class="sp"></span><a href="/publico">área pública</a>{{if .Admin}}<a href="/_convite">convidar</a>{{end}}<span class="mut">{{.Me}}</span>{{template "logout"}}</header>
 <main>
 <form onsubmit="location='/{{.Me}}/'+this.n.value.trim();return false">
-<label><span class="mut">/{{.Me}}/</span><input name="n" placeholder="nome-do-documento (ex.: projetos/ideias)" required size="32"></label> <button>abrir ou criar</button>
+<input name="n" placeholder="nome do documento (ex.: projetos/ideias)" required size="36" aria-label="nome do documento"> <button>abrir ou criar</button>
 </form>
 {{if .Docs}}<table>{{range .Docs}}
-<tr><td><a href="/{{.Name}}">{{.Name}}</a>{{if .Owner}} <span class="mut">de {{.Owner}}</span>{{end}}</td><td class="mut" style="text-align:right">{{.Updated}}</td></tr>
+<tr><td><a href="/{{.Name}}">{{.Label}}</a></td><td class="mut" style="text-align:right">{{.Updated}}</td></tr>
 {{end}}</table>{{else}}<p class="mut">Nenhum documento ainda.</p>{{end}}
 </main></body></html>{{end}}
 
@@ -71,9 +72,9 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 <textarea readonly spellcheck="false" aria-label="{{.Name}}">{{.Body}}</textarea>
 </body></html>{{end}}
 
-{{define "doc"}}{{template "head" .Name}}<body class="ed">
+{{define "doc"}}{{template "head" .Label}}<body class="ed">
 <header>
-<a href="/">← documentos</a><b>{{.Name}}</b>{{if .Public}}<span class="mut">público</span>{{end}}
+<a href="/">← documentos</a><b>{{.Label}}</b>{{if .Public}}<span class="mut">público</span>{{end}}
 <span id="st" class="mut">{{if not .Exists}}novo: salva quando você digitar{{end}}</span>
 <span class="sp"></span>
 {{if .Owner}}<details {{if .NotFound}}open{{end}}><summary>compartilhar</summary><div class="pop">
@@ -91,8 +92,8 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 {{else}}<input type="hidden" name="public" value="1"><p class="mut">Privado. <button class="link">tornar público (só leitura)</button></p>{{end}}
 </form>
 <form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="link err">apagar documento</button></form>
-</div></details>{{else if .Exists}}<span class="mut">de {{.OwnerName}}</span>{{end}}
-<span class="mut">{{.Me}}</span>{{template "logout"}}
+</div></details>{{end}}
+{{if .Me}}<span class="mut">{{.Me}}</span>{{template "logout"}}{{else}}<a href="/_login">entrar</a>{{end}}
 </header>
 <textarea id="t" spellcheck="false" autofocus>{{.Body}}</textarea>
 <script>
