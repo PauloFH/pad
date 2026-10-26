@@ -176,7 +176,7 @@ func (a *app) routes() http.Handler {
 
 func (a *app) auth(h func(http.ResponseWriter, *http.Request, user)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		u, ok, err := a.currentUser(r)
+		u, ok, err := a.currentUser(w, r)
 		switch {
 		case err != nil:
 			serverError(w, err)
@@ -190,18 +190,37 @@ func (a *app) auth(h func(http.ResponseWriter, *http.Request, user)) http.Handle
 	}
 }
 
-// currentUser lê a sessão do cookie; ok é false quando não há sessão válida.
-func (a *app) currentUser(r *http.Request) (u user, ok bool, err error) {
+// currentUser lê a sessão do cookie e a renova; ok é false quando não há sessão válida.
+func (a *app) currentUser(w http.ResponseWriter, r *http.Request) (u user, ok bool, err error) {
 	c, err := r.Cookie("sid")
 	if err != nil {
 		return u, false, nil
 	}
-	err = a.db.QueryRow(`SELECT u.id, u.name, u.admin FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token = ? AND s.expires > ?`, c.Value, time.Now().Unix()).Scan(&u.ID, &u.Name, &u.Admin)
+	now := time.Now()
+	var expires int64
+	err = a.db.QueryRow(`SELECT u.id, u.name, u.admin, s.expires FROM sessions s JOIN users u ON u.id = s.user_id
+		WHERE s.token = ? AND s.expires > ?`, c.Value, now.Unix()).Scan(&u.ID, &u.Name, &u.Admin, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, false, nil
 	}
-	return u, err == nil, err
+	if err != nil {
+		return u, false, err
+	}
+	// renovação deslizante, no máximo uma vez por dia para não gravar no banco a cada clique
+	if time.Unix(expires, 0).Sub(now) < sessionTTL-24*time.Hour {
+		if _, err := a.db.Exec(`UPDATE sessions SET expires = ? WHERE token = ?`, now.Add(sessionTTL).Unix(), c.Value); err != nil {
+			return u, false, err
+		}
+		setSessionCookie(w, r, c.Value, now.Add(sessionTTL))
+	}
+	return u, true, nil
+}
+
+func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, expires time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name: "sid", Value: token, Path: "/", Expires: expires,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isHTTPS(r),
+	})
 }
 
 func toLogin(w http.ResponseWriter, r *http.Request) {
@@ -247,10 +266,7 @@ func (a *app) startSession(w http.ResponseWriter, r *http.Request, uid int64) er
 		token, uid, now.Add(sessionTTL).Unix()); err != nil {
 		return err
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name: "sid", Value: token, Path: "/", Expires: now.Add(sessionTTL),
-		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isHTTPS(r),
-	})
+	setSessionCookie(w, r, token, now.Add(sessionTTL))
 	return nil
 }
 
@@ -490,7 +506,7 @@ type docPage struct {
 }
 
 func (a *app) view(w http.ResponseWriter, r *http.Request) {
-	u, logged, err := a.currentUser(r)
+	u, logged, err := a.currentUser(w, r)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -572,7 +588,7 @@ func (a *app) save(w http.ResponseWriter, r *http.Request) {
 		a.savePublico(w, name, body)
 		return
 	}
-	u, logged, err := a.currentUser(r)
+	u, logged, err := a.currentUser(w, r)
 	if err != nil {
 		serverError(w, err)
 		return

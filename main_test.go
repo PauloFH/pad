@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAcessoECompartilhamento(t *testing.T) {
@@ -94,6 +95,18 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	// "/../" puro o ServeMux já limpa; codificado chega ao handler e precisa ser barrado
 	check(status(ana, "GET", "/..%2F..%2Fetc%2Fpasswd", ""), 404, "path traversal")
 	check(status(ana, "POST", "/a%2F..%2F..%2Fx", "x"), 404, "path traversal na gravação")
+	// renovação deslizante: sessão perto de vencer volta para 30 dias quando é usada
+	if _, err := a.db.Exec(`UPDATE sessions SET expires = ?`, time.Now().Add(time.Hour).Unix()); err != nil {
+		t.Fatal(err)
+	}
+	check(status(bia, "GET", "/", ""), 200, "bia com sessão quase vencida")
+	var exp int64
+	if err := a.db.QueryRow(`SELECT MAX(s.expires) FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.name = 'bia'`).Scan(&exp); err != nil {
+		t.Fatal(err)
+	}
+	if time.Until(time.Unix(exp, 0)) < 29*24*time.Hour {
+		t.Errorf("sessão da bia não renovou: vence em %v", time.Until(time.Unix(exp, 0)))
+	}
 	check(status(ana, "POST", "/_logout", ""), 401, "logout leva ao login")
 	check(status(ana, "GET", "/", ""), 401, "depois do logout")
 
