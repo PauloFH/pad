@@ -159,6 +159,20 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dir, "docs", "publico", "recado.txt")); string(b) != "oi do caio" {
 		t.Errorf("publico/recado.txt = %q", b)
 	}
+	// área cheia: o documento novo entra e o editado há mais tempo sai, levando as pastas vazias
+	old := time.Now().Add(-time.Hour)
+	for _, p := range []string{"publico/1/2/3/4/5.txt", "publico/1/2/3/4", "publico/1/2/3", "publico/1/2", "publico/1"} {
+		os.Chtimes(filepath.Join(dir, "docs", p), old, old)
+	}
+	maxPublicoItems = 6
+	check(status(anon, "POST", "/publico/novo", "x"), 204, "doc novo com área cheia")
+	maxPublicoItems = 50000
+	if _, err := os.Stat(filepath.Join(dir, "docs", "publico", "1")); !os.IsNotExist(err) {
+		t.Error("o mais antigo (1/2/3/4/5) e suas pastas vazias deviam ter sido apagados")
+	}
+	if n := countEntries(filepath.Join(dir, "docs", "publico")); n != 2 { // recado.txt + novo.txt
+		t.Errorf("itens em /publico depois da limpeza = %d, queria 2", n)
+	}
 	check(status(anon, "POST", "/_delete/publico/recado", ""), 401, "anônimo apaga em /publico")
 	check(status(ana, "POST", "/_delete/publico/recado", ""), 403, "ninguém é dono de /publico")
 	if err := runCLI(a.db, []string{"useradd", "publico"}, strings.NewReader("senha-forte\n")); err == nil {

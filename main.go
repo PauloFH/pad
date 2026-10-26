@@ -25,12 +25,11 @@ import (
 )
 
 const (
-	maxDoc          = 2 << 20 // 2 MiB por documento
-	maxPublicoDoc   = 256 << 10
-	maxPublicoItems = 2000 // documentos + pastas na área /publico
-	maxDepth        = 5    // níveis de pasta abaixo do usuário (ou de /publico)
-	sessionTTL      = 30 * 24 * time.Hour
-	inviteTTL       = 7 * 24 * time.Hour
+	maxDoc        = 2 << 20 // 2 MiB por documento
+	maxPublicoDoc = 256 << 10
+	maxDepth      = 5 // níveis de pasta abaixo do usuário (ou de /publico)
+	sessionTTL    = 30 * 24 * time.Hour
+	inviteTTL     = 7 * 24 * time.Hour
 )
 
 //go:embed templates.html
@@ -688,6 +687,9 @@ func (a *app) del(w http.ResponseWriter, r *http.Request, u user) {
 
 const publico = "publico"
 
+// teto de documentos + pastas em /publico; var para o teste poder baixar
+var maxPublicoItems = 50000
+
 func isPublico(name string) bool { return name == publico || strings.HasPrefix(name, publico+"/") }
 
 // validUserName barra "publico", que é a área aberta e não pode virar espaço de alguém.
@@ -698,17 +700,48 @@ func (a *app) savePublico(w http.ResponseWriter, name string, body []byte) {
 		http.Error(w, "documento da área pública passa de 256 KB", http.StatusRequestEntityTooLarge)
 		return
 	}
-	// teto de documentos + pastas: a área é aberta para qualquer um, sem isso dá para encher o disco
-	if _, err := os.Stat(a.docPath(name)); errors.Is(err, os.ErrNotExist) &&
-		countEntries(filepath.Join(a.docsDir, publico)) >= maxPublicoItems {
-		http.Error(w, "a área pública está cheia", http.StatusInsufficientStorage)
-		return
+	// área cheia: abre espaço apagando os documentos editados há mais tempo
+	if _, err := os.Stat(a.docPath(name)); errors.Is(err, os.ErrNotExist) {
+		for countEntries(filepath.Join(a.docsDir, publico)) >= maxPublicoItems {
+			if err := a.evictOldest(); err != nil {
+				serverError(w, err)
+				return
+			}
+		}
 	}
 	if err := a.writeDoc(name, body); err != nil {
 		serverError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// evictOldest apaga o documento público editado há mais tempo e as pastas que ficarem vazias.
+func (a *app) evictOldest() error {
+	root := filepath.Join(a.docsDir, publico)
+	var oldest string
+	var oldestAt time.Time
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if info, err := d.Info(); err == nil && (oldest == "" || info.ModTime().Before(oldestAt)) {
+			oldest, oldestAt = p, info.ModTime()
+		}
+		return nil
+	})
+	if oldest == "" {
+		return errors.New("área pública cheia sem nenhum documento para apagar")
+	}
+	if err := os.Remove(oldest); err != nil {
+		return err
+	}
+	for dir := filepath.Dir(oldest); dir != root; dir = filepath.Dir(dir) {
+		if os.Remove(dir) != nil {
+			break // pasta ainda tem conteúdo
+		}
+	}
+	return nil
 }
 
 // shortcut: percorre a pasta a cada documento público novo; se a área crescer muito, guardar o total no SQLite
