@@ -9,10 +9,11 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          check-latest: true
       - name: gofmt
         run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go vet ./...
@@ -22,10 +23,11 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          check-latest: true
       - run: go test -race -count=1 ./...
 
   deploy:
@@ -36,7 +38,7 @@ jobs:
     env:
       SSH_TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: chave ssh
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
