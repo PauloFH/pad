@@ -1,0 +1,19 @@
+# deploy na vpsarm, atrás do Traefik da stack pathoplay:
+#   docker compose -f compose.yaml -f compose.traefik.yaml up -d --build
+services:
+  pad:
+    ports: !reset []
+    networks: [traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: pathoplay_default
+      traefik.http.routers.pad.rule: Host(`pad.pauloholanda.com.br`)
+      traefik.http.routers.pad.entrypoints: websecure
+      traefik.http.routers.pad.tls: "true"
+      traefik.http.routers.pad.tls.certresolver: myresolver
+      traefik.http.services.pad.loadbalancer.server.port: "8080"
+
+networks:
+  traefik:
+    name: pathoplay_default
+    external: true
