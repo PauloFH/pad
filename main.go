@@ -93,6 +93,7 @@ type app struct {
 	writeMu sync.Mutex
 	// assina os tokens de visitante do /publico
 	visitorKey []byte
+	hub        *hub // documentos abertos na edição ao vivo
 }
 
 type user struct {
@@ -155,7 +156,9 @@ func openApp(dataDir string) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &app{db: db, docsDir: docsDir, visitorKey: key}, nil
+	a := &app{db: db, docsDir: docsDir, visitorKey: key}
+	a.hub = &hub{a: a, docs: map[string]*liveDoc{}}
+	return a, nil
 }
 
 // staticSub é static/ sem o prefixo, para servir em /_static/.
@@ -183,6 +186,7 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("GET /_convite", a.auth(a.invite))
 	mux.HandleFunc("POST /_convite", a.auth(a.invite))
 	mux.Handle("GET /_static/", noCache(http.StripPrefix("/_static/", http.FileServerFS(staticSub))))
+	mux.HandleFunc("GET /_ws/{name...}", a.liveWS)
 	mux.HandleFunc("GET /{$}", a.auth(a.home))
 	mux.HandleFunc("GET /{name...}", a.view)  // sem auth: documento público abre sem login
 	mux.HandleFunc("POST /{name...}", a.save) // confere a sessão por dentro: /publico grava sem login
@@ -726,20 +730,28 @@ func (a *app) savePublico(w http.ResponseWriter, name string, body []byte) {
 		http.Error(w, "documento da área pública passa de 256 KB", http.StatusRequestEntityTooLarge)
 		return
 	}
-	// área cheia: abre espaço apagando os documentos editados há mais tempo
-	if _, err := os.Stat(a.docPath(name)); errors.Is(err, os.ErrNotExist) {
-		for countEntries(filepath.Join(a.docsDir, publico)) >= maxPublicoItems {
-			if err := a.evictOldest(); err != nil {
-				serverError(w, err)
-				return
-			}
-		}
+	if err := a.roomPublico(name); err != nil {
+		serverError(w, err)
+		return
 	}
 	if err := a.writeDoc(name, body); err != nil {
 		serverError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// roomPublico (com writeMu) abre espaço antes de criar documento novo na área
+// cheia, apagando os editados há mais tempo.
+func (a *app) roomPublico(name string) error {
+	if _, err := os.Stat(a.docPath(name)); errors.Is(err, os.ErrNotExist) {
+		for countEntries(filepath.Join(a.docsDir, publico)) >= maxPublicoItems {
+			if err := a.evictOldest(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // evictOldest apaga o documento público editado há mais tempo e as pastas que ficarem vazias.

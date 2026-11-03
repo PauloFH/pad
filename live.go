@@ -68,6 +68,10 @@ type liveDoc struct {
 	aliases map[string]string // key -> apelido opaco ("k1"...) mostrado às abas
 	seqs    map[string]int    // cid -> última seq aplicada; sobrevive à saída da aba
 	dirty   bool
+	// usados pelo hub (hub.go): refs e dropT sob hub.mu; flushT e peersT sob mu
+	refs                  int
+	dropT, flushT, peersT *time.Timer
+	stop                  chan struct{} // encerra o tique de 1 s
 }
 
 type peerView struct {
