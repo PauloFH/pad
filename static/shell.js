@@ -186,7 +186,11 @@
       b.dataset.tema = id;
       return b;
     };
-    const grupo = (txt) => Object.assign(document.createElement('span'), { className: 'menu-grupo', textContent: txt });
+    const grupo = (txt) => {
+      const g = Object.assign(document.createElement('span'), { className: 'menu-grupo', textContent: txt });
+      g.setAttribute('role', 'presentation');
+      return g;
+    };
     const cores = amostras();
     m.append(item('sistema', 'Seguir o sistema'));
     for (const [tipo, txt] of [['escuro', 'escuros'], ['claro', 'claros']]) {

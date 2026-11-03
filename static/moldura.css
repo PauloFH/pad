@@ -1,12 +1,14 @@
 /* Moldura Oficina do editor: barra de cima, coluna de documentos, abas, editor e barra de status.
    Os seletores levam .ed ou uma classe própria para valer sobre as regras antigas do <style> do head. */
 
-/* uma regra de fonte só: o espelho e a calha medem o mesmo texto que o textarea */
-.ed textarea,.ed #mir,.ed .gut{font:400 14px/1.7 var(--mono)}
+textarea,#mir,.gut{font:400 14px/1.7 var(--mono)} /* uma regra só: o espelho e a calha medem o mesmo texto */
 
 .topo{display:flex;flex-wrap:nowrap;align-items:center;gap:10px;padding:6px 12px;min-height:44px;background:var(--bar);border-bottom:1px solid var(--line)}
 .topo>*{flex:none}
-.topo .crumb{flex:0 1 auto;min-width:0;font:500 13px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topo .crumb{display:flex;flex:0 1 auto;min-width:5rem;font:500 13px var(--mono)}
+/* sem espaço, as pastas encolhem primeiro e o nome do documento fica à vista */
+.crumb>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumb>.mut{flex:0 1000 auto}
 .topo .sp{flex:1}
 .topo .dot{border-color:var(--bar)}
 .conta,.tema{position:relative}

@@ -698,12 +698,16 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var col *colunaData
-	if logged {
-		if col, err = a.coluna(u, name); err != nil {
-			serverError(w, err)
-			return
+	// a coluna só depois de decidido o acesso: o caminho do 404 não consulta nada a mais
+	mostrar := func(tpl string, p docPage) {
+		if logged {
+			var err error
+			if p.Coluna, err = a.coluna(u, name); err != nil {
+				serverError(w, err)
+				return
+			}
 		}
+		render(w, http.StatusOK, tpl, p)
 	}
 	if isPublico(name) {
 		body, err := a.readDoc(name)
@@ -711,7 +715,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 			serverError(w, err)
 			return
 		}
-		render(w, http.StatusOK, "doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Admin: u.Admin, Exists: body != "", Coluna: col})
+		mostrar("doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Admin: u.Admin, Exists: body != ""})
 		return
 	}
 	exists, allowed, owner, public, err := a.access(name, u.ID)
@@ -728,7 +732,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 			serverError(w, err)
 			return
 		}
-		render(w, http.StatusOK, "public", docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Body: body, Me: u.Name, Admin: u.Admin, Coluna: col})
+		mostrar("public", docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Body: body, Me: u.Name, Admin: u.Admin})
 		return
 	case !logged:
 		// mesma resposta para privado e inexistente: visitante não descobre quais nomes existem
@@ -739,7 +743,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "documento não encontrado ou sem acesso. Seus documentos ficam em /"+u.Name+"/...")
 		return
 	}
-	p := docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Me: u.Name, Admin: u.Admin, Coluna: col,
+	p := docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Me: u.Name, Admin: u.Admin,
 		Exists: exists, Owner: owner, Public: public, NotFound: r.URL.Query().Has("erro")}
 	if exists {
 		if p.Body, err = a.readDoc(name); err != nil {
@@ -759,7 +763,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	render(w, http.StatusOK, "doc", p)
+	mostrar("doc", p)
 }
 
 func (a *app) save(w http.ResponseWriter, r *http.Request) {

@@ -75,9 +75,9 @@ test('barra de status: salvando… até o ack, depois salvo', () => {
   p.type('oi!');
   assert.deepStrictEqual([p.st.textContent, p.st.className], ['salvando…', '']);
   p.recv({ t: 'ack', rev: 2 });
-  assert.deepStrictEqual([p.st.textContent, p.st.className], ['salvo', 'ok']);
+  assert.deepStrictEqual([p.st.textContent, p.st.className, p.st.ariaLive], ['salvo', 'ok', 'off']);
   p.drop();
-  assert.deepStrictEqual([p.st.textContent, p.st.className], ['reconectando…', '']);
+  assert.deepStrictEqual([p.st.textContent, p.st.className, p.st.ariaLive], ['reconectando…', '', 'polite']);
   // só leitura não salva nada: sem "salvo"
   p.tick();
   p.recv({ t: 'init', rev: 2, text: 'oi!', me: 'p1', canEdit: false, seq: 1 });
