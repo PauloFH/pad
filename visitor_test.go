@@ -70,6 +70,22 @@ func TestNomesConcordam(t *testing.T) {
 			}
 		}
 	}
+	// valores escritos à mão, independentes da regra da implementação
+	curioso := adjetivo{"Curioso", "Curiosa"}
+	if n := nomeVisitante(bicho{"Capivara", true}, curioso); n != "Capivara Curiosa" {
+		t.Errorf("feminino = %q", n)
+	}
+	if n := nomeVisitante(bicho{"Tatu", false}, curioso); n != "Tatu Curioso" {
+		t.Errorf("masculino = %q", n)
+	}
+	// nada que possa soar como ofensa
+	for n := range validos {
+		for _, ruim := range []string{"Anta", "Piranha", "Baleia", "Macaco"} {
+			if strings.Contains(n, ruim) {
+				t.Fatalf("nome ofensivo: %q", n)
+			}
+		}
+	}
 	if len(bichos) < 30 || len(adjetivos) < 30 {
 		t.Fatalf("listas curtas: %d bichos, %d adjetivos", len(bichos), len(adjetivos))
 	}

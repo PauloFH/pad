@@ -21,25 +21,33 @@ type adjetivo struct{ m, f string }
 
 var bichos = []bicho{
 	{"Capivara", true}, {"Onça", true}, {"Arara", true}, {"Preguiça", true}, {"Ariranha", true},
-	{"Anta", true}, {"Jaguatirica", true}, {"Cutia", true}, {"Tartaruga", true}, {"Seriema", true},
-	{"Coruja", true}, {"Suçuarana", true}, {"Lontra", true}, {"Piranha", true}, {"Garça", true},
-	{"Jiboia", true}, {"Baleia", true}, {"Raposa", true}, {"Borboleta", true}, {"Cotia", true},
+	{"Jandaia", true}, {"Jaguatirica", true}, {"Cutia", true}, {"Tartaruga", true}, {"Seriema", true},
+	{"Coruja", true}, {"Suçuarana", true}, {"Lontra", true}, {"Maritaca", true}, {"Garça", true},
+	{"Jiboia", true}, {"Gaivota", true}, {"Cigarra", true}, {"Borboleta", true}, {"Cotia", true},
 	{"Tatu", false}, {"Jabuti", false}, {"Gambá", false}, {"Tamanduá", false}, {"Boto", false},
-	{"Jacaré", false}, {"Tucano", false}, {"Urubu", false}, {"Quati", false}, {"Sagui", false},
+	{"Jacaré", false}, {"Tucano", false}, {"Gavião", false}, {"Quati", false}, {"Sagui", false},
 	{"Lobo-guará", false}, {"Beija-flor", false}, {"Pirarucu", false}, {"Curió", false}, {"Papagaio", false},
-	{"Caranguejo", false}, {"Macaco-prego", false}, {"Bem-te-vi", false}, {"Sabiá", false}, {"Cavalo-marinho", false},
+	{"Caranguejo", false}, {"Mico-leão", false}, {"Bem-te-vi", false}, {"Sabiá", false}, {"Cavalo-marinho", false},
 }
 
+// só adjetivos simpáticos: o nome aparece para outras pessoas e não pode soar como insulto
 var adjetivos = []adjetivo{
-	{"Anônimo", "Anônima"}, {"Curioso", "Curiosa"}, {"Apressado", "Apressada"}, {"Sonolento", "Sonolenta"},
-	{"Sorridente", "Sorridente"}, {"Desconfiado", "Desconfiada"}, {"Faminto", "Faminta"}, {"Distraído", "Distraída"},
-	{"Valente", "Valente"}, {"Tímido", "Tímida"}, {"Animado", "Animada"}, {"Elegante", "Elegante"},
-	{"Misterioso", "Misteriosa"}, {"Teimoso", "Teimosa"}, {"Brincalhão", "Brincalhona"}, {"Preguiçoso", "Preguiçosa"},
-	{"Faceiro", "Faceira"}, {"Esperto", "Esperta"}, {"Atrapalhado", "Atrapalhada"}, {"Corajoso", "Corajosa"},
-	{"Sossegado", "Sossegada"}, {"Barulhento", "Barulhenta"}, {"Fofo", "Fofa"}, {"Gentil", "Gentil"},
-	{"Pensativo", "Pensativa"}, {"Falante", "Falante"}, {"Folgado", "Folgada"}, {"Contente", "Contente"},
-	{"Perdido", "Perdida"}, {"Sorrateiro", "Sorrateira"}, {"Veloz", "Veloz"}, {"Astuto", "Astuta"},
-	{"Calmo", "Calma"}, {"Orgulhoso", "Orgulhosa"},
+	{"Anônimo", "Anônima"}, {"Curioso", "Curiosa"}, {"Apressado", "Apressada"}, {"Sonhador", "Sonhadora"},
+	{"Sorridente", "Sorridente"}, {"Saltitante", "Saltitante"}, {"Risonho", "Risonha"}, {"Alegre", "Alegre"},
+	{"Valente", "Valente"}, {"Charmoso", "Charmosa"}, {"Animado", "Animada"}, {"Elegante", "Elegante"},
+	{"Misterioso", "Misteriosa"}, {"Radiante", "Radiante"}, {"Brincalhão", "Brincalhona"}, {"Amigável", "Amigável"},
+	{"Faceiro", "Faceira"}, {"Esperto", "Esperta"}, {"Divertido", "Divertida"}, {"Corajoso", "Corajosa"},
+	{"Sossegado", "Sossegada"}, {"Brilhante", "Brilhante"}, {"Fofo", "Fofa"}, {"Gentil", "Gentil"},
+	{"Pensativo", "Pensativa"}, {"Falante", "Falante"}, {"Sereno", "Serena"}, {"Contente", "Contente"},
+	{"Encantado", "Encantada"}, {"Simpático", "Simpática"}, {"Veloz", "Veloz"}, {"Ligeiro", "Ligeira"},
+	{"Calmo", "Calma"}, {"Feliz", "Feliz"},
+}
+
+func nomeVisitante(b bicho, adj adjetivo) string {
+	if b.fem {
+		return b.nome + " " + adj.f
+	}
+	return b.nome + " " + adj.m
 }
 
 // loadVisitorKey devolve a chave de assinatura dos visitantes, criando-a na primeira vez.
@@ -68,12 +76,7 @@ func (a *app) newVisitor() (id, name, token string) {
 	raw := make([]byte, 9)
 	rand.Read(raw) // nunca falha (Go 1.24+)
 	id = base64.RawURLEncoding.EncodeToString(raw)
-	b := bichos[mrand.IntN(len(bichos))]
-	adj := adjetivos[mrand.IntN(len(adjetivos))]
-	name = b.nome + " " + adj.m
-	if b.fem {
-		name = b.nome + " " + adj.f
-	}
+	name = nomeVisitante(bichos[mrand.IntN(len(bichos))], adjetivos[mrand.IntN(len(adjetivos))])
 	payload := id + "|" + name
 	enc := base64.RawURLEncoding
 	return id, name, enc.EncodeToString([]byte(payload)) + "." + enc.EncodeToString(a.sign(payload))
