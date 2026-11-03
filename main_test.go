@@ -282,7 +282,7 @@ func TestPaginaCarregaScripts(t *testing.T) {
 		return string(b)
 	}
 	page := get(ana)
-	for _, s := range []string{"/_static/ot.js", "/_static/sync.js", "/_static/editor.js", `data-name="ana/doc"`, `data-can-edit="true"`} {
+	for _, s := range []string{"/_static/ot.js", "/_static/sync.js", "/_static/editor.js", "/_static/presence.js", `id="peers"`, `id="mir"`, `data-name="ana/doc"`, `data-can-edit="true"`} {
 		if !strings.Contains(page, s) {
 			t.Errorf("editor sem %q", s)
 		}
@@ -292,7 +292,7 @@ func TestPaginaCarregaScripts(t *testing.T) {
 	}
 	// público aberto sem login: o mesmo editor, só leitura
 	page = get(http.DefaultClient)
-	for _, s := range []string{"/_static/editor.js", `data-name="ana/doc"`, `data-can-edit="false"`} {
+	for _, s := range []string{"/_static/editor.js", "/_static/presence.js", `id="peers"`, `id="mir"`, `data-name="ana/doc"`, `data-can-edit="false"`} {
 		if !strings.Contains(page, s) {
 			t.Errorf("página pública sem %q", s)
 		}

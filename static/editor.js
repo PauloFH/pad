@@ -37,7 +37,7 @@
   let visitor = null;
   try { visitor = localStorage['pad:visitor'] || null; } catch {}
 
-  const fire = (type) => document.dispatchEvent(new CustomEvent(type));
+  const fire = (type, detail) => document.dispatchEvent(new CustomEvent(type, { detail }));
   const local = (i, stick) => pad.sync.localIndex(i, stick);
   const raw = () => ({ s: t.selectionStart, e: t.selectionEnd, d: t.selectionDirection });
 
@@ -150,6 +150,7 @@
         pad.undo.transform(op);
         show(pad.sync.text, op, false);
         changed();
+        fire('pad:op', { by: m.by }); // a presença mostra quem está digitando
       } else if (m.t === 'peers') {
         pad.peers = m.peers;
         fire('pad:peers');

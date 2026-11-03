@@ -18,8 +18,8 @@ function boot() {
   const st = el(), trava = el(), fim = el({ firstChild: { textContent: '' } });
   Object.assign(globalThis, {
     window: globalThis,
-    document: { getElementById: (id) => ({ t, st, trava, fim })[id], addEventListener() {}, dispatchEvent: (e) => events.push(e.type), activeElement: t },
-    CustomEvent: class { constructor(type) { this.type = type; } },
+    document: { getElementById: (id) => ({ t, st, trava, fim })[id], addEventListener() {}, dispatchEvent: (e) => events.push(e.detail ? [e.type, e.detail] : e.type), activeElement: t },
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
     location: { protocol: 'http:', host: 'h' },
     addEventListener() {},
     setTimeout: (f, ms) => timers.push({ f, ms }),
@@ -65,6 +65,7 @@ test('init, op local, remota com pendente e ack', () => {
   p.recv({ t: 'ack', rev: 5 });
   assert.strictEqual(window.pad.sync.pending(), false);
   assert.ok(p.events.includes('pad:text'));
+  assert.deepStrictEqual(p.events.filter((e) => e[0] === 'pad:op'), [['pad:op', { by: 'p2' }]]); // presença: quem digitou
 });
 
 test('trava alheia barra o input; Ctrl+Z desfaz só o próprio', () => {
