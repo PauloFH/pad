@@ -4,13 +4,14 @@ import (
 	"errors"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
 
 var temaIDs = []string{"grafite", "madrugada", "cafe", "floresta", "papel", "ceu", "areia", "contraste"}
 
-var blocoTema = regexp.MustCompile(`:root\[data-theme="([a-z]+)"\]\s*\{([^}]*)\}`)
+var blocoTema = regexp.MustCompile(`:root\[data-theme="([a-z]+)"\][^{]*\{([^}]*)\}`)
 
 // themeTokens lê os blocos :root[data-theme="id"]{...} do CSS: id → propriedade → valor.
 func themeTokens(css string) (map[string]map[string]string, error) {
@@ -83,5 +84,31 @@ func TestTemasContraste(t *testing.T) {
 				t.Errorf("tema %s: %s sobre %s = %.2f < %v", id, r.fg, r.bg, c, r.min)
 			}
 		}
+	}
+}
+
+// o script inline do head aplica o tema antes do theme.js: os ids dele são os mesmos 8
+func TestTemaInlineIDs(t *testing.T) {
+	html, err := os.ReadFile("templates.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`/\^\(([a-z|]+)\)\$/\.test\(t\)`).FindSubmatch(html)
+	if m == nil {
+		t.Fatal("regex dos temas não encontrada no script inline")
+	}
+	if got := strings.Split(string(m[1]), "|"); !slices.Equal(got, temaIDs) {
+		t.Errorf("ids do script inline %v, quero %v", got, temaIDs)
+	}
+}
+
+// sem o script inline (JS desligado), o <html> fica sem data-theme e vale o Papel
+func TestTemaSemJS(t *testing.T) {
+	css, err := os.ReadFile("static/pad.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(css), `:root[data-theme="papel"],:root:not([data-theme]){`) {
+		t.Error(`pad.css sem :root:not([data-theme]) no bloco do Papel`)
 	}
 }

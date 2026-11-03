@@ -30,6 +30,9 @@
 
 /* painel flutuante: por padrão abre embaixo, alinhado à direita do pai posicionado; quem usa pode mudar top/bottom e a largura */
 .pop{position:absolute;right:0;top:calc(100% + 6px);z-index:5;width:22rem;max-width:90vw;padding:14px;border-radius:12px;background:var(--field);color:var(--fg);box-shadow:0 14px 40px #0008,0 0 0 1px var(--line)}
+/* o .pop já tem o fundo --field do .btn: dentro dele o secundário sobe um tom */
+.pop .btn:not(.pri,.perigo){background:var(--hov)}
+.pop .btn:not(.pri,.perigo):hover{background:var(--bg)}
 
 /* menu e seus itens (pessoas, avatar, tema) */
 .menu{min-width:13rem;padding:4px;border-radius:12px;background:var(--field);color:var(--fg);box-shadow:0 10px 30px #0006,0 0 0 1px var(--line)}
@@ -64,7 +67,7 @@ a.cartao:hover{background:var(--hov)}
 
 /* telas de cartão centralizado: login, criar conta, convite e mensagens */
 .tela-cartao{min-height:100dvh;display:grid;place-items:center;padding:1.5rem 1rem;font:15px/1.5 var(--ui);
-  background:radial-gradient(120% 90% at 50% 0%,color-mix(in srgb,var(--acc) 12%,var(--bg)) 0%,var(--bg) 60%) fixed var(--bg)}
+  background:radial-gradient(120% 90% at 50% 0%,color-mix(in srgb,var(--acc) 8%,var(--bg)) 0%,var(--bg) 60%) fixed var(--bg)}
 .tela-cartao main{display:grid;gap:12px;width:100%;max-width:20rem;margin:0;padding:0}
 .tela-cartao main.largo{max-width:24rem}
 .tela-cartao h1,.tela-cartao h2,.tela-cartao p{margin:0}
@@ -89,3 +92,6 @@ a.cartao:hover{background:var(--hov)}
     content:"";position:absolute;left:50%;top:50%;width:max(100%,40px);height:max(100%,40px);transform:translate(-50%,-50%)}
 }
 @media (prefers-reduced-motion:reduce){.btn,.chave,.chave::before{transition:none}}
+
+/* some da tela, fica para o leitor de tela */
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}

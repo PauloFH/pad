@@ -59,13 +59,13 @@
   // "salvo" quando o servidor já confirmou tudo (ele grava em disco logo depois); só leitura não salva nada
   function saveState() {
     const ok = !t.readOnly && !pad.sync.pending();
-    st.ariaLive = 'off'; // salvo/salvando a cada pausa não é anunciado; só a queda e as recusas
+    st.setAttribute('aria-live', 'off'); // salvo/salvando a cada pausa não é anunciado; só a queda e as recusas
     st.textContent = t.readOnly ? '' : ok ? 'salvo' : 'salvando…';
     st.className = ok ? 'ok' : '';
   }
 
   function say(text) {
-    st.ariaLive = 'polite';
+    st.setAttribute('aria-live', 'polite');
     st.textContent = text;
     st.className = '';
   }

@@ -374,3 +374,57 @@ func TestTelasSimplesUsamCartao(t *testing.T) {
 		}
 	}
 }
+
+// /_static/ revalida a cada carga (no-cache), mas com ETag do conteúdo embutido: sem mudança volta 304
+func TestStaticETag(t *testing.T) {
+	a, err := openApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(a.routes())
+	defer srv.Close()
+	tags := map[string]bool{}
+	for _, path := range []string{"/_static/pad.css", "/_static/ot.js", "/_static/fonts/space-grotesk-latin-400-normal.woff2"} {
+		res, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		tag := res.Header.Get("ETag")
+		if tag == "" || res.Header.Get("Cache-Control") != "no-cache" {
+			t.Fatalf("%s: ETag %q, Cache-Control %q", path, tag, res.Header.Get("Cache-Control"))
+		}
+		tags[tag] = true
+		req, _ := http.NewRequest("GET", srv.URL+path, nil)
+		req.Header.Set("If-None-Match", tag)
+		if res, err = http.DefaultClient.Do(req); err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusNotModified {
+			t.Errorf("%s com If-None-Match: status %d, quero 304", path, res.StatusCode)
+		}
+	}
+	if len(tags) != 3 {
+		t.Errorf("arquivos diferentes com o mesmo ETag: %v", tags)
+	}
+}
+
+// aba de um documento que sumiu ou perdeu o acesso: a página do 404 tira o nome das abas
+func TestAbaSemAcessoSai(t *testing.T) {
+	_, srv, login := wsApp(t)
+	ana, bia := login("ana"), login("bia")
+	post(t, bia, srv.URL+"/bia/fora", "text/plain", "x")
+	res, err := ana.Get(srv.URL + "/bia/fora")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 404 {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	if !regexp.MustCompile(`PadShell\.abas\.fechar\("ana",\s*"bia\\?/fora"\)`).Match(b) {
+		t.Errorf("404 não fecha a aba:\n%s", b)
+	}
+}

@@ -43,7 +43,7 @@ func (e msgErr) Error() string        { return e.msg }
 func (e msgErr) Is(target error) bool { return target == e.base }
 
 // peer é uma aba conectada. key agrupa as abas da mesma identidade
-// ("u:"+uid para editor logado fora do /publico, "v:"+visitante no resto).
+// ("u:"+uid para editor logado, inclusive no /publico; "v:"+visitante no resto).
 type peer struct {
 	id, key, login, visitor, color string
 	cid                            string // identidade da aba, para descartar op repetida após reconexão

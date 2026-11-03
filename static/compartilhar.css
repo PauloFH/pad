@@ -9,7 +9,7 @@
 .comp-linha{display:flex;gap:8px}
 .comp-linha .campo{flex:1}
 
-/* #comp-painel na frente para vencer o `.pop ul` ainda solto no head */
+/* lista sem marcadores nem recuo */
 #comp-painel .comp-lista{list-style:none;margin:0;padding:0}
 .comp-lista:empty{display:none}
 .comp-lista li{display:flex;align-items:center;gap:8px;padding:4px 0}

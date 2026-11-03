@@ -9,7 +9,10 @@ const src = fs.readFileSync(__dirname + '/editor.js', 'utf8');
 
 function boot() {
   const L = {}, timers = [], sockets = [], events = [];
-  const el = (extra) => Object.assign({ textContent: '', hidden: true, addEventListener: (k, f) => (L[k] ||= []).push(f) }, extra);
+  const el = (extra) => {
+    const at = {};
+    return Object.assign({ textContent: '', hidden: true, addEventListener: (k, f) => (L[k] ||= []).push(f), setAttribute: (k, v) => { at[k] = String(v); }, getAttribute: (k) => at[k] ?? null }, extra);
+  };
   const t = el({
     value: 'oi', selectionStart: 0, selectionEnd: 0, selectionDirection: 'none', scrollTop: 0, readOnly: false,
     dataset: { name: 'ana/doc', canEdit: 'true' },
@@ -75,9 +78,9 @@ test('barra de status: salvando… até o ack, depois salvo', () => {
   p.type('oi!');
   assert.deepStrictEqual([p.st.textContent, p.st.className], ['salvando…', '']);
   p.recv({ t: 'ack', rev: 2 });
-  assert.deepStrictEqual([p.st.textContent, p.st.className, p.st.ariaLive], ['salvo', 'ok', 'off']);
+  assert.deepStrictEqual([p.st.textContent, p.st.className, p.st.getAttribute('aria-live')], ['salvo', 'ok', 'off']);
   p.drop();
-  assert.deepStrictEqual([p.st.textContent, p.st.className, p.st.ariaLive], ['reconectando…', '', 'polite']);
+  assert.deepStrictEqual([p.st.textContent, p.st.className, p.st.getAttribute('aria-live')], ['reconectando…', '', 'polite']);
   // só leitura não salva nada: sem "salvo"
   p.tick();
   p.recv({ t: 'init', rev: 2, text: 'oi!', me: 'p1', canEdit: false, seq: 1 });

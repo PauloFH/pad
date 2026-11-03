@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"embed"
 	"errors"
@@ -185,7 +186,21 @@ func openApp(dataDir string) (*app, error) {
 // staticSub é static/ sem o prefixo, para servir em /_static/.
 var staticSub = func() fs.FS { sub, _ := fs.Sub(staticFS, "static"); return sub }()
 
+// etags é o hash de cada arquivo de static/, calculado uma vez: o conteúdo embutido não muda enquanto o binário roda.
+var etags = func() map[string]string {
+	m := map[string]string{}
+	fs.WalkDir(staticSub, ".", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			b, _ := fs.ReadFile(staticSub, p)
+			m[p] = fmt.Sprintf(`"%x"`, sha256.Sum256(b))
+		}
+		return err
+	})
+	return m
+}()
+
 // noCache faz o navegador revalidar o JS, o CSS e as fontes a cada carga: o binário os embute e muda a cada deploy.
+// Com o ETag a revalidação volta 304 sem corpo enquanto o arquivo não mudar.
 func noCache(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/") { // sem listagem do diretório
@@ -193,6 +208,9 @@ func noCache(h http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
+		if tag, ok := etags[strings.TrimPrefix(r.URL.Path, "/_static/")]; ok {
+			w.Header().Set("ETag", tag) // o http.FileServer responde 304 ao If-None-Match igual
+		}
 		if strings.HasSuffix(r.URL.Path, ".woff2") { // o mime do Go não conhece .woff2 sem /etc/mime.types (imagem do Docker)
 			w.Header().Set("Content-Type", "font/woff2")
 		}
@@ -570,7 +588,8 @@ func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 		if por {
 			meta = append([]string{"por " + maiuscula(d.Owner)}, meta...)
 		}
-		if q := quemEsta(a.hub.editores(d.Name)); q != "" {
+		// quem abre a entrada já sabe onde está: só os outros contam
+		if q := quemEsta(slices.DeleteFunc(a.hub.editores(d.Name), func(n string) bool { return n == u.Name })); q != "" {
 			meta = append(meta, q)
 		}
 		return cartao{d.Name, d.Label, strings.Join(meta, " · ")}
@@ -740,7 +759,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		// mesma resposta para privado e inexistente: ninguém descobre os nomes dos outros
-		fail(w, http.StatusNotFound, "documento não encontrado ou sem acesso. Seus documentos ficam em /"+u.Name+"/...")
+		render(w, http.StatusNotFound, "msg", msgPage{"documento não encontrado ou sem acesso. Seus documentos ficam em /" + u.Name + "/...", u.Name, name})
 		return
 	}
 	p := docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Me: u.Name, Admin: u.Admin,
@@ -1042,7 +1061,10 @@ func render(w http.ResponseWriter, status int, name string, data any) {
 	}
 }
 
-func fail(w http.ResponseWriter, status int, msg string) { render(w, status, "msg", msg) }
+// msgPage é a página de aviso; Aba, se houver, sai das abas de Me (documento apagado ou sem acesso).
+type msgPage struct{ Msg, Me, Aba string }
+
+func fail(w http.ResponseWriter, status int, msg string) { render(w, status, "msg", msgPage{Msg: msg}) }
 
 func serverError(w http.ResponseWriter, err error) {
 	log.Print(err)

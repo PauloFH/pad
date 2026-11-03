@@ -52,7 +52,7 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "documento não encontrado ou sem acesso", http.StatusNotFound)
 		return
 	}
-	// toda aba tem identidade de visitante: é o nome que leitores e o /publico veem
+	// toda aba tem identidade de visitante: é o nome que leitores e os anônimos do /publico veem
 	vid, vname, ok := a.parseVisitor(r.URL.Query().Get("v"))
 	var fresh string
 	if !ok {

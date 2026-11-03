@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -86,5 +89,37 @@ func TestEntradaRecentes(t *testing.T) {
 	}
 	if strings.Contains(page, "bia/fora") {
 		t.Error("a entrada mostra documento da bia não compartilhado")
+	}
+}
+
+// até 9 blocos em "continuar", do editado há menos tempo ao mais antigo; a própria pessoa não conta como "está aqui"
+func TestEntradaTetoEOrdem(t *testing.T) {
+	a, srv, login := wsApp(t)
+	ana := login("ana")
+	for i := range 10 {
+		n := fmt.Sprintf("ana/d%d", i)
+		post(t, ana, srv.URL+"/"+n, "text/plain", "x")
+		if _, err := a.db.Exec(`UPDATE docs SET updated = ? WHERE name = ?`, time.Now().Add(time.Duration(i)*-time.Hour).Unix(), n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dialWS(t, srv, ana, "ana/d0", "a1", "") // a ana com o documento aberto noutra aba
+	page := pagina(t, ana, srv.URL+"/")
+	var got []string
+	for _, m := range regexp.MustCompile(`class="cartao" href="/([^"]+)"`).FindAllStringSubmatch(page, -1) {
+		got = append(got, m[1])
+	}
+	want := []string{"ana/d0", "ana/d1", "ana/d2", "ana/d3", "ana/d4", "ana/d5", "ana/d6", "ana/d7", "ana/d8"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("blocos %v, quero %v", got, want)
+	}
+	if strings.Contains(page, "Ana está aqui") {
+		t.Error("a própria pessoa aparece no está aqui")
+	}
+	if !strings.Contains(page, "<h1") {
+		t.Error("entrada sem h1")
+	}
+	if i := strings.Index(page, `class="criar"`); i < 0 || strings.Contains(page[i:i+300], "autofocus") {
+		t.Error("campo de criar com autofocus (abre o teclado no celular)")
 	}
 }

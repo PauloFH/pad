@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="/_static/pad.css">
 <link rel="stylesheet" href="/_static/componentes.css"><link rel="stylesheet" href="/_static/moldura.css"><link rel="stylesheet" href="/_static/entrada.css"><link rel="stylesheet" href="/_static/compartilhar.css">
 <script src="/_static/theme.js" defer></script>
-<script src="/_static/shell.js"></script>
 <style>
 *{box-sizing:border-box} [hidden]{display:none!important}
 body{margin:0;font:15px/1.5 var(--ui);background:var(--bg);color:var(--fg)}
@@ -17,7 +16,6 @@ header{display:flex;flex-wrap:wrap;gap:.4rem 1rem;align-items:center;padding:.5r
 main{padding:1rem;max-width:50rem;margin:auto}
 input,select,button{font:inherit;padding:.3rem .5rem}
 form.inline{display:inline} button.link{background:none;border:0;color:var(--acc);cursor:pointer;padding:0}
-table{width:100%;border-collapse:collapse;margin-top:1rem} td{padding:.35rem 0;border-bottom:1px solid var(--line)}
 body.ed{display:flex;flex-direction:column;height:100dvh}
 textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);resize:none;outline:none}
 .area{flex:1;display:flex;min-height:0}
@@ -46,8 +44,6 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 #quem-menu small{display:block;color:var(--mut)}
 .sq{width:10px;height:10px;border-radius:50%;flex:none}
 .seguir{display:flex;gap:.5rem;padding:.3rem 1rem;color:#fff;font-size:13px} .seguir button{color:#fff;text-decoration:underline}
-details{position:relative} summary{cursor:pointer;color:var(--acc)}
-.pop ul{padding-left:1.2rem}
 </style></head>
 {{end}}
 
@@ -66,8 +62,10 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 
 {{define "msg"}}{{template "head" "aviso"}}<body class="tela-cartao"><main>
 <h1 class="marca">pad<span>_</span></h1>
-<p>{{.}}</p>
+<p>{{.Msg}}</p>
 <a class="btn" href="/">Voltar</a>
+{{/* documento apagado ou sem acesso: sai das abas de quem tentou abrir */}}
+{{with .Aba}}<script src="/_static/shell.js"></script><script>PadShell.abas.fechar({{$.Me}}, {{.}})</script>{{end}}
 </main></body></html>{{end}}
 
 {{define "login"}}{{template "head" "entrar"}}<body class="tela-cartao"><main>
@@ -117,8 +115,9 @@ document.getElementById('copiar').onclick = function () {
 {{define "home"}}{{template "head" "documentos"}}<body class="ed">
 <header class="topo">{{template "moldura-topo" .}}<span class="marca">pad</span><span class="sp"></span>{{if .Admin}}<a class="btn" href="/_convite">Convidar</a>{{end}}{{template "conta" .}}</header>
 <div class="meio">{{template "coluna" .}}<div class="centro"><main class="entrada">
+<h1 class="vh">Documentos de {{.Me}}</h1>
 <form class="criar" onsubmit="location='/{{.Me}}/'+this.n.value.trim();return false">
-<input class="campo" name="n" placeholder="nome do novo documento" aria-label="nome do novo documento" required autofocus><button class="btn pri">Criar</button>
+<input class="campo" name="n" placeholder="nome do novo documento" aria-label="nome do novo documento" required><button class="btn pri">Criar</button>
 </form>
 {{with .Recentes}}<h2>Continuar de onde parou</h2>{{template "cartoes" .}}{{else}}<p class="mut">Nenhum documento ainda. Dê um nome acima para criar o primeiro.</p>{{end}}
 {{with .Compartilhados}}<h2>Compartilhados com você</h2>{{template "cartoes" .}}{{end}}
@@ -131,8 +130,9 @@ document.getElementById('copiar').onclick = function () {
 {{/* Moldura Oficina: barra de cima, coluna (só logado), abas, editor e barra de status.
 Os defines recebem um docPage (ou qualquer valor com Me, Admin, Name e Coluna). */}}
 
-{{/* botão que abre e fecha a coluna */}}
-{{define "moldura-topo"}}{{if .Coluna}}<button id="col" class="btn" type="button" aria-controls="coluna" aria-expanded="true" title="documentos" aria-label="documentos">◧</button>{{end}}{{end}}
+{{/* começo da barra de cima: o shell.js, sem defer porque monta a coluna e as abas logo abaixo antes da
+primeira pintura (as telas de cartão não o carregam), e o botão que abre e fecha a coluna */}}
+{{define "moldura-topo"}}<script src="/_static/shell.js"></script>{{if .Coluna}}<button id="col" class="btn" type="button" aria-controls="coluna" aria-expanded="true" title="documentos" aria-label="documentos">◧</button>{{end}}{{end}}
 
 {{/* caminho com as pastas apagadas */}}
 {{define "caminho"}}<span class="crumb" title="{{.}}">{{with corta .}}<span class="mut">{{index . 0}}</span><span>{{index . 1}}</span>{{end}}</span>{{end}}
@@ -204,4 +204,5 @@ Os defines recebem um docPage (ou qualquer valor com Me, Admin, Name e Coluna). 
 </ul>
 <form method="post" action="/_public/{{.Name}}" class="comp-pub"><input type="hidden" name="public" value="{{if .Public}}0{{else}}1{{end}}"><span id="comp-pub-t">Público, só leitura</span><button class="chave" role="switch" aria-checked="{{.Public}}" aria-labelledby="comp-pub-t"></button></form>
 <form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="btn perigo">Apagar documento</button></form>
-</div><script src="/_static/compartilhar.js"></script></span>{{end}}{{end}}
+</div>{{/* fecha já, antes de pintar, para o painel não piscar aberto enquanto o compartilhar.js chega */}}
+<script>{const p=document.getElementById('comp-painel');p.hidden=!p.hasAttribute('data-aberto')}</script><script src="/_static/compartilhar.js"></script></span>{{end}}{{end}}
