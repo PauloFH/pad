@@ -517,8 +517,8 @@ func docName(w http.ResponseWriter, r *http.Request) (string, bool) {
 // Label é o nome sem "/eu/" na frente: na própria interface o usuário não precisa ver o próprio nome.
 // Owner é o dono quando não é o próprio usuário.
 type docRow struct {
-	Name, Label, Updated, Owner string
-	UpdatedAt                   time.Time
+	Name, Label, Owner string
+	UpdatedAt          time.Time
 }
 
 // userDocs lista os documentos de u e os compartilhados com ele, do mais recente ao mais antigo.
@@ -541,7 +541,6 @@ func (a *app) userDocs(u user) ([]docRow, error) {
 		}
 		d.Label = strings.TrimPrefix(d.Name, u.Name+"/")
 		d.UpdatedAt = time.Unix(t, 0)
-		d.Updated = d.UpdatedAt.Format("02/01/2006 15:04")
 		// só se cria documento dentro do próprio usuário: o dono é o primeiro trecho do nome
 		if dono, _, _ := strings.Cut(d.Name, "/"); dono != u.Name {
 			d.Owner = dono
@@ -551,17 +550,47 @@ func (a *app) userDocs(u user) ([]docRow, error) {
 	return docs, rows.Err()
 }
 
+// cartao é um bloco da entrada; Meta junta quando mudou e quem está nele agora.
+type cartao struct{ Name, Label, Meta string }
+
 func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 	docs, err := a.userDocs(u)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	render(w, http.StatusOK, "home", struct {
-		Me    string
-		Admin bool
-		Docs  []docRow
-	}{u.Name, u.Admin, docs})
+	col, err := a.coluna(u, "")
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	agora := time.Now()
+	bloco := func(d docRow, por bool) cartao {
+		meta := []string{quando(d.UpdatedAt, agora)}
+		if por {
+			meta = append([]string{"por " + maiuscula(d.Owner)}, meta...)
+		}
+		if q := quemEsta(a.hub.editores(d.Name)); q != "" {
+			meta = append(meta, q)
+		}
+		return cartao{d.Name, d.Label, strings.Join(meta, " · ")}
+	}
+	p := struct {
+		Me, Name                 string
+		Admin                    bool
+		Coluna                   *colunaData
+		Recentes, Compartilhados []cartao
+	}{Me: u.Name, Admin: u.Admin, Coluna: col}
+	// userDocs já vem do mais recente ao mais antigo
+	for i, d := range docs {
+		if i < 9 {
+			p.Recentes = append(p.Recentes, bloco(d, false))
+		}
+		if d.Owner != "" {
+			p.Compartilhados = append(p.Compartilhados, bloco(d, true))
+		}
+	}
+	render(w, http.StatusOK, "home", p)
 }
 
 // noArvore é uma pasta ou um documento da coluna; Caminho é o nome completo.

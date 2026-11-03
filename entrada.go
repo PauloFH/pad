@@ -30,16 +30,18 @@ func quando(t, agora time.Time) string {
 	return fmt.Sprintf("%d %s %d", t.Day(), meses[t.Month()-1], t.Year())
 }
 
-// quemEsta resume quem edita um documento; os logins ganham a inicial maiúscula só aqui.
+// maiuscula põe a inicial de um login em maiúscula, só para exibir.
+func maiuscula(s string) string { return strings.ToUpper(s[:1]) + s[1:] }
+
+// quemEsta resume quem edita um documento.
 func quemEsta(nomes []string) string {
-	cap := func(s string) string { return strings.ToUpper(s[:1]) + s[1:] }
 	switch len(nomes) {
 	case 0:
 		return ""
 	case 1:
-		return cap(nomes[0]) + " está aqui"
+		return maiuscula(nomes[0]) + " está aqui"
 	case 2:
-		return cap(nomes[0]) + " e " + cap(nomes[1]) + " estão aqui"
+		return maiuscula(nomes[0]) + " e " + maiuscula(nomes[1]) + " estão aqui"
 	}
 	return fmt.Sprintf("%d pessoas aqui", len(nomes))
 }
