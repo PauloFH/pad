@@ -4,15 +4,25 @@
   const OT = typeof module !== 'undefined' ? require('./ot.js') : globalThis.PadOT;
 
   // Nome de quem trava um trecho que op toca. As posições dos peers valem na
-  // revisão do servidor; map as leva para o texto local (sync.localIndex).
+  // revisão do servidor; map(i, stickRight) as leva para o texto local (sync.localIndex).
+  // Como no servidor, insert colado a uma borda fica fora da trava: o início anda, o fim fica.
   function lockedBy(op, peers, me, map) {
     for (const p of peers) {
-      if (p.lock && p.id !== me && OT.touchesRange(op, map(Math.min(p.a, p.h)), map(Math.max(p.a, p.h)))) return p.name;
+      if (p.lock && p.id !== me && OT.touchesRange(op, map(Math.min(p.a, p.h), true), map(Math.max(p.a, p.h), false))) return p.name;
     }
     return null;
   }
 
-  if (typeof module !== 'undefined') module.exports = { lockedBy };
+  // as posições dos outros acompanham uma op já aplicada no servidor, com a mesma regra de lá
+  function shift(peers, op) {
+    for (const p of peers) {
+      const back = p.a > p.h;
+      const s = OT.transformIndex(back ? p.h : p.a, op, true), e = OT.transformIndex(back ? p.a : p.h, op, !p.lock);
+      [p.a, p.h] = back ? [e, s] : [s, e];
+    }
+  }
+
+  if (typeof module !== 'undefined') module.exports = { lockedBy, shift };
   if (typeof document === 'undefined') return;
 
   const t = document.getElementById('t'), st = document.getElementById('st');
@@ -28,7 +38,7 @@
   try { visitor = localStorage['pad:visitor'] || null; } catch {}
 
   const fire = (type) => document.dispatchEvent(new CustomEvent(type));
-  const local = (i) => pad.sync.localIndex(i);
+  const local = (i, stick) => pad.sync.localIndex(i, stick);
   const raw = () => ({ s: t.selectionStart, e: t.selectionEnd, d: t.selectionDirection });
 
   function send(m) {
@@ -60,21 +70,16 @@
     t.scrollTop = top;
   }
 
+  // prev segue o sync, nunca o textarea: assim o diff do próximo input sempre encaixa
   function changed() {
-    prev = t.value;
+    prev = pad.sync.text;
     fire('pad:text');
   }
 
-  // as posições dos outros acompanham uma op já aplicada no servidor, como lá
-  function shift(op) {
-    for (const p of pad.peers) {
-      p.a = OT.transformIndex(p.a, op, true);
-      p.h = OT.transformIndex(p.h, op, true);
-    }
-  }
-
+  // sem checar readOnly: o compositionend de uma composição cortada pela queda chega
+  // com o textarea já travado, e o sync guarda a op até o rebase da reconexão
   function edit() {
-    if (composing || t.readOnly) return;
+    if (composing || !pad.sync) return;
     const before = prev, op = OT.diff(before, t.value, t.selectionEnd);
     if (OT.isNoop(op)) return;
     const who = lockedBy(op, pad.peers, pad.me, local);
@@ -84,8 +89,8 @@
       return warn('trecho travado por ' + who);
     }
     pad.undo.record(op, before, Date.now());
-    changed();
     send(pad.sync.local(op));
+    changed();
   }
 
   function history(redo) {
@@ -97,8 +102,8 @@
     if (redo) pad.undo.redo(prev);
     else pad.undo.undo(prev);
     show(OT.apply(prev, op), op, true);
-    changed();
     send(pad.sync.local(op));
+    changed();
   }
 
   function init(m) {
@@ -107,20 +112,19 @@
       try { localStorage['pad:visitor'] = visitor; } catch {}
     }
     pad.me = m.me;
-    pad.peers = []; // as posições antigas eram de outra conexão
     delay = 500;
-    let op, msg = null;
-    if (!pad.sync) {
-      op = OT.diff(t.value, m.text, 0);
-      pad.sync = new PadSync.SyncClient(m.rev, m.text, cid);
-    } else if (resetNext) {
-      op = pad.sync.reset(m.rev, m.text);
+    let msg = null;
+    if (!pad.sync) pad.sync = new PadSync.SyncClient(m.rev, m.text, cid);
+    else if (resetNext) {
+      pad.sync.reset(m.rev, m.text);
       pad.undo.clear();
     } else {
+      let op;
       ({ op, msg } = pad.sync.rebase(m.rev, m.text, m.seq));
       if (op) pad.undo.transform(op);
     }
-    if (op) show(pad.sync.text, op, false);
+    // com o textarea igual ao texto local antigo, este diff é a própria op do rebase
+    if (t.value !== pad.sync.text) show(pad.sync.text, OT.diff(t.value, pad.sync.text, 0), false);
     changed();
     send(msg);
     if (!resetNext) st.textContent = ''; // depois de um reject, o motivo fica à vista
@@ -135,13 +139,13 @@
     try {
       if (m.t === 'init') init(m);
       else if (m.t === 'ack') {
-        shift(pad.sync.inflight);
+        shift(pad.peers, pad.sync.inflight);
         st.textContent = '';
         const msg = pad.sync.ack(m.rev);
         if (msg) send(msg);
         else sendSel();
       } else if (m.t === 'op') {
-        shift(m.op);
+        shift(pad.peers, m.op);
         const op = pad.sync.remote(m.rev, m.op);
         pad.undo.transform(op);
         show(pad.sync.text, op, false);

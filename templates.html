@@ -82,7 +82,7 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 {{define "doc"}}{{template "head" .Label}}<body class="ed">
 <header>
 <a href="/">← documentos</a><b>{{.Label}}</b>{{if .Public}}<span class="mut">público</span>{{end}}
-<span id="st" class="mut">{{if not .Exists}}novo: salva quando você digitar{{end}}</span>
+<span id="st" class="mut"></span>
 <span class="sp"></span>
 {{if .Owner}}<details {{if .NotFound}}open{{end}}><summary>compartilhar</summary><div class="pop">
 {{if .NotFound}}<p class="err">Usuário ou grupo não encontrado.</p>{{end}}

@@ -87,10 +87,11 @@
 
     pending() { return this.inflight !== null; }
 
-    // posições dos outros (na revisão do servidor) levadas para o texto local
-    localIndex(i) {
+    // posições dos outros (na revisão do servidor) levadas para o texto local;
+    // o fim de uma trava usa stickRight=false, como no servidor
+    localIndex(i, stickRight = true) {
       const pend = join(this.inflight, this.buffer);
-      return pend ? OT.transformIndex(i, pend, true) : i;
+      return pend ? OT.transformIndex(i, pend, stickRight) : i;
     }
   }
 

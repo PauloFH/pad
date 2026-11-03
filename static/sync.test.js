@@ -213,4 +213,5 @@ test('localIndex', () => {
   const c = new SyncClient(0, 'xyz');
   c.local(['ab', 3]);
   assert.strictEqual(c.localIndex(0), 2);
+  assert.strictEqual(c.localIndex(0, false), 0); // fim de trava: insert na borda fica fora
 });
