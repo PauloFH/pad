@@ -35,6 +35,9 @@ const (
 //go:embed templates.html
 var tmplFS embed.FS
 
+//go:embed static/*.js
+var staticFS embed.FS
+
 var (
 	tmpl = template.Must(template.ParseFS(tmplFS, "templates.html"))
 	// o nome vira caminho de arquivo: sem "..", "/" inicial, "//" ou ponto
@@ -148,6 +151,17 @@ func openApp(dataDir string) (*app, error) {
 	return &app{db: db, docsDir: docsDir}, nil
 }
 
+// staticSub é static/ sem o prefixo, para servir em /_static/.
+var staticSub = func() fs.FS { sub, _ := fs.Sub(staticFS, "static"); return sub }()
+
+// noCache faz o navegador revalidar o JS a cada carga: o binário o embute e muda a cada deploy.
+func noCache(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		h.ServeHTTP(w, r)
+	})
+}
+
 func (a *app) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /_login", a.loginPage)
@@ -157,6 +171,7 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_join/{token}", a.join)
 	mux.HandleFunc("GET /_convite", a.auth(a.invite))
 	mux.HandleFunc("POST /_convite", a.auth(a.invite))
+	mux.Handle("GET /_static/", noCache(http.StripPrefix("/_static/", http.FileServerFS(staticSub))))
 	mux.HandleFunc("GET /{$}", a.auth(a.home))
 	mux.HandleFunc("GET /{name...}", a.view)  // sem auth: documento público abre sem login
 	mux.HandleFunc("POST /{name...}", a.save) // confere a sessão por dentro: /publico grava sem login

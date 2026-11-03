@@ -223,3 +223,23 @@ func TestAcessoECompartilhamento(t *testing.T) {
 		t.Error("apagou usuária que ainda é dona de documento")
 	}
 }
+
+func TestStatic(t *testing.T) {
+	a, err := openApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(a.routes())
+	defer srv.Close()
+	res, err := http.Get(srv.URL + "/_static/ot.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 || !strings.Contains(res.Header.Get("Content-Type"), "javascript") {
+		t.Errorf("status %d, tipo %q", res.StatusCode, res.Header.Get("Content-Type"))
+	}
+	if res.Header.Get("Cache-Control") != "no-cache" {
+		t.Errorf("Cache-Control = %q", res.Header.Get("Cache-Control"))
+	}
+}
