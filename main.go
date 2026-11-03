@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"embed"
@@ -13,10 +14,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	_ "time/tzdata"
 
@@ -34,6 +37,9 @@ const (
 
 //go:embed templates.html
 var tmplFS embed.FS
+
+//go:embed static/*.js
+var staticFS embed.FS
 
 var (
 	tmpl = template.Must(template.ParseFS(tmplFS, "templates.html"))
@@ -80,6 +86,7 @@ CREATE TABLE IF NOT EXISTS group_shares (
 	doc TEXT NOT NULL REFERENCES docs ON DELETE CASCADE,
 	group_id INTEGER NOT NULL REFERENCES groups ON DELETE CASCADE,
 	PRIMARY KEY (doc, group_id));
+CREATE TABLE IF NOT EXISTS secrets (k TEXT PRIMARY KEY, v BLOB NOT NULL);
 `
 
 type app struct {
@@ -87,6 +94,9 @@ type app struct {
 	docsDir string
 	// serializa salvar/apagar: sem isso, um autosave em curso recria o arquivo de um doc recém-apagado
 	writeMu sync.Mutex
+	// assina os tokens de visitante do /publico
+	visitorKey []byte
+	hub        *hub // documentos abertos na edição ao vivo
 }
 
 type user struct {
@@ -109,8 +119,25 @@ func main() {
 		return
 	}
 	srv := &http.Server{Addr: env("PAD_ADDR", ":8080"), Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
-	log.Printf("pad ouvindo em %s, dados em %s", srv.Addr, dataDir)
-	log.Fatal(srv.ListenAndServe())
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	go func() {
+		log.Printf("pad ouvindo em %s, dados em %s", srv.Addr, dataDir)
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+	<-ctx.Done()
+	// o Shutdown não espera os WebSockets (conexões sequestradas): o hub os fecha
+	// com 1001 e espera cada um gravar; o flushAll pega o que sobrar
+	sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(sctx); err != nil {
+		log.Print(err)
+	}
+	a.hub.closeAll(sctx)
+	a.hub.flushAll()
+	log.Print("pad encerrado")
 }
 
 func env(k, def string) string {
@@ -145,7 +172,28 @@ func openApp(dataDir string) (*app, error) {
 			}
 		}
 	}
-	return &app{db: db, docsDir: docsDir}, nil
+	key, err := loadVisitorKey(db)
+	if err != nil {
+		return nil, err
+	}
+	a := &app{db: db, docsDir: docsDir, visitorKey: key}
+	a.hub = &hub{a: a, docs: map[string]*liveDoc{}, perIP: map[string]int{}, perDoc: map[string]int{}}
+	return a, nil
+}
+
+// staticSub é static/ sem o prefixo, para servir em /_static/.
+var staticSub = func() fs.FS { sub, _ := fs.Sub(staticFS, "static"); return sub }()
+
+// noCache faz o navegador revalidar o JS a cada carga: o binário o embute e muda a cada deploy.
+func noCache(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") { // sem listagem do diretório
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		h.ServeHTTP(w, r)
+	})
 }
 
 func (a *app) routes() http.Handler {
@@ -157,6 +205,8 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_join/{token}", a.join)
 	mux.HandleFunc("GET /_convite", a.auth(a.invite))
 	mux.HandleFunc("POST /_convite", a.auth(a.invite))
+	mux.Handle("GET /_static/", noCache(http.StripPrefix("/_static/", http.FileServerFS(staticSub))))
+	mux.HandleFunc("GET /_ws/{name...}", a.liveWS)
 	mux.HandleFunc("GET /{$}", a.auth(a.home))
 	mux.HandleFunc("GET /{name...}", a.view)  // sem auth: documento público abre sem login
 	mux.HandleFunc("POST /{name...}", a.save) // confere a sessão por dentro: /publico grava sem login
@@ -622,11 +672,25 @@ func (a *app) save(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if a.liveConflict(w, name) {
+		return
+	}
 	if err := a.writeDoc(name, body); err != nil {
 		serverError(w, err)
 		return
 	}
+	a.hub.forget(name)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// liveConflict (com writeMu, depois de conferir o acesso) recusa o POST num
+// documento aberto: a aba gravaria o texto dela por cima deste.
+func (a *app) liveConflict(w http.ResponseWriter, name string) bool {
+	if !a.hub.connected(name) {
+		return false
+	}
+	http.Error(w, "documento aberto na edição ao vivo: recarregue a página", http.StatusConflict)
+	return true
 }
 
 // share atende /_share e /_unshare; só o dono mexe nos compartilhamentos.
@@ -660,6 +724,7 @@ func (a *app) share(w http.ResponseWriter, r *http.Request, u user) {
 		serverError(w, err)
 		return
 	}
+	a.hub.recheck(name)
 	http.Redirect(w, r, "/"+name, http.StatusSeeOther)
 }
 
@@ -673,6 +738,7 @@ func (a *app) del(w http.ResponseWriter, r *http.Request, u user) {
 	if !a.mustOwn(w, name, u) {
 		return
 	}
+	a.hub.kill(name, "documento apagado")
 	if _, err := a.db.Exec(`DELETE FROM docs WHERE name = ?`, name); err != nil {
 		serverError(w, err)
 		return
@@ -700,23 +766,36 @@ func (a *app) savePublico(w http.ResponseWriter, name string, body []byte) {
 		http.Error(w, "documento da área pública passa de 256 KB", http.StatusRequestEntityTooLarge)
 		return
 	}
-	// área cheia: abre espaço apagando os documentos editados há mais tempo
-	if _, err := os.Stat(a.docPath(name)); errors.Is(err, os.ErrNotExist) {
-		for countEntries(filepath.Join(a.docsDir, publico)) >= maxPublicoItems {
-			if err := a.evictOldest(); err != nil {
-				serverError(w, err)
-				return
-			}
-		}
+	if a.liveConflict(w, name) {
+		return
+	}
+	if err := a.roomPublico(name); err != nil {
+		serverError(w, err)
+		return
 	}
 	if err := a.writeDoc(name, body); err != nil {
 		serverError(w, err)
 		return
 	}
+	a.hub.forget(name)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// evictOldest apaga o documento público editado há mais tempo e as pastas que ficarem vazias.
+// roomPublico (com writeMu) abre espaço antes de criar documento novo na área
+// cheia, apagando os editados há mais tempo.
+func (a *app) roomPublico(name string) error {
+	if _, err := os.Stat(a.docPath(name)); errors.Is(err, os.ErrNotExist) {
+		for countEntries(filepath.Join(a.docsDir, publico)) >= maxPublicoItems {
+			if err := a.evictOldest(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// evictOldest (com writeMu) apaga o documento público editado há mais tempo,
+// fora os abertos na edição ao vivo, e as pastas que ficarem vazias.
 func (a *app) evictOldest() error {
 	root := filepath.Join(a.docsDir, publico)
 	var oldest string
@@ -725,7 +804,7 @@ func (a *app) evictOldest() error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		if info, err := d.Info(); err == nil && (oldest == "" || info.ModTime().Before(oldestAt)) {
+		if info, err := d.Info(); err == nil && (oldest == "" || info.ModTime().Before(oldestAt)) && !a.hub.connected(docOf(a.docsDir, p)) {
 			oldest, oldestAt = p, info.ModTime()
 		}
 		return nil
@@ -736,12 +815,19 @@ func (a *app) evictOldest() error {
 	if err := os.Remove(oldest); err != nil {
 		return err
 	}
+	a.hub.forget(docOf(a.docsDir, oldest))
 	for dir := filepath.Dir(oldest); dir != root; dir = filepath.Dir(dir) {
 		if os.Remove(dir) != nil {
 			break // pasta ainda tem conteúdo
 		}
 	}
 	return nil
+}
+
+// docOf é o nome do documento guardado no arquivo path (o inverso de docPath).
+func docOf(docsDir, path string) string {
+	rel, _ := filepath.Rel(docsDir, path)
+	return filepath.ToSlash(strings.TrimSuffix(rel, ".txt"))
 }
 
 // shortcut: percorre a pasta a cada documento público novo; se a área crescer muito, guardar o total no SQLite
@@ -767,6 +853,7 @@ func (a *app) setPublic(w http.ResponseWriter, r *http.Request, u user) {
 		serverError(w, err)
 		return
 	}
+	a.hub.recheck(name)
 	http.Redirect(w, r, "/"+name, http.StatusSeeOther)
 }
 

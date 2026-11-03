@@ -1,0 +1,14 @@
+{"apply":[
+  {"doc":"abc","op":[1,"X",-1,1],"want":"aXc"},
+  {"doc":"ação","op":[4,"!"],"want":"ação!"},
+  {"doc":"a😀b","op":[1,-2,1],"want":"ab"}
+ ],
+ "applyErr":[
+  {"doc":"a😀b","op":[2,-1,1]},
+  {"doc":"abc","op":[2]}
+ ],
+ "transform":[
+  {"doc":"abc","a":[1,"X",2],"b":[1,"Y",2],"want":"aXYbc"},
+  {"doc":"abcdef","a":[1,-3,2],"b":[2,-3,1],"want":"af"},
+  {"doc":"😀😀","a":[2,"é",2],"b":[-2,2],"want":"é😀"}
+ ]}

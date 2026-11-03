@@ -4,7 +4,7 @@
 <style>
 :root{color-scheme:light dark;--bg:#fafaf7;--fg:#222;--mut:#777;--line:#ddd;--acc:#2b6cb0;--err:#c53030}
 @media(prefers-color-scheme:dark){:root{--bg:#1a1b1e;--fg:#ddd;--mut:#888;--line:#333;--acc:#7aa7e0;--err:#f08080}}
-*{box-sizing:border-box}
+*{box-sizing:border-box} [hidden]{display:none!important}
 body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
 a{color:var(--acc)} .mut{color:var(--mut)} .err{color:var(--err)} .sp{flex:1}
 header{display:flex;flex-wrap:wrap;gap:.4rem 1rem;align-items:center;padding:.5rem 1rem;border-bottom:1px solid var(--line)}
@@ -13,12 +13,51 @@ input,select,button{font:inherit;padding:.3rem .5rem}
 form.inline{display:inline} button.link{background:none;border:0;color:var(--acc);cursor:pointer;padding:0}
 table{width:100%;border-collapse:collapse;margin-top:1rem} td{padding:.35rem 0;border-bottom:1px solid var(--line)}
 body.ed{display:flex;flex-direction:column;height:100dvh}
-textarea{flex:1;width:100%;border:0;padding:1rem;font:14px/1.5 ui-monospace,monospace;background:var(--bg);color:var(--fg);resize:none;outline:none}
+textarea,#mir,.gut{font:14px/1.5 ui-monospace,monospace} /* uma regra só: o espelho e a calha medem o mesmo texto */
+textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);resize:none;outline:none}
+.area{flex:1;display:flex;min-height:0}
+.area.fol{outline:2px solid var(--fc);outline-offset:-2px}
+.box{flex:1;position:relative;overflow:hidden}
+.box textarea{position:absolute;inset:0;height:100%}
+#mir{position:absolute;top:0;left:0;visibility:hidden;padding:1rem;white-space:pre-wrap;overflow-wrap:break-word}
+#lay{position:absolute;top:0;left:0;overflow:hidden;pointer-events:none}
+#lay div{position:absolute}
+#lay .s{opacity:.2;border-radius:2px}
+#lay .c{width:2px}
+#lay .c span,#lay .k{font:600 10px/1.4 system-ui,sans-serif;color:#fff;padding:0 .3rem;white-space:nowrap}
+#lay .c span{font-size:9px;line-height:1.25;padding:0 .25rem}
+#lay .c span{position:absolute;bottom:100%;left:0;border-radius:3px 3px 3px 0}
+#lay .c.dn span{bottom:auto;top:100%;border-radius:0 3px 3px 3px}
+#lay .k{border-radius:3px;display:flex;align-items:center}
+.gut{position:relative;overflow:hidden;flex:none;color:var(--mut);border-right:1px solid var(--line);user-select:none}
+.gut div{position:absolute;right:.5rem} .gut .on{font-weight:700}
+#peers{position:relative}
+#quem{display:inline-flex;background:none;border:0;padding:0 0 0 6px;cursor:pointer}
+.dot{width:22px;height:22px;border-radius:50%;color:#fff;display:inline-grid;place-items:center;font:600 11px system-ui,sans-serif;margin-left:-6px;border:2px solid var(--bg)}
+.dot.ring{box-shadow:0 0 0 2px var(--c)}
+#quem-menu{position:absolute;right:0;top:1.9rem;z-index:2;min-width:13rem;padding:.35rem;background:var(--bg);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px #0003;font-size:13px}
+#quem-menu button{display:flex;align-items:center;gap:.5rem;width:100%;padding:.35rem .5rem;border:0;border-radius:6px;background:none;color:inherit;text-align:left;cursor:pointer}
+#quem-menu button:hover,#quem-menu button:focus-visible{background:var(--line)} #quem-menu button[aria-disabled]{cursor:default}
+#quem-menu small{display:block;color:var(--mut)}
+.sq{width:10px;height:10px;border-radius:50%;flex:none}
+.seguir{display:flex;gap:.5rem;padding:.3rem 1rem;color:#fff;font-size:13px} .seguir button{color:#fff;text-decoration:underline}
 details{position:relative} summary{cursor:pointer;color:var(--acc)}
 .pop{position:absolute;right:0;top:1.8rem;z-index:1;width:22rem;max-width:90vw;padding:1rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
 .pop ul{padding-left:1.2rem}
+.aviso{position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);max-width:90vw;padding:.4rem .8rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
 </style></head>
 {{end}}
+
+{{/* avisos e scripts do editor ao vivo, comuns ao doc e ao public */}}
+{{/* presença no cabeçalho: bolinhas e o menu delas (presence.js) */}}
+{{define "peers"}}<span id="peers"><button id="quem" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quem-menu" hidden></button><span id="quem-menu" role="menu" hidden></span></span>{{end}}
+
+{{/* faixa do acompanhar; o editor fica numa .area com a calha de linhas, o espelho e a camada de cursores */}}
+{{define "seguir"}}<div id="seguir" class="seguir" role="status" hidden>👁 acompanhando <b></b><span class="sp"></span><button type="button" class="link">parar</button></div>{{end}}
+
+{{define "live"}}<p id="trava" class="aviso err" role="status" hidden></p>
+<p id="fim" class="aviso" role="alert" hidden><span></span><a href="">recarregar</a></p>
+<script src="/_static/ot.js"></script><script src="/_static/sync.js"></script><script src="/_static/editor.js"></script><script src="/_static/presence.js"></script>{{end}}
 
 {{define "logout"}}<form method="post" action="/_logout" class="inline"><button class="link">sair</button></form>{{end}}
 
@@ -67,15 +106,17 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 </main></body></html>{{end}}
 
 {{define "public"}}{{template "head" .Name}}<body class="ed">
-<header><b>{{.Name}}</b><span class="mut">somente leitura</span><span class="sp"></span>
+<header><b>{{.Name}}</b><span class="mut">somente leitura</span><span id="st" class="mut"></span><span class="sp"></span>{{template "peers"}}
 {{if .Me}}<a href="/">documentos</a>{{else}}<a href="/_login?next=/{{.Name}}">entrar</a>{{end}}</header>
-<textarea readonly spellcheck="false" aria-label="{{.Name}}">{{.Body}}</textarea>
+{{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
+<textarea id="t" readonly spellcheck="false" aria-label="{{.Name}}" data-name="{{.Name}}" data-can-edit="false">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
+{{template "live"}}
 </body></html>{{end}}
 
 {{define "doc"}}{{template "head" .Label}}<body class="ed">
 <header>
 <a href="/">← documentos</a><b>{{.Label}}</b>{{if .Public}}<span class="mut">público</span>{{end}}
-<span id="st" class="mut">{{if not .Exists}}novo: salva quando você digitar{{end}}</span>
+<span id="st" class="mut"></span>
 <span class="sp"></span>
 {{if .Owner}}<details {{if .NotFound}}open{{end}}><summary>compartilhar</summary><div class="pop">
 {{if .NotFound}}<p class="err">Usuário ou grupo não encontrado.</p>{{end}}
@@ -93,24 +134,10 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 </form>
 <form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="link err">apagar documento</button></form>
 </div></details>{{end}}
+{{template "peers"}}
 {{if .Me}}<span class="mut">{{.Me}}</span>{{template "logout"}}{{else}}<a href="/_login">entrar</a>{{end}}
 </header>
-<textarea id="t" spellcheck="false" autofocus>{{.Body}}</textarea>
-<script>
-const t = document.getElementById('t'), st = document.getElementById('st');
-let timer, dirty = false, queue = Promise.resolve();
-t.addEventListener('input', () => { dirty = true; st.textContent = '…'; clearTimeout(timer); timer = setTimeout(save, 700); });
-// salvamentos em fila, para chegarem ao servidor na ordem em que foram feitos
-function save() {
-  dirty = false;
-  const body = t.value;
-  queue = queue.then(() => fetch(location.pathname, {method: 'POST', body}))
-    .then(r => {
-      if (!r.ok) throw new Error(r.status === 401 ? 'sessão expirada: recarregue e entre de novo' : 'erro ao salvar (' + r.status + ')');
-      if (!dirty) st.textContent = 'salvo';
-    })
-    .catch(e => { dirty = true; st.textContent = e.message; });
-}
-addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
-</script>
+{{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
+<textarea id="t" spellcheck="false" autofocus data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
+{{template "live"}}
 </body></html>{{end}}
