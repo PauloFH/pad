@@ -234,7 +234,7 @@
     const focused = menu.contains(document.activeElement) ? document.activeElement.dataset.key : null;
     const items = keyed(menu, gs, () => {
       const b = el('button');
-      Object.assign(b, { type: 'button', onclick: () => choose(b.dataset.key) });
+      Object.assign(b, { type: 'button', className: 'menu-item', onclick: () => choose(b.dataset.key) });
       b.setAttribute('role', 'menuitem');
       b.append(el('span', 'sq'), el('span'));
       b.lastChild.append(el('span'), el('small'));
@@ -307,7 +307,9 @@
   document.addEventListener('pad:op', (e) => { last[e.detail.by] = Date.now(); schedule(); });
   t.addEventListener('scroll', schedule);
   new ResizeObserver(schedule).observe(t);
-  document.fonts?.ready.then(schedule); // a fonte embutida chega depois e muda a medida do texto
+  // a fonte embutida chega depois e muda a medida do texto; o ready pode já ter resolvido antes de ela começar a carregar
+  document.fonts?.ready.then(schedule);
+  document.fonts?.addEventListener('loadingdone', schedule);
   const quit = (e) => { if (follow && stopsFollow(e)) stop(); };
   t.addEventListener('input', (e) => { last[pad.me] = Date.now(); quit(e); });
   t.addEventListener('keydown', quit);

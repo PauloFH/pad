@@ -577,11 +577,7 @@ func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 		serverError(w, err)
 		return
 	}
-	col, err := a.coluna(u, "")
-	if err != nil {
-		serverError(w, err)
-		return
-	}
+	col := colunaDe(docs, u, "")
 	agora := time.Now()
 	bloco := func(d docRow, por bool) cartao {
 		meta := []string{quando(d.UpdatedAt, agora)}
@@ -674,6 +670,11 @@ func (a *app) coluna(u user, atual string) (*colunaData, error) {
 	if err != nil {
 		return nil, err
 	}
+	return colunaDe(docs, u, atual), nil
+}
+
+// colunaDe monta a coluna a partir dos documentos já lidos (a entrada usa os mesmos para os blocos).
+func colunaDe(docs []docRow, u user, atual string) *colunaData {
 	c := &colunaData{Arvore: arvore(docs, u.Name), Atual: atual}
 	for _, d := range docs {
 		if d.Owner != "" {
@@ -681,7 +682,7 @@ func (a *app) coluna(u user, atual string) (*colunaData, error) {
 		}
 	}
 	slices.SortFunc(c.Compartilhados, func(a, b docRow) int { return strings.Compare(a.Name, b.Name) })
-	return c, nil
+	return c
 }
 
 // ramo leva o documento atual para dentro do template recursivo da árvore.

@@ -54,12 +54,14 @@ func TestPainelCompartilhar(t *testing.T) {
 		}
 	}
 
+	// data-aberto em qualquer posição entre os atributos do painel
+	aberto := regexp.MustCompile(`<div id="comp-painel"[^>]*\sdata-aberto[\s>]`)
 	priv := get("/ana/doc")
 	tem(priv, `role="switch"`, `aria-checked="false"`, `name="public" value="1"`,
 		`action="/_share/ana/doc"`, `action="/_unshare/ana/doc"`, `action="/_public/ana/doc"`, `action="/_delete/ana/doc"`,
 		`name="tipo" value="user"`, `name="tipo" value="group"`, `name="alvo"`, `confirm(`,
 		`/_static/compartilhar.js`, `<script>{const p=document.getElementById('comp-painel');p.hidden=!p.hasAttribute('data-aberto')}</script>`)
-	if strings.Contains(priv, `Usuário ou grupo não encontrado`) || strings.Contains(priv, ` data-aberto>`) {
+	if strings.Contains(priv, `Usuário ou grupo não encontrado`) || aberto.MatchString(priv) {
 		t.Error("painel aberto ou com erro sem falha")
 	}
 	// sem JS os formulários têm de estar alcançáveis: o painel não pode vir com hidden
@@ -77,5 +79,9 @@ func TestPainelCompartilhar(t *testing.T) {
 	}
 
 	// alvo inexistente: o painel já nasce aberto com o erro
-	tem(get("/ana/doc?erro=1"), `Usuário ou grupo não encontrado.`, ` data-aberto>`)
+	erro := get("/ana/doc?erro=1")
+	tem(erro, `Usuário ou grupo não encontrado.`)
+	if !aberto.MatchString(erro) {
+		t.Error("painel com erro não nasce aberto")
+	}
 }

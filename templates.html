@@ -6,15 +6,13 @@
 <link rel="preload" href="/_static/fonts/space-grotesk-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/_static/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/_static/pad.css">
-<link rel="stylesheet" href="/_static/componentes.css"><link rel="stylesheet" href="/_static/moldura.css"><link rel="stylesheet" href="/_static/entrada.css"><link rel="stylesheet" href="/_static/compartilhar.css">
+<link rel="stylesheet" href="/_static/componentes.css"><link rel="stylesheet" href="/_static/moldura.css">
 <script src="/_static/theme.js" defer></script>
 <style>
 *{box-sizing:border-box} [hidden]{display:none!important}
 body{margin:0;font:15px/1.5 var(--ui);background:var(--bg);color:var(--fg)}
 a{color:var(--acc)} .mut{color:var(--mut)} .err{color:var(--err)} .sp{flex:1}
-header{display:flex;flex-wrap:wrap;gap:.4rem 1rem;align-items:center;padding:.5rem 1rem;border-bottom:1px solid var(--line)}
-main{padding:1rem;max-width:50rem;margin:auto}
-input,select,button{font:inherit;padding:.3rem .5rem}
+input,button{font:inherit;padding:.3rem .5rem}
 form.inline{display:inline} button.link{background:none;border:0;color:var(--acc);cursor:pointer;padding:0}
 body.ed{display:flex;flex-direction:column;height:100dvh}
 textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);resize:none;outline:none}
@@ -38,10 +36,6 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 #quem{display:inline-flex;background:none;border:0;padding:0 0 0 6px;cursor:pointer}
 .dot{width:22px;height:22px;border-radius:50%;color:#fff;display:inline-grid;place-items:center;font:600 11px var(--ui);margin-left:-6px;border:2px solid var(--bg)}
 .dot.ring{box-shadow:0 0 0 2px var(--c)}
-#quem-menu{position:absolute;right:0;top:1.9rem;z-index:2;min-width:13rem;padding:.35rem;background:var(--bg);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px #0003;font-size:13px}
-#quem-menu button{display:flex;align-items:center;gap:.5rem;width:100%;padding:.35rem .5rem;border:0;border-radius:6px;background:none;color:inherit;text-align:left;cursor:pointer}
-#quem-menu button:hover,#quem-menu button:focus-visible{background:var(--line)} #quem-menu button[aria-disabled]{cursor:default}
-#quem-menu small{display:block;color:var(--mut)}
 .sq{width:10px;height:10px;border-radius:50%;flex:none}
 .seguir{display:flex;gap:.5rem;padding:.3rem 1rem;color:#fff;font-size:13px} .seguir button{color:#fff;text-decoration:underline}
 </style></head>
@@ -49,7 +43,7 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 
 {{/* avisos e scripts do editor ao vivo, comuns ao doc e ao public */}}
 {{/* presença no cabeçalho: bolinhas e o menu delas (presence.js) */}}
-{{define "peers"}}<span id="peers"><button id="quem" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quem-menu" hidden></button><span id="quem-menu" role="menu" hidden></span></span>{{end}}
+{{define "peers"}}<span id="peers"><button id="quem" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quem-menu" hidden></button><span id="quem-menu" class="menu" role="menu" hidden></span></span>{{end}}
 
 {{/* faixa do acompanhar; o editor fica numa .area com a calha de linhas, o espelho e a camada de cursores */}}
 {{define "seguir"}}<div id="seguir" class="seguir" role="status" hidden>👁 acompanhando <b></b><span class="sp"></span><button type="button" class="link">parar</button></div>{{end}}
@@ -138,10 +132,10 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{define "caminho"}}<span class="crumb" title="{{.}}">{{with corta .}}<span class="mut">{{index . 0}}</span><span>{{index . 1}}</span>{{end}}</span>{{end}}
 
 {{/* avatar com o menu da conta; o visitante vê o Entrar que volta para a página */}}
-{{define "conta"}}{{if .Me}}<span class="conta"><button id="conta" class="av" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="conta-menu" title="{{.Me}}" aria-label="conta de {{.Me}}">{{slice .Me 0 1}}</button>
-<span id="conta-menu" class="menu" role="menu" hidden><span class="menu-grupo" role="presentation">{{.Me}}</span>
+{{define "conta"}}{{if .Me}}<div class="conta"><button id="conta" class="av" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="conta-menu" title="{{.Me}}" aria-label="conta de {{.Me}}">{{slice .Me 0 1}}</button>
+<div id="conta-menu" class="menu" role="menu" hidden><span class="menu-grupo" role="presentation">{{.Me}}</span>
 <a class="menu-item" role="menuitem" href="/">documentos</a>{{if .Admin}}<a class="menu-item" role="menuitem" href="/_convite">convidar</a>{{end}}
-<form method="post" action="/_logout"><button class="menu-item" role="menuitem">sair</button></form></span></span>
+<form method="post" action="/_logout"><button class="menu-item" role="menuitem">sair</button></form></div></div>
 {{else}}<a class="btn pri" href="/_login?next=/{{.Name}}">Entrar</a>{{end}}{{end}}
 
 {{/* coluna de documentos; o estado (aberta, pastas) vem do navegador antes de pintar */}}
@@ -162,7 +156,7 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{define "tema"}}<span class="tema"><button id="tema" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="tema-menu">tema</button><span id="tema-menu" class="menu" role="menu" hidden></span></span>{{end}}
 
 {{/* barra de status; true no editor (pessoas e linha), false na página só leitura (quem edita) */}}
-{{define "status"}}<footer class="status">{{if .}}<span id="pessoas" class="forte"></span><span id="lc"></span>{{else}}<span id="editando"></span>{{end}}<span class="sp"></span><span id="st" aria-live="polite"></span>{{template "tema"}}</footer>{{end}}
+{{define "status"}}<footer class="status">{{if .}}<span id="pessoas" class="forte"></span><span id="lc"></span>{{else}}<span id="editando"></span>{{end}}<span class="sp"></span><span><span id="salvo"></span><span id="st" aria-live="polite"></span></span>{{template "tema"}}</footer>{{end}}
 
 {{define "public"}}{{template "head" .Label}}<body class="ed">
 <header class="topo">{{template "moldura-topo" .}}{{template "caminho" .Label}}<span class="selo">só leitura</span><span class="sp"></span>{{template "peers"}}{{template "conta" .}}</header>

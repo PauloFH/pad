@@ -25,7 +25,7 @@
   if (typeof module !== 'undefined') module.exports = { lockedBy, shift };
   if (typeof document === 'undefined') return;
 
-  const t = document.getElementById('t'), st = document.getElementById('st');
+  const t = document.getElementById('t'), st = document.getElementById('st'), salvo = document.getElementById('salvo');
   const lockMsg = document.getElementById('trava'), fim = document.getElementById('fim');
   const canEditPage = t.dataset.canEdit === 'true';
   // o cid vale a vida da aba, entre reconexões: o servidor reconhece a op cujo ack se perdeu
@@ -56,18 +56,19 @@
     }, 50);
   }
 
-  // "salvo" quando o servidor já confirmou tudo (ele grava em disco logo depois); só leitura não salva nada
+  // "salvo" quando o servidor já confirmou tudo (ele grava em disco logo depois); só leitura não salva nada.
+  // Fica em #salvo, sem aria-live, para não ser anunciado a cada pausa; #st (sempre polite) leva só a queda e as recusas
   function saveState() {
     const ok = !t.readOnly && !pad.sync.pending();
-    st.setAttribute('aria-live', 'off'); // salvo/salvando a cada pausa não é anunciado; só a queda e as recusas
-    st.textContent = t.readOnly ? '' : ok ? 'salvo' : 'salvando…';
-    st.className = ok ? 'ok' : '';
+    st.textContent = '';
+    salvo.textContent = t.readOnly ? '' : ok ? 'salvo' : 'salvando…';
+    salvo.className = ok ? 'ok' : '';
   }
 
   function say(text) {
-    st.setAttribute('aria-live', 'polite');
+    salvo.textContent = '';
+    salvo.className = '';
     st.textContent = text;
-    st.className = '';
   }
 
   function warn(text) {

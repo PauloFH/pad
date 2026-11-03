@@ -95,7 +95,7 @@
   }
 
   function desenharAbas(nav, l, atual, u) {
-    nav.replaceChildren(...l.map((nome) => {
+    nav.replaceChildren(...l.map((nome, i) => {
       const aba = document.createElement('span'), a = document.createElement('a'), x = document.createElement('button');
       aba.className = 'aba';
       a.href = '/' + nome;
@@ -111,7 +111,11 @@
       x.onclick = () => {
         const resto = abas.fechar(u, nome);
         if (nome === atual) location.href = resto.length ? '/' + resto[0] : '/';
-        else desenharAbas(nav, resto, atual, u);
+        else {
+          desenharAbas(nav, resto, atual, u);
+          // o botão sumiu no redesenho: o foco vai para a aba que ficou no lugar (a atual nunca sai da lista)
+          (nav.children[i] || nav.lastElementChild).querySelector('a').focus();
+        }
       };
       aba.append(a, x);
       return aba;
