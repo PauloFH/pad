@@ -80,19 +80,19 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		c.Close(websocket.StatusInternalError, "erro interno")
 		return
 	}
+	// o escape do JSON pode dobrar um insert grande; o limite de verdade fica no submit
+	c.SetReadLimit(int64(2*d.max) + 64<<10)
 	defer a.hub.leave(d, p)
 	if cr, ok := a.hub.join(d, p, fresh); !ok {
 		c.Close(cr.code, cr.reason)
 		return
 	}
-	// o escape do JSON pode dobrar um insert grande; o limite de verdade fica no submit
-	c.SetReadLimit(int64(2*maxDoc) + 64<<10)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	written := make(chan struct{})
 	go func() { writeLoop(ctx, c, p); close(written) }()
 	go pingLoop(ctx, c)
-	go a.recheckLoop(ctx, d, p)
+	go a.recheckLoop(ctx, d, p, recheckEvery) // lido aqui: os testes trocam o valor entre conexões
 
 	for {
 		_, b, err := c.Read(ctx)
@@ -176,6 +176,10 @@ func writeLoop(ctx context.Context, c *websocket.Conn, p *peer) {
 		case <-ctx.Done():
 			return
 		case k := <-p.kick:
+			// o select sorteia entre canais prontos: o que já estava na fila (um ack) sai antes.
+			// Depois do kick nada mais entra na fila, e este é o único leitor dela.
+			for len(p.send) > 0 && c.Write(ctx, websocket.MessageText, <-p.send) == nil {
+			}
 			c.Close(k.code, k.reason)
 			return
 		case b, ok := <-p.send:
@@ -237,9 +241,9 @@ func (a *app) recheckPeer(d *liveDoc, p *peer) {
 	}
 }
 
-// recheckLoop reconfere a aba a cada recheckEvery, até a conexão terminar.
-func (a *app) recheckLoop(ctx context.Context, d *liveDoc, p *peer) {
-	t := time.NewTicker(recheckEvery)
+// recheckLoop reconfere a aba a cada every, até a conexão terminar.
+func (a *app) recheckLoop(ctx context.Context, d *liveDoc, p *peer, every time.Duration) {
+	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
 		select {

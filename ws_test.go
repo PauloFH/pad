@@ -822,3 +822,48 @@ func TestHubDesligamento(t *testing.T) {
 		t.Fatalf("depois do desligamento: %+v", ce)
 	}
 }
+
+// o /publico lê no máximo o dobro do seu próprio limite, não o do documento comum
+func TestWSLimiteDeLeituraPublico(t *testing.T) {
+	_, srv, _ := wsApp(t)
+	tc := dialWS(t, srv, &http.Client{}, "publico/leitura", "l1", "")
+	if err := tc.edit(Op{{Insert: strings.Repeat("x", 2*maxPublicoDoc+64<<10)}}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if ce := closedWith(t, tc.c); ce.Code != websocket.StatusMessageTooBig {
+		t.Fatalf("fechou com %+v", ce)
+	}
+}
+
+// o ack já na fila sai antes do fechamento: sem ele, o cliente reenviaria a op ao
+// próximo processo (seqs vazio) e o texto dobraria
+func TestWriteLoopAckAntesDoKick(t *testing.T) {
+	for i := range 50 {
+		p := &peer{send: make(chan []byte, 2), kick: make(chan closeReq, 1)}
+		p.send <- []byte(`{"t":"ack","rev":1}`)
+		p.kick <- closeReq{websocket.StatusGoingAway, "servidor reiniciando"}
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			c, err := websocket.Accept(w, r, nil)
+			if err != nil {
+				return
+			}
+			defer c.CloseNow()
+			writeLoop(r.Context(), c, p)
+		}))
+		c, _, err := websocket.Dial(context.Background(), "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_, b, err := c.Read(ctx)
+		cancel()
+		if err != nil || string(b) != `{"t":"ack","rev":1}` {
+			t.Fatalf("rodada %d: %q, %v", i, b, err)
+		}
+		if ce := closedWith(t, c); ce.Code != websocket.StatusGoingAway {
+			t.Fatalf("rodada %d: fechou com %+v", i, ce)
+		}
+		c.CloseNow()
+		srv.Close()
+	}
+}

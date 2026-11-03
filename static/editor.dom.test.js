@@ -147,3 +147,69 @@ test('reject, reconexão e fechamento 4000', () => {
   assert.strictEqual(p.fim.hidden, false);
   assert.strictEqual(p.fim.firstChild.textContent, 'acesso removido ');
 });
+
+test('insert alheio na borda não entra na seleção (trava) própria', () => {
+  const p = boot();
+  p.recv({ t: 'init', rev: 1, text: 'abcdefghijklmno', me: 'p1', canEdit: true, seq: 0 });
+  p.t.setSelectionRange(5, 10);
+  p.recv({ t: 'op', rev: 2, op: [5, 'x', 10], by: 'p2' }); // no início: a seleção anda
+  assert.deepStrictEqual([p.t.selectionStart, p.t.selectionEnd], [6, 11]);
+  p.recv({ t: 'op', rev: 3, op: [11, 'y', 5], by: 'p2' }); // no fim: a seleção fica
+  assert.deepStrictEqual([p.t.selectionStart, p.t.selectionEnd], [6, 11]);
+});
+
+test('rebase que falha: o init seguinte recomeça e avisa', () => {
+  const p = boot();
+  p.recv({ t: 'init', rev: 1, text: 'olá', me: 'p1', canEdit: true, seq: 0 });
+  p.type('olá!');
+  p.drop();
+  p.tick();
+  window.pad.sync.rebase = () => { throw new Error('fora de compasso'); };
+  const err = console.error;
+  console.error = () => {};
+  p.recv({ t: 'init', rev: 2, text: 'Zolá', me: 'p1', canEdit: true, seq: 0 });
+  console.error = err;
+  p.drop();
+  p.tick();
+  p.recv({ t: 'init', rev: 2, text: 'Zolá', me: 'p1', canEdit: true, seq: 0 });
+  assert.strictEqual(p.t.value, 'Zolá');
+  assert.strictEqual(p.st.textContent, 'não deu para reaplicar o que você digitou durante a queda');
+});
+
+// arrastar um trecho do próprio textarea: o navegador apaga a origem e insere no destino
+function drag(p, from, value, to) {
+  p.t.setSelectionRange(from[0], from[1]);
+  p.L.dragstart?.[0]();
+  const del = p.t.value.slice(0, from[0]) + p.t.value.slice(from[1]);
+  p.L.beforeinput[0]({ inputType: 'deleteByDrag' });
+  p.t.value = del;
+  p.t.setSelectionRange(from[0], from[0]);
+  p.L.input[0]();
+  if (to != null) {
+    p.L.beforeinput[0]({ inputType: 'insertFromDrop' });
+    p.t.value = value;
+    p.t.setSelectionRange(to, to);
+    p.L.input[0]();
+  }
+  p.L.dragend?.[0]();
+}
+
+test('arrastar para dentro de uma trava alheia recusa o mover inteiro', () => {
+  const p = boot();
+  p.recv({ t: 'init', rev: 1, text: 'abcdef', me: 'p1', canEdit: true, seq: 0 });
+  p.recv({ t: 'peers', peers: [{ id: 'p2', name: 'bruno', a: 4, h: 6, lock: true }] });
+  drag(p, [0, 2], 'cdeabf', 5);
+  assert.strictEqual(p.t.value, 'abcdef');
+  assert.deepStrictEqual([p.t.selectionStart, p.t.selectionEnd], [0, 2]);
+  assert.strictEqual(p.trava.textContent, 'trecho travado por bruno');
+  assert.deepStrictEqual(p.ops(), []);
+  // fora da trava o mover sai numa op só
+  drag(p, [0, 2], 'cabdef', 3);
+  assert.strictEqual(p.ops().length, 1);
+  assert.strictEqual(window.pad.sync.text, 'cabdef');
+  // arrastado para fora do textarea: só a origem some, no dragend
+  p.recv({ t: 'ack', rev: 2 });
+  drag(p, [0, 1], null, null);
+  assert.strictEqual(p.ops().length, 2);
+  assert.strictEqual(window.pad.sync.text, 'abdef');
+});

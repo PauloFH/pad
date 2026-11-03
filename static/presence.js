@@ -113,7 +113,8 @@
     if (p.id === pad.me) return { ...p, a: t.selectionStart, h: t.selectionEnd };
     if (parked(p)) return { ...p, parked: true };
     const clamp = (i, stick) => Math.max(0, Math.min(text.length, pad.sync.localIndex(i, stick)));
-    const s = clamp(Math.min(p.a, p.h), true), e = p.a === p.h ? s : clamp(Math.max(p.a, p.h), false);
+    // mesma regra do shift do editor.js: só o fim de uma trava fica parado diante de um insert
+    const s = clamp(Math.min(p.a, p.h), true), e = p.a === p.h ? s : clamp(Math.max(p.a, p.h), !p.lock);
     return { ...p, a: p.a > p.h ? e : s, h: p.a > p.h ? s : e };
   }
 

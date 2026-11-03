@@ -32,7 +32,8 @@
   const cid = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
   const pad = (window.pad = { sync: null, undo: new PadSync.UndoStack(), socket: null, peers: [], me: null });
   let prev = t.value; // texto que o sync conhece; o textarea difere dele só no meio de um input
-  let composing = false, queue = [], resetNext = false, delay = 500, selTimer = 0, msgTimer = 0;
+  // resetNext: o próximo init recomeça do servidor; guarda o motivo a mostrar
+  let composing = false, moving = false, queue = [], resetNext = '', delay = 500, selTimer = 0, msgTimer = 0;
   let saved = { s: 0, e: 0, d: 'none' }; // seleção antes do input, para desfazer um input barrado
   let visitor = null;
   try { visitor = localStorage['pad:visitor'] || null; } catch {}
@@ -62,11 +63,13 @@
     msgTimer = setTimeout(() => (lockMsg.hidden = true), 2000);
   }
 
-  // troca o texto mantendo a seleção própria e a rolagem
+  // troca o texto mantendo a seleção própria e a rolagem. Uma seleção é trava: como no
+  // servidor, insert colado a uma borda fica fora dela (o início anda, o fim fica)
   function show(text, op, stick) {
     const { s, e, d } = raw(), top = t.scrollTop;
     t.value = text;
-    t.setSelectionRange(OT.transformIndex(s, op, stick), OT.transformIndex(e, op, stick), d);
+    const sel = s < e;
+    t.setSelectionRange(OT.transformIndex(s, op, sel || stick), OT.transformIndex(e, op, !sel && stick), d);
     t.scrollTop = top;
   }
 
@@ -79,7 +82,7 @@
   // sem checar readOnly: o compositionend de uma composição cortada pela queda chega
   // com o textarea já travado, e o sync guarda a op até o rebase da reconexão
   function edit() {
-    if (composing || !pad.sync) return;
+    if (composing || moving || !pad.sync) return;
     const before = prev, op = OT.diff(before, t.value, t.selectionEnd);
     if (OT.isNoop(op)) return;
     const who = lockedBy(op, pad.peers, pad.me, local);
@@ -127,8 +130,8 @@
     if (t.value !== pad.sync.text) show(pad.sync.text, OT.diff(t.value, pad.sync.text, 0), false);
     changed();
     send(msg);
-    if (!resetNext) st.textContent = ''; // depois de um reject, o motivo fica à vista
-    resetNext = false;
+    st.textContent = resetNext; // depois de um reject, o motivo fica à vista
+    resetNext = '';
     t.readOnly = !(canEditPage && m.canEdit);
     sendSel();
     fire('pad:peers');
@@ -155,13 +158,12 @@
         pad.peers = m.peers;
         fire('pad:peers');
       } else if (m.t === 'reject') {
-        st.textContent = m.reason;
-        resetNext = true;
+        st.textContent = resetNext = m.reason || 'operação recusada';
       }
     } catch (err) {
       // estado fora de compasso: reconecta; se nem o rebase serviu, o próximo init recomeça do servidor
       console.error(err);
-      if (m.t === 'init') resetNext = true;
+      if (m.t === 'init') resetNext = 'não deu para reaplicar o que você digitou durante a queda';
       pad.socket.close();
     }
   }
@@ -204,7 +206,17 @@
     if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') {
       e.preventDefault();
       history(e.inputType === 'historyRedo');
-    } else if (!composing) saved = raw();
+    } else if (!composing && !moving) saved = raw();
+  });
+  // mover arrastando = apagar a origem + inserir no destino: as duas metades viram uma op só,
+  // aceita ou barrada inteira (sem isso, soltar numa trava alheia apagava o trecho)
+  t.addEventListener('dragstart', () => {
+    moving = true;
+    saved = raw();
+  });
+  t.addEventListener('dragend', () => {
+    moving = false;
+    edit(); // também quando o trecho foi solto fora do textarea
   });
   t.addEventListener('keydown', (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return; // Ctrl+Alt é AltGr no Windows
