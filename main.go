@@ -157,6 +157,10 @@ var staticSub = func() fs.FS { sub, _ := fs.Sub(staticFS, "static"); return sub 
 // noCache faz o navegador revalidar o JS a cada carga: o binário o embute e muda a cada deploy.
 func noCache(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") { // sem listagem do diretório
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Cache-Control", "no-cache")
 		h.ServeHTTP(w, r)
 	})

@@ -85,7 +85,7 @@
     }
     const o = [], ia = iter(a), ib = iter(b);
     while (!ia.done() || !ib.done()) {
-      if (!ia.done() && ia.cur() < 0) { const c = ia.cur(); push(o, c); ia.take(-c); continue; }
+      if (!ia.done() && !isIns(ia.cur()) && ia.cur() < 0) { const c = ia.cur(); push(o, c); ia.take(-c); continue; }
       if (!ib.done() && isIns(ib.cur())) { const c = ib.cur(); push(o, c); ib.take(c.length); continue; }
       if (ia.done() || ib.done()) throw new Error('operações de tamanhos diferentes');
       const ca = ia.cur(), cb = ib.cur(), n = Math.min(len(ca), len(cb));

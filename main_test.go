@@ -242,4 +242,11 @@ func TestStatic(t *testing.T) {
 	if res.Header.Get("Cache-Control") != "no-cache" {
 		t.Errorf("Cache-Control = %q", res.Header.Get("Cache-Control"))
 	}
+	if res, err = http.Get(srv.URL + "/_static/"); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 404 {
+		t.Errorf("listagem do diretório: status %d", res.StatusCode)
+	}
 }

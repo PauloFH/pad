@@ -45,7 +45,7 @@ function randomOp(r, doc) {
   for (let i = 0; i < doc.length; ) {
     const n = isHigh(doc.charCodeAt(i)) ? 2 : 1;
     const k = Math.floor(r() * 5);
-    if (k === 0) { add(pick(r, ['a', 'ç', '😀', 'aç'])); continue; }
+    if (k === 0) { add(pick(r, ['a', 'ç', '😀', 'aç', '-1', '5'])); continue; }
     add(k === 1 ? -n : n);
     i += n;
   }
@@ -142,4 +142,9 @@ test('touchesRange', () => {
     [[9, -2, 1], true],
   ];
   for (const [op, want] of cases) assert.strictEqual(OT.touchesRange(op, 5, 10), want, JSON.stringify(op));
+});
+
+test('compose: insert que parece número não vira delete', () => {
+  assert.deepStrictEqual(OT.compose(['-1'], [2]), ['-1']);
+  assert.deepStrictEqual(OT.compose(['-1', 1], [3]), ['-1', 1]);
 });
