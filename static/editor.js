@@ -33,7 +33,7 @@
   const pad = (window.pad = { sync: null, undo: new PadSync.UndoStack(), socket: null, peers: [], me: null });
   let prev = t.value; // texto que o sync conhece; o textarea difere dele só no meio de um input
   // resetNext: o próximo init recomeça do servidor; guarda o motivo a mostrar
-  let composing = false, moving = false, queue = [], resetNext = '', delay = 500, selTimer = 0, msgTimer = 0;
+  let composing = false, moving = null, queue = [], resetNext = '', delay = 500, selTimer = 0, msgTimer = 0;
   let saved = { s: 0, e: 0, d: 'none' }; // seleção antes do input, para desfazer um input barrado
   let visitor = null;
   try { visitor = localStorage['pad:visitor'] || null; } catch {}
@@ -82,8 +82,24 @@
   // sem checar readOnly: o compositionend de uma composição cortada pela queda chega
   // com o textarea já travado, e o sync guarda a op até o rebase da reconexão
   function edit() {
-    if (composing || moving || !pad.sync) return;
-    const before = prev, op = OT.diff(before, t.value, t.selectionEnd);
+    if (composing || !pad.sync) return;
+    const op = OT.diff(moving?.op ? moving.text : prev, t.value, t.selectionEnd);
+    if (!moving) return commit(op);
+    // cada metade do mover tem o seu diff: um só, da origem ao destino, apagaria e
+    // reinseriria tudo entre elas (cursores alheios pulam, travas no caminho barram)
+    moving.op = moving.op ? OT.compose(moving.op, op) : op;
+    moving.text = t.value;
+  }
+
+  // fim do mover arrastando: as metades compostas saem numa op só, aceita ou barrada inteira
+  function endMove() {
+    const op = moving?.op;
+    moving = null;
+    if (op) commit(op);
+  }
+
+  function commit(op) {
+    const before = prev;
     if (OT.isNoop(op)) return;
     const who = lockedBy(op, pad.peers, pad.me, local);
     if (who) {
@@ -139,6 +155,7 @@
 
   function receive(m) {
     if (composing) return queue.push(m); // nada mexe no textarea no meio de uma composição
+    if (moving?.op) endMove(); // as duas metades chegam na mesma tarefa: um dragend se perdeu
     try {
       if (m.t === 'init') init(m);
       else if (m.t === 'ack') {
@@ -203,22 +220,22 @@
     q.forEach(receive);
   });
   t.addEventListener('beforeinput', (e) => {
+    if (e.inputType !== 'deleteByDrag' && e.inputType !== 'insertFromDrop') endMove(); // dragend perdido não segura a digitação
     if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') {
       e.preventDefault();
       history(e.inputType === 'historyRedo');
     } else if (!composing && !moving) saved = raw();
   });
-  // mover arrastando = apagar a origem + inserir no destino: as duas metades viram uma op só,
-  // aceita ou barrada inteira (sem isso, soltar numa trava alheia apagava o trecho)
+  // mover arrastando = apagar a origem + inserir no destino (sem juntar, soltar numa trava
+  // alheia apagava o trecho); dragend também vem quando o trecho foi solto fora do textarea
   t.addEventListener('dragstart', () => {
-    moving = true;
+    endMove();
+    moving = { op: null, text: '' };
     saved = raw();
   });
-  t.addEventListener('dragend', () => {
-    moving = false;
-    edit(); // também quando o trecho foi solto fora do textarea
-  });
+  t.addEventListener('dragend', endMove);
   t.addEventListener('keydown', (e) => {
+    endMove();
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return; // Ctrl+Alt é AltGr no Windows
     const k = e.key.toLowerCase();
     if (k === 'z' || k === 'y') {

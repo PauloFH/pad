@@ -213,3 +213,34 @@ test('arrastar para dentro de uma trava alheia recusa o mover inteiro', () => {
   assert.strictEqual(p.ops().length, 2);
   assert.strictEqual(window.pad.sync.text, 'abdef');
 });
+
+test('mover arrastando manda as duas metades compostas, não o trecho entre elas', () => {
+  const p = boot();
+  p.recv({ t: 'init', rev: 1, text: 'ab0123456789', me: 'p1', canEdit: true, seq: 0 });
+  p.recv({ t: 'peers', peers: [
+    { id: 'p2', name: 'bruno', a: 6, h: 6, lock: false },
+    { id: 'p3', name: 'caio', a: 4, h: 6, lock: true }, // trava no caminho, não no destino
+  ] });
+  drag(p, [0, 2], '0123456789ab', 12);
+  assert.strictEqual(p.trava.hidden, true);
+  assert.deepStrictEqual(p.ops().map((m) => m.op), [[-2, 10, 'ab']]);
+  p.recv({ t: 'ack', rev: 2 });
+  assert.deepStrictEqual([window.pad.peers[0].a, window.pad.peers[0].h], [4, 4]); // o cursor do bruno não pula
+  assert.strictEqual(window.pad.sync.text, '0123456789ab');
+});
+
+test('sem dragend, a próxima tecla encerra o mover e envia o que ficou', () => {
+  const p = boot();
+  p.recv({ t: 'init', rev: 1, text: 'abcdef', me: 'p1', canEdit: true, seq: 0 });
+  p.t.setSelectionRange(0, 2);
+  p.L.dragstart[0]();
+  p.L.beforeinput[0]({ inputType: 'deleteByDrag' });
+  p.t.value = 'cdef';
+  p.t.setSelectionRange(0, 0);
+  p.L.input[0]();
+  p.L.keydown[0]({ key: 'x' });
+  assert.deepStrictEqual(p.ops().map((m) => m.op), [[-2, 4]]);
+  p.recv({ t: 'ack', rev: 2 });
+  p.type('cdefx');
+  assert.deepStrictEqual(p.ops().at(-1).op, [4, 'x']);
+});
