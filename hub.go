@@ -392,7 +392,7 @@ func (d *liveDoc) sendInit(p *peer, visitor string) {
 }
 
 // editores dá os logins distintos de quem edita o documento agora, em ordem
-// alfabética. Leitores e visitantes não têm login; no /publico ninguém tem.
+// alfabética. Leitores e visitantes não têm login; o /publico fica de fora.
 func (h *hub) editores(name string) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -404,7 +404,7 @@ func (h *hub) editores(name string) []string {
 	defer d.mu.Unlock()
 	set := map[string]bool{}
 	for p := range d.peers {
-		if p.canEdit && p.login != "" {
+		if !d.publico && p.canEdit && p.login != "" {
 			set[p.login] = true
 		}
 	}

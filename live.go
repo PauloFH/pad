@@ -306,9 +306,10 @@ next:
 	return changed
 }
 
-// nameFor é o nome de p visto por to: login só entre editores fora do /publico.
+// nameFor é o nome de p visto por to: no /publico quem tem conta aparece pelo
+// login para todos; fora dele, o login só aparece entre editores.
 func (d *liveDoc) nameFor(to, p *peer) string {
-	if !d.publico && to.canEdit && p.canEdit && p.login != "" {
+	if p.login != "" && (d.publico || to.canEdit && p.canEdit) {
 		return p.login
 	}
 	return p.visitor

@@ -64,7 +64,7 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		ck, _ := r.Cookie("sid") // logged garante o cookie
 		p.sid = ck.Value
 	}
-	if canEdit && logged && !isPublico(name) {
+	if canEdit && logged {
 		p.key, p.login = fmt.Sprintf("u:%d", u.ID), u.Name
 	}
 

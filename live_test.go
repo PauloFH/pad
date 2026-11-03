@@ -281,14 +281,18 @@ func TestNomesPorDestinatario(t *testing.T) {
 		t.Fatal("presença deve incluir todo mundo, a própria aba também")
 	}
 
+	// no /publico quem tem conta aparece pelo login para todos; anônimo segue visitante
 	p := newLiveDoc("publico/x", "")
-	pa := novoPeer(p, "1", "v:1", "ana", "Capivara Anônima", true)
-	pb := novoPeer(p, "2", "v:2", "bruno", "Tatu Curioso", true)
-	if v := nome(p.views(pb), "1"); v.Name != "Capivara Anônima" {
-		t.Fatalf("no /publico vê %+v", v)
-	}
-	if v := nome(p.views(pa), "2"); v.Name != "Tatu Curioso" {
-		t.Fatalf("no /publico vê %+v", v)
+	pa := novoPeer(p, "1", "u:1", "ana", "Capivara Anônima", true)
+	pb := novoPeer(p, "2", "u:2", "bruno", "Tatu Curioso", true)
+	pc := novoPeer(p, "3", "v:9", "", "Arara Azul", true)
+	for _, c := range []struct {
+		to       *peer
+		id, nome string
+	}{{pb, "1", "ana"}, {pa, "2", "bruno"}, {pc, "1", "ana"}, {pc, "2", "bruno"}, {pa, "3", "Arara Azul"}, {pb, "3", "Arara Azul"}} {
+		if v := nome(p.views(c.to), c.id); v.Name != c.nome {
+			t.Fatalf("no /publico %s vê %+v, queria %q", c.to.id, v, c.nome)
+		}
 	}
 }
 

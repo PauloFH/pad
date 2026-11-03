@@ -332,7 +332,7 @@ func TestWSLeitorPublico(t *testing.T) {
 	}
 }
 
-func TestWSPublicoVisitante(t *testing.T) {
+func TestWSPublicoNomes(t *testing.T) {
 	_, srv, login := wsApp(t)
 	ana := login("ana")
 	self := func(tc *testClient) string {
@@ -349,17 +349,41 @@ func TestWSPublicoVisitante(t *testing.T) {
 		return ""
 	}
 	tc := dialWS(t, srv, ana, "publico/sala", "p1", "")
-	token := tc.init.Visitor
-	name := self(tc)
+	if name := self(tc); name != "ana" {
+		t.Fatalf("logada devia aparecer como ana, veio %q", name)
+	}
+	// anônimo: nome de visitante estável ao reconectar com o token
+	an := dialWS(t, srv, &http.Client{}, "publico/sala", "a1", "")
+	token := an.init.Visitor
+	name := self(an)
 	if token == "" || name == "" || name == "ana" {
 		t.Fatalf("visitante %q, nome %q", token, name)
 	}
-	tc.c.Close(websocket.StatusNormalClosure, "")
-	tc = dialWS(t, srv, ana, "publico/sala", "p2", token)
-	if tc.init.Visitor != "" {
-		t.Errorf("token válido não devia gerar outro: %q", tc.init.Visitor)
+	// cada um vê o outro: o anônimo vê o login, a logada vê o nome de visitante
+	for _, c := range []struct {
+		tc         *testClient
+		outro, nom string
+	}{{an, tc.init.Me, "ana"}, {tc, an.init.Me, name}} {
+		vê := func() bool {
+			for _, p := range c.tc.peers {
+				if p.ID == c.outro && p.Name == c.nom {
+					return true
+				}
+			}
+			return false
+		}
+		for !vê() {
+			if _, err := c.tc.next(); err != nil {
+				t.Fatalf("não viu %q: %v", c.nom, err)
+			}
+		}
 	}
-	if got := self(tc); got != name {
+	an.c.Close(websocket.StatusNormalClosure, "")
+	an = dialWS(t, srv, &http.Client{}, "publico/sala", "a2", token)
+	if an.init.Visitor != "" {
+		t.Errorf("token válido não devia gerar outro: %q", an.init.Visitor)
+	}
+	if got := self(an); got != name {
 		t.Errorf("nome mudou ao reconectar: %q, antes %q", got, name)
 	}
 }
