@@ -52,6 +52,11 @@ type peer struct {
 	lock, idle                     bool
 	selSince, active               time.Time
 	send                           chan []byte
+	// usados pelo ws.go: quem conectou (para reconferir o acesso) e o pedido de fechamento
+	u      user
+	logged bool
+	sid    string // sessão do cookie, se havia
+	kick   chan closeReq
 }
 
 // Os métodos não travam d.mu: quem chama segura o lock, para juntar a
@@ -73,6 +78,7 @@ type liveDoc struct {
 	refs                  int
 	dropT, flushT, peersT *time.Timer
 	stop                  chan struct{} // encerra o tique de 1 s
+	gone                  closeReq      // sob mu: descartado pelo hub; não grava nem aceita aba
 }
 
 type peerView struct {

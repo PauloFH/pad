@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -25,32 +27,30 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "identificador de aba inválido", http.StatusBadRequest)
 		return
 	}
+	ip := clientIP(r)
+	if !a.hub.admit(ip, name) {
+		http.Error(w, "conexões demais, tente de novo mais tarde", http.StatusTooManyRequests)
+		return
+	}
+	defer a.hub.release(ip, name)
 	u, logged, err := a.currentUser(w, r)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
 	// mesmas regras do view, decididas antes do upgrade
-	canEdit, create := true, false
-	if !isPublico(name) {
-		exists, allowed, _, public, err := a.access(name, u.ID)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		switch {
-		case allowed:
-		case logged && !exists && strings.HasPrefix(name, u.Name+"/"):
-			create = true
-		case public:
-			canEdit = false
-		case !logged:
-			http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
-			return
-		default:
-			http.Error(w, "documento não encontrado ou sem acesso", http.StatusNotFound)
-			return
-		}
+	canView, canEdit, create, err := a.liveAccess(name, u, logged)
+	switch {
+	case err != nil:
+		serverError(w, err)
+		return
+	case canView:
+	case !logged:
+		http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
+		return
+	default:
+		http.Error(w, "documento não encontrado ou sem acesso", http.StatusNotFound)
+		return
 	}
 	// toda aba tem identidade de visitante: é o nome que leitores e o /publico veem
 	vid, vname, ok := a.parseVisitor(r.URL.Query().Get("v"))
@@ -59,34 +59,40 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		vid, vname, fresh = a.newVisitor()
 	}
 	p := &peer{id: rand.Text(), key: "v:" + vid, visitor: vname, cid: cid, canEdit: canEdit,
-		active: time.Now(), send: make(chan []byte, 256)}
+		active: time.Now(), send: make(chan []byte, 256), kick: make(chan closeReq, 1), u: u, logged: logged}
+	if logged {
+		ck, _ := r.Cookie("sid") // logged garante o cookie
+		p.sid = ck.Value
+	}
 	if canEdit && logged && !isPublico(name) {
 		p.key, p.login = fmt.Sprintf("u:%d", u.ID), u.Name
 	}
 
-	d, err := a.hub.open(name)
-	if err != nil {
-		serverError(w, err)
-		return
-	}
-	defer a.hub.leave(d, p)
 	c, err := websocket.Accept(w, r, nil) // origem diferente do Host é recusada
 	if err != nil {
 		return // Accept já respondeu
 	}
 	defer c.CloseNow()
+	// só depois do handshake: um upgrade recusado não carrega documento nem liga o tique
+	d, err := a.hub.open(name)
+	if err != nil {
+		log.Print(err)
+		c.Close(websocket.StatusInternalError, "erro interno")
+		return
+	}
+	defer a.hub.leave(d, p)
+	if cr, ok := a.hub.join(d, p, fresh); !ok {
+		c.Close(cr.code, cr.reason)
+		return
+	}
 	// o escape do JSON pode dobrar um insert grande; o limite de verdade fica no submit
 	c.SetReadLimit(int64(2*maxDoc) + 64<<10)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	go writeLoop(ctx, c, p.send)
+	written := make(chan struct{})
+	go func() { writeLoop(ctx, c, p); close(written) }()
 	go pingLoop(ctx, c)
-
-	d.mu.Lock()
-	d.add(p)
-	d.sendInit(p, fresh)
-	d.peersSoon()
-	d.mu.Unlock()
+	go a.recheckLoop(ctx, d, p)
 
 	for {
 		_, b, err := c.Read(ctx)
@@ -101,9 +107,22 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		}
 		bad := json.Unmarshal(b, &m) != nil
 		if m.T == "op" && create && !bad {
-			// mesmo INSERT do save: a primeira op cria o documento no espaço do usuário
-			if _, err := a.db.Exec(`INSERT INTO docs (name, owner_id, updated) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
-				name, u.ID, time.Now().Unix()); err != nil {
+			// mesmo INSERT do save: a primeira op cria o documento no espaço do usuário.
+			// Sob writeMu e só se a aba segue no documento: um del não é desfeito.
+			a.writeMu.Lock()
+			d.mu.Lock()
+			in := d.peers[p]
+			d.mu.Unlock()
+			if in {
+				_, err = a.db.Exec(`INSERT INTO docs (name, owner_id, updated) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
+					name, u.ID, time.Now().Unix())
+			}
+			a.writeMu.Unlock()
+			if !in {
+				<-written // o escritor fecha com o motivo
+				return
+			}
+			if err != nil {
 				log.Print(err)
 				c.Close(websocket.StatusInternalError, "erro interno")
 				return
@@ -112,6 +131,11 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		}
 		now := time.Now()
 		d.mu.Lock()
+		if !d.peers[p] { // fila estourada ou acesso mudou: nada mais dela vale
+			d.mu.Unlock()
+			<-written // o escritor fecha com o motivo
+			return
+		}
 		switch {
 		case bad:
 			d.sendJSON(p, map[string]any{"t": "reject", "reason": errInvalid.Error()})
@@ -146,12 +170,15 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeLoop é o único que escreve no socket; canal fechado = aba que não acompanhou.
-func writeLoop(ctx context.Context, c *websocket.Conn, send chan []byte) {
+func writeLoop(ctx context.Context, c *websocket.Conn, p *peer) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case b, ok := <-send:
+		case k := <-p.kick:
+			c.Close(k.code, k.reason)
+			return
+		case b, ok := <-p.send:
 			if !ok {
 				c.Close(websocket.StatusPolicyViolation, "conexão lenta demais")
 				return
@@ -162,6 +189,78 @@ func writeLoop(ctx context.Context, c *websocket.Conn, send chan []byte) {
 			}
 		}
 	}
+}
+
+// liveAccess decide, como o view, se a aba abre o documento, se edita e se a
+// primeira op o cria. A conexão e as reconferências usam esta mesma função.
+func (a *app) liveAccess(name string, u user, logged bool) (canView, canEdit, create bool, err error) {
+	if isPublico(name) {
+		return true, true, false, nil
+	}
+	exists, allowed, _, public, err := a.access(name, u.ID)
+	switch {
+	case err != nil:
+		return false, false, false, err
+	case allowed:
+		return true, true, false, nil
+	case logged && !exists && strings.HasPrefix(name, u.Name+"/"):
+		return true, true, true, nil
+	}
+	return public, false, false, nil
+}
+
+// recheckPeer fecha a aba com 4000 se a sessão caiu ou se o acesso mudou desde a conexão.
+func (a *app) recheckPeer(d *liveDoc, p *peer) {
+	if isPublico(d.name) {
+		return // aberto a todos: nada a mudar
+	}
+	u, logged := p.u, p.logged
+	if p.sid != "" {
+		err := a.db.QueryRow(`SELECT 1 FROM sessions WHERE token = ? AND expires > ?`, p.sid, time.Now().Unix()).Scan(new(int))
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			u, logged = user{}, false
+		case err != nil:
+			log.Print(err)
+			return
+		}
+	}
+	canView, canEdit, _, err := a.liveAccess(d.name, u, logged)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	if !canView || canEdit != p.canEdit {
+		d.mu.Lock()
+		d.kick(p, closeReq{4000, accessChanged})
+		d.mu.Unlock()
+	}
+}
+
+// recheckLoop reconfere a aba a cada recheckEvery, até a conexão terminar.
+func (a *app) recheckLoop(ctx context.Context, d *liveDoc, p *peer) {
+	t := time.NewTicker(recheckEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			a.recheckPeer(d, p)
+		}
+	}
+}
+
+// shortcut: confia no X-Real-Ip do Traefik; se o serviço ficar exposto sem proxy, ler só o RemoteAddr
+func clientIP(r *http.Request) string {
+	if ip := r.Header.Get("X-Real-Ip"); ip != "" {
+		return ip
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // pingLoop derruba a conexão que parou de responder.

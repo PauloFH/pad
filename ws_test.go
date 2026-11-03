@@ -1,8 +1,12 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"math/rand/v2"
 	"net/http"
 	"net/http/cookiejar"
@@ -281,12 +285,17 @@ func TestWSSemAcesso(t *testing.T) {
 }
 
 func TestWSOrigemOutroSite(t *testing.T) {
-	_, srv, _ := wsApp(t)
+	a, srv, _ := wsApp(t)
 	_, res, err := websocket.Dial(context.Background(), wsURL(srv, "publico/x", "c=x"), &websocket.DialOptions{
 		HTTPHeader: http.Header{"Origin": {"https://evil.example"}},
 	})
 	if err == nil || res == nil || res.StatusCode != http.StatusForbidden {
 		t.Errorf("handshake de outra origem: %v, %+v", err, res)
+	}
+	a.hub.mu.Lock()
+	defer a.hub.mu.Unlock()
+	if len(a.hub.docs) != 0 {
+		t.Error("handshake recusado carregou o documento")
 	}
 }
 
@@ -500,4 +509,316 @@ func TestEnqueueCheio(t *testing.T) {
 		t.Fatal("canal devia estar fechado")
 	}
 	d.enqueue(p, []byte("c")) // já fora: não envia nem fecha de novo
+}
+
+// eventually espera ok virar verdade em até 2 s.
+func eventually(t *testing.T, what string, ok func() bool) {
+	t.Helper()
+	for deadline := time.Now().Add(2 * time.Second); !ok(); time.Sleep(5 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal(what)
+		}
+	}
+}
+
+// closedWith lê até a conexão fechar (em até 1 s) e devolve o código e o motivo.
+func closedWith(t *testing.T, c *websocket.Conn) websocket.CloseError {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	for {
+		_, _, err := c.Read(ctx)
+		if err == nil {
+			continue
+		}
+		var ce websocket.CloseError
+		if !errors.As(err, &ce) {
+			t.Fatalf("conexão não fechou com código: %v", err)
+		}
+		return ce
+	}
+}
+
+func postStatus(t *testing.T, c *http.Client, u, body string) (int, string) {
+	t.Helper()
+	res, err := c.Post(u, "text/plain", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	return res.StatusCode, strings.TrimSpace(string(b))
+}
+
+const accessMsg = "seu acesso a este documento mudou: recarregue a página"
+
+func TestWSPerdeAcesso(t *testing.T) {
+	_, srv, login := wsApp(t)
+	ana, bia := login("ana"), login("bia")
+	post(t, ana, srv.URL+"/ana/doc", "text/plain", "oi")
+	post(t, ana, srv.URL+"/_share/ana/doc", "application/x-www-form-urlencoded", "tipo=user&alvo=bia")
+	tc := dialWS(t, srv, bia, "ana/doc", "b1", "")
+	dona := dialWS(t, srv, ana, "ana/doc", "a1", "")
+	post(t, ana, srv.URL+"/_unshare/ana/doc", "application/x-www-form-urlencoded", "tipo=user&alvo=bia")
+	if ce := closedWith(t, tc.c); ce.Code != 4000 || ce.Reason != accessMsg {
+		t.Fatalf("fechou com %+v", ce)
+	}
+	// a dona continua: o acesso dela não mudou
+	if err := dona.edit(Op{{Retain: 2}, {Insert: "!"}}, 3); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dona.until(isType("ack")); err != nil {
+		t.Fatal(err)
+	}
+	// leitor que vira editor também recarrega (canEdit mudou)
+	post(t, ana, srv.URL+"/_public/ana/doc", "application/x-www-form-urlencoded", "public=1")
+	leitor := dialWS(t, srv, bia, "ana/doc", "b2", "")
+	if leitor.init.CanEdit {
+		t.Fatal("bia devia só ler")
+	}
+	post(t, ana, srv.URL+"/_share/ana/doc", "application/x-www-form-urlencoded", "tipo=user&alvo=bia")
+	if ce := closedWith(t, leitor.c); ce.Code != 4000 || ce.Reason != accessMsg {
+		t.Fatalf("leitor fechou com %+v", ce)
+	}
+}
+
+func TestWSApagado(t *testing.T) {
+	old := flushDelay
+	flushDelay = 20 * time.Millisecond
+	t.Cleanup(func() { flushDelay = old })
+	a, srv, login := wsApp(t)
+	ana := login("ana")
+	path := filepath.Join(a.docsDir, "ana", "doc.txt")
+	gone := func() {
+		t.Helper()
+		time.Sleep(5 * flushDelay)
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("arquivo voltou: %v", err)
+		}
+		var n int
+		a.db.QueryRow(`SELECT COUNT(*) FROM docs WHERE name = 'ana/doc'`).Scan(&n)
+		if n != 0 {
+			t.Fatal("registro voltou")
+		}
+	}
+	post(t, ana, srv.URL+"/ana/doc", "text/plain", "velho")
+	tc := dialWS(t, srv, ana, "ana/doc", "a1", "")
+	if err := tc.edit(Op{{Retain: 5}, {Insert: "!"}}, 6); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tc.until(isType("ack")); err != nil {
+		t.Fatal(err)
+	}
+	post(t, ana, srv.URL+"/_delete/ana/doc", "application/x-www-form-urlencoded", "")
+	if ce := closedWith(t, tc.c); ce.Code != 4000 || ce.Reason != "documento apagado" {
+		t.Fatalf("fechou com %+v", ce)
+	}
+	gone()
+
+	// apagado no prazo da memória (sem abas): a reconexão não traz o texto de volta
+	post(t, ana, srv.URL+"/ana/doc", "text/plain", "outro")
+	tc = dialWS(t, srv, ana, "ana/doc", "a2", "")
+	tc.c.Close(websocket.StatusNormalClosure, "")
+	eventually(t, "aba não saiu", func() bool { return !a.hub.connected("ana/doc") })
+	post(t, ana, srv.URL+"/_delete/ana/doc", "application/x-www-form-urlencoded", "")
+	tc = dialWS(t, srv, ana, "ana/doc", "a3", "")
+	if tc.init.Text != "" || !tc.init.CanEdit {
+		t.Fatalf("init depois de apagar: %+v", tc.init)
+	}
+	tc.c.Close(websocket.StatusNormalClosure, "")
+	gone()
+}
+
+func TestWSSessaoExpira(t *testing.T) {
+	old := recheckEvery
+	recheckEvery = 50 * time.Millisecond
+	t.Cleanup(func() { recheckEvery = old })
+	a, srv, login := wsApp(t)
+	ana, bia := login("ana"), login("bia")
+	post(t, ana, srv.URL+"/ana/doc", "text/plain", "oi")
+	post(t, ana, srv.URL+"/_share/ana/doc", "application/x-www-form-urlencoded", "tipo=user&alvo=bia")
+	tc := dialWS(t, srv, bia, "ana/doc", "b1", "")
+	dona := dialWS(t, srv, ana, "ana/doc", "a1", "")
+	time.Sleep(3 * recheckEvery) // nada mudou: ninguém cai
+	if _, err := a.db.Exec(`DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE name = 'bia')`); err != nil {
+		t.Fatal(err)
+	}
+	if ce := closedWith(t, tc.c); ce.Code != 4000 || ce.Reason != accessMsg {
+		t.Fatalf("fechou com %+v", ce)
+	}
+	if err := dona.edit(Op{{Retain: 2}, {Insert: "!"}}, 3); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dona.until(isType("ack")); err != nil {
+		t.Fatalf("a ana caiu junto: %v", err)
+	}
+}
+
+func TestPOSTComConexao(t *testing.T) {
+	a, srv, login := wsApp(t)
+	ana := login("ana")
+	post(t, ana, srv.URL+"/ana/doc", "text/plain", "velho")
+	tc := dialWS(t, srv, ana, "ana/doc", "a1", "")
+	if st, msg := postStatus(t, ana, srv.URL+"/ana/doc", "x"); st != 409 || msg != "documento aberto na edição ao vivo: recarregue a página" {
+		t.Fatalf("POST com aba aberta: %d %q", st, msg)
+	}
+	tc.c.Close(websocket.StatusNormalClosure, "")
+	eventually(t, "aba não saiu", func() bool { return !a.hub.connected("ana/doc") })
+	if st, msg := postStatus(t, ana, srv.URL+"/ana/doc", "novo"); st != 204 {
+		t.Fatalf("POST sem aba: %d %q", st, msg)
+	}
+	// reconexão no prazo da memória: vale o texto do POST, e a op seguinte não ressuscita o velho
+	tc = dialWS(t, srv, ana, "ana/doc", "a1", "")
+	if tc.init.Text != "novo" {
+		t.Fatalf("init depois do POST: %q", tc.init.Text)
+	}
+	if err := tc.edit(Op{{Retain: 4}, {Insert: "!"}}, 5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tc.until(isType("ack")); err != nil {
+		t.Fatal(err)
+	}
+	tc.c.Close(websocket.StatusNormalClosure, "")
+	path := filepath.Join(a.docsDir, "ana", "doc.txt")
+	eventually(t, "não gravou novo!", func() bool { b, _ := os.ReadFile(path); return string(b) == "novo!" })
+}
+
+func TestEvictPulaAberto(t *testing.T) {
+	old := maxPublicoItems
+	t.Cleanup(func() { maxPublicoItems = old })
+	a, srv, _ := wsApp(t)
+	anon := &http.Client{}
+	for i, n := range []string{"a", "b"} {
+		post(t, anon, srv.URL+"/publico/"+n, "text/plain", n)
+		at := time.Now().Add(time.Duration(i-10) * time.Hour) // a é o mais antigo
+		os.Chtimes(filepath.Join(a.docsDir, "publico", n+".txt"), at, at)
+	}
+	// b fica na memória (prazo de keepAlive) depois que a aba sai
+	tb := dialWS(t, srv, anon, "publico/b", "b1", "")
+	tb.c.Close(websocket.StatusNormalClosure, "")
+	eventually(t, "aba não saiu", func() bool { return !a.hub.connected("publico/b") })
+	ta := dialWS(t, srv, anon, "publico/a", "a1", "")
+	maxPublicoItems = 2
+	post(t, anon, srv.URL+"/publico/c", "text/plain", "c")
+	for n, want := range map[string]bool{"a": true, "b": false, "c": true} {
+		if _, err := os.Stat(filepath.Join(a.docsDir, "publico", n+".txt")); (err == nil) != want {
+			t.Errorf("publico/%s existe = %v, queria %v", n, err == nil, want)
+		}
+	}
+	if ta.init.Text != "a" {
+		t.Fatalf("init de a: %q", ta.init.Text)
+	}
+	// b apagado não volta da memória
+	if tb = dialWS(t, srv, anon, "publico/b", "b2", ""); tb.init.Text != "" {
+		t.Fatalf("b voltou da memória: %q", tb.init.Text)
+	}
+}
+
+func TestWSLimitePorIP(t *testing.T) {
+	a, srv, _ := wsApp(t)
+	dial := func(name, ip string) (*websocket.Conn, int) {
+		h := http.Header{}
+		if ip != "" {
+			h.Set("X-Real-Ip", ip)
+		}
+		c, res, err := websocket.Dial(context.Background(), wsURL(srv, name, "c=x"), &websocket.DialOptions{HTTPHeader: h})
+		if err != nil {
+			if res == nil {
+				t.Fatal(err)
+			}
+			return nil, res.StatusCode
+		}
+		t.Cleanup(func() { c.CloseNow() })
+		return c, res.StatusCode
+	}
+	var first *websocket.Conn
+	for i := range maxConnsPerIP {
+		c, st := dial(fmt.Sprintf("publico/d%d", i), "")
+		if st != 101 {
+			t.Fatalf("conexão %d: %d", i+1, st)
+		}
+		first = cmp.Or(first, c)
+	}
+	if _, st := dial("publico/outro", ""); st != 429 {
+		t.Fatalf("conexão %d: %d, queria 429", maxConnsPerIP+1, st)
+	}
+	if _, st := dial("publico/outro", "10.0.0.9"); st != 101 {
+		t.Fatalf("outro IP: %d", st)
+	}
+	// a vaga volta quando a conexão termina
+	first.Close(websocket.StatusNormalClosure, "")
+	eventually(t, "vaga não voltou", func() bool {
+		a.hub.mu.Lock()
+		defer a.hub.mu.Unlock()
+		return a.hub.perIP["127.0.0.1"] < maxConnsPerIP
+	})
+	if _, st := dial("publico/outro", ""); st != 101 {
+		t.Fatalf("depois de liberar: %d", st)
+	}
+
+	old := maxPeersPerDoc
+	maxPeersPerDoc = 2
+	t.Cleanup(func() { maxPeersPerDoc = old })
+	for i, want := range []int{101, 101, 429} {
+		if _, st := dial("publico/cheio", fmt.Sprintf("10.1.0.%d", i)); st != want {
+			t.Fatalf("aba %d do documento: %d, queria %d", i+1, st, want)
+		}
+	}
+}
+
+// apagado enquanto uma aba entrava: o flush não recria um arquivo sem registro.
+func TestFlushSemRegistro(t *testing.T) {
+	a, _, _ := wsApp(t)
+	d := newLiveDoc("ana/x", "oi")
+	d.dirty = true
+	if err := a.hub.flush(d); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(a.docPath("ana/x")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("gravou documento sem registro: %v", err)
+	}
+}
+
+// SIGTERM: as abas caem com 1001 (o cliente reconecta) e o texto vai para o disco.
+func TestHubDesligamento(t *testing.T) {
+	a, srv, _ := wsApp(t)
+	tc := dialWS(t, srv, &http.Client{}, "publico/fim", "f1", "")
+	if err := tc.edit(Op{{Insert: "fim"}}, 3); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tc.until(isType("ack")); err != nil {
+		t.Fatal(err)
+	}
+	// o navegador lê enquanto o servidor fecha: o handshake de fechamento completa
+	closed := make(chan error, 1)
+	go func() {
+		for {
+			if _, _, err := tc.c.Read(context.Background()); err != nil {
+				closed <- err
+				return
+			}
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	a.hub.closeAll(ctx)
+	if ctx.Err() != nil {
+		t.Fatal("closeAll esperou até o prazo")
+	}
+	a.hub.flushAll()
+	if code := websocket.CloseStatus(<-closed); code != websocket.StatusGoingAway {
+		t.Fatalf("fechou com %v", code)
+	}
+	if b, _ := os.ReadFile(filepath.Join(a.docsDir, "publico", "fim.txt")); string(b) != "fim" {
+		t.Fatalf("arquivo %q", b)
+	}
+	// quem termina o handshake depois disso também cai com 1001
+	c, _, err := websocket.Dial(context.Background(), wsURL(srv, "publico/fim", "c=y"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	if ce := closedWith(t, c); ce.Code != websocket.StatusGoingAway {
+		t.Fatalf("depois do desligamento: %+v", ce)
+	}
 }
