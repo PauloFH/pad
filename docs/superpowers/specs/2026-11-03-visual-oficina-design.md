@@ -15,10 +15,10 @@ Ele escolheu cada parte vendo mockups. Os arquivos aprovados estão em `docs/sup
 
   | tema | tipo | fundo | barras | texto | apagado | linhas | destaque | texto sobre o destaque |
   |---|---|---|---|---|---|---|---|---|
-  | Grafite | escuro | `#16181f` | `#1d2029` | `#d7dae4` | `#858a9c` | `#262a35` | `#7758f5` | `#fff` |
-  | Madrugada | escuro | `#0e1726` | `#142035` | `#d6e2f3` | `#7f93b3` | `#1d2a42` | `#38bdf8` | `#06121f` |
-  | Café | escuro | `#1b1613` | `#241d19` | `#ece2d8` | `#a08e80` | `#30271f` | `#f59e0b` | `#1b1613` |
-  | Floresta | escuro | `#111a15` | `#17231c` | `#d9eadf` | `#7d9a88` | `#1f2f26` | `#34d399` | `#0b1510` |
+  | Grafite | escuro | `#16181f` | `#1d2029` | `#d7dae4` | `#8e93a4` | `#262a35` | `#7758f5` | `#fff` |
+  | Madrugada | escuro | `#0e1726` | `#142035` | `#d6e2f3` | `#8498b7` | `#1d2a42` | `#38bdf8` | `#06121f` |
+  | Café | escuro | `#1b1613` | `#241d19` | `#ece2d8` | `#a29082` | `#30271f` | `#f59e0b` | `#1b1613` |
+  | Floresta | escuro | `#111a15` | `#17231c` | `#d9eadf` | `#829e8c` | `#1f2f26` | `#34d399` | `#0b1510` |
   | Papel | claro | `#f3f4f7` | `#e7e9ef` | `#222634` | `#606677` | `#d9dce5` | `#7758f5` | `#fff` |
   | Céu | claro | `#f2f6fc` | `#e3ebf7` | `#1a2638` | `#596982` | `#d3deee` | `#2563eb` | `#fff` |
   | Areia | claro | `#f5f2ec` | `#ebe5da` | `#2b241c` | `#6e6253` | `#ddd4c5` | `#c2410c` | `#fff` |
