@@ -132,20 +132,20 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 {{template "live"}}
 </body></html>{{end}}
 
-{{/* painel de compartilhar do dono (Task 5 redesenha) */}}
-{{define "compartilhar"}}{{if .Owner}}<details {{if .NotFound}}open{{end}}><summary>compartilhar</summary><div class="pop">
-{{if .NotFound}}<p class="err">Usuário ou grupo não encontrado.</p>{{end}}
+
+{{/* painel de compartilhar do dono; abre e fecha em compartilhar.js (sem JS fica fechado e o resto da página segue igual) */}}
+{{define "compartilhar"}}{{if .Owner}}<span id="compartilhar"><button type="button" id="comp-abrir" class="btn" aria-haspopup="dialog" aria-expanded="{{.NotFound}}" aria-controls="comp-painel">Compartilhar</button>
+<div id="comp-painel" class="pop" role="dialog" aria-labelledby="comp-titulo" {{if .NotFound}}data-aberto{{else}}hidden{{end}}>
+<h2 id="comp-titulo">Compartilhar {{.Name}}</h2>
+{{if .NotFound}}<p class="err" role="alert">Usuário ou grupo não encontrado.</p>{{end}}
 <form method="post" action="/_share/{{.Name}}">
-<select name="tipo"><option value="user">usuário</option><option value="group">grupo</option></select>
-<input name="alvo" placeholder="nome" required size="10"> <button>adicionar</button>
+<div class="seg" role="radiogroup" aria-label="Compartilhar com"><label><input type="radio" name="tipo" value="user" checked><span>Usuário</span></label><label><input type="radio" name="tipo" value="group"><span>Grupo</span></label></div>
+<div class="comp-linha"><input class="campo" name="alvo" placeholder="nome" required autocomplete="off" aria-label="Nome do usuário ou grupo"><button class="btn pri">Adicionar</button></div>
 </form>
-<ul>
-{{range .Users}}<li>{{.}} <form method="post" action="/_unshare/{{$.Name}}" class="inline"><input type="hidden" name="tipo" value="user"><input type="hidden" name="alvo" value="{{.}}"><button class="link">remover</button></form></li>{{end}}
-{{range .Groups}}<li>grupo {{.}} <form method="post" action="/_unshare/{{$.Name}}" class="inline"><input type="hidden" name="tipo" value="group"><input type="hidden" name="alvo" value="{{.}}"><button class="link">remover</button></form></li>{{end}}
+<ul class="comp-lista">
+{{range .Users}}<li><span class="av" aria-hidden="true">{{printf "%.1s" .}}</span><span class="comp-nome">{{.}}</span><form method="post" action="/_unshare/{{$.Name}}"><input type="hidden" name="tipo" value="user"><input type="hidden" name="alvo" value="{{.}}"><button class="comp-rem" aria-label="Remover {{.}}">remover</button></form></li>{{end}}
+{{range .Groups}}<li><span class="av" aria-hidden="true">{{printf "%.1s" .}}</span><span class="comp-nome">grupo {{.}}</span><form method="post" action="/_unshare/{{$.Name}}"><input type="hidden" name="tipo" value="group"><input type="hidden" name="alvo" value="{{.}}"><button class="comp-rem" aria-label="Remover grupo {{.}}">remover</button></form></li>{{end}}
 </ul>
-<form method="post" action="/_public/{{.Name}}">
-{{if .Public}}<input type="hidden" name="public" value="0"><p>Público: qualquer pessoa com o endereço lê sem login. <button class="link">tornar privado</button></p>
-{{else}}<input type="hidden" name="public" value="1"><p class="mut">Privado. <button class="link">tornar público (só leitura)</button></p>{{end}}
-</form>
-<form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="link err">apagar documento</button></form>
-</div></details>{{end}}{{end}}
+<form method="post" action="/_public/{{.Name}}" class="comp-pub"><input type="hidden" name="public" value="{{if .Public}}0{{else}}1{{end}}"><span id="comp-pub-t">Público, só leitura</span><button class="chave" role="switch" aria-checked="{{.Public}}" aria-labelledby="comp-pub-t"></button></form>
+<form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="btn perigo">Apagar documento</button></form>
+</div><script src="/_static/compartilhar.js" defer></script></span>{{end}}{{end}}
