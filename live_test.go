@@ -438,8 +438,11 @@ func TestSubmitDocJaAcima(t *testing.T) {
 	}
 }
 
-// luminância relativa do WCAG de uma cor "#rrggbb"
+// luminância relativa do WCAG de uma cor "#rrggbb" ou "#rgb"
 func luminance(t *testing.T, hex string) float64 {
+	if len(hex) == 4 && hex[0] == '#' {
+		hex = string([]byte{'#', hex[1], hex[1], hex[2], hex[2], hex[3], hex[3]})
+	}
 	if len(hex) != 7 || hex[0] != '#' {
 		t.Fatalf("cor inválida %q", hex)
 	}
@@ -460,11 +463,20 @@ func luminance(t *testing.T, hex string) float64 {
 	return 0.2126*rgb[0] + 0.7152*rgb[1] + 0.0722*rgb[2]
 }
 
-// cada cor vira cursor e seleção sobre o fundo claro e o escuro, e fundo de etiqueta com texto branco
+// razão de contraste do WCAG entre duas cores
+func contraste(t *testing.T, a, b string) float64 {
+	x, y := luminance(t, a), luminance(t, b)
+	return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+}
+
+// cada cor vira cursor e seleção sobre o --bg de cada tema, e fundo de etiqueta com texto branco
 func TestPaletaContraste(t *testing.T) {
-	ratio := func(a, b string) float64 {
-		x, y := luminance(t, a), luminance(t, b)
-		return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+	fundos := []string{"#ffffff"} // texto da etiqueta
+	for _, props := range lerTemas(t) {
+		fundos = append(fundos, props["--bg"])
+	}
+	if len(fundos) != 1+len(temaIDs) {
+		t.Errorf("%d fundos, quero os %d temas mais o branco", len(fundos), len(temaIDs))
 	}
 	seen := map[string]bool{}
 	for _, c := range palette {
@@ -472,8 +484,8 @@ func TestPaletaContraste(t *testing.T) {
 			t.Errorf("cor repetida %q", c)
 		}
 		seen[c] = true
-		for _, bg := range []string{"#fafaf7", "#1a1b1e", "#ffffff"} { // --bg claro, --bg escuro, texto da etiqueta
-			if r := ratio(c, bg); r < 3 {
+		for _, bg := range fundos {
+			if r := contraste(t, c, bg); r < 3 {
 				t.Errorf("%s contra %s: %.2f:1, quero 3:1", c, bg, r)
 			}
 		}

@@ -1,0 +1,73 @@
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Space+Grotesk:wght@400;600;700&family=Martian+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+.fg{display:grid;gap:1rem}
+.s{border-radius:10px;overflow:hidden;background:#16181f;color:#d7dae4;display:grid;grid-template-columns:1fr 1.25fr}
+@media(max-width:800px){.s{grid-template-columns:1fr}}
+.ui{padding:14px 16px;border-right:1px solid #262a35}
+.ui h5{margin:0 0 10px;font-size:18px;font-weight:700;letter-spacing:-.01em}
+.ui .row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #262a35;font-size:13px}
+.ui .row span{color:#7d8396;font-size:12px}
+.ui .btn{display:inline-block;margin-top:12px;background:#7c5cff;color:#fff;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600}
+.ui .inp{display:block;margin-top:10px;border:1px solid #2b3040;background:#1d2029;border-radius:6px;padding:6px 10px;font-size:13px;color:#7d8396}
+.ed{padding:14px 16px;font-size:13px;line-height:1.7;white-space:pre}
+.ed .k{color:#a48bff}
+.fa .ui,.fa .ed{font-family:'JetBrains Mono',monospace}
+.fb .ui{font-family:'Space Grotesk',system-ui}.fb .ed{font-family:'JetBrains Mono',monospace}
+.fc .ui{font-family:'IBM Plex Sans',system-ui}.fc .ed{font-family:'IBM Plex Mono',monospace}
+.fd .ui,.fd .ed{font-family:'Martian Mono',monospace}.fd .ui{font-size:12px}.fd .ui h5{font-size:16px}.fd .ed{font-size:12px}
+</style>
+
+<h2>Que fontes o pad usa?</h2>
+<p class="subtitle">À esquerda, a interface (lista de documentos, botões, campos). À direita, o texto do editor. Tema Grafite.</p>
+
+<div class="options fg">
+
+<div class="option" data-choice="a" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">A</div><h3 style="margin:.2rem 0 .6rem">Tudo em JetBrains Mono</h3>
+<div class="s fa"><div class="ui"><h5>Seus documentos</h5>
+<div class="row">projetos/ideias<span>há 2 min</span></div><div class="row">pessoal/viagem<span>ontem</span></div><div class="row">receitas<span>12 out</span></div>
+<span class="inp">nome do documento</span><span class="btn">Abrir ou criar</span></div>
+<div class="ed"><span class="k"># Ideias para o trimestre</span>
+- landing nova com depoimentos
+- migrar fotos pro bucket
+- revisar preços do plano pro
+  e do plano anual: R$ 29 / R$ 290
+- testar o websocket 😀 ação</div></div></div>
+
+<div class="option" data-choice="b" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">B</div><h3 style="margin:.2rem 0 .6rem">Space Grotesk na interface + JetBrains Mono no editor</h3>
+<div class="s fb"><div class="ui"><h5>Seus documentos</h5>
+<div class="row">projetos/ideias<span>há 2 min</span></div><div class="row">pessoal/viagem<span>ontem</span></div><div class="row">receitas<span>12 out</span></div>
+<span class="inp">nome do documento</span><span class="btn">Abrir ou criar</span></div>
+<div class="ed"><span class="k"># Ideias para o trimestre</span>
+- landing nova com depoimentos
+- migrar fotos pro bucket
+- revisar preços do plano pro
+  e do plano anual: R$ 29 / R$ 290
+- testar o websocket 😀 ação</div></div></div>
+
+<div class="option" data-choice="c" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">C</div><h3 style="margin:.2rem 0 .6rem">IBM Plex Sans na interface + IBM Plex Mono no editor</h3>
+<div class="s fc"><div class="ui"><h5>Seus documentos</h5>
+<div class="row">projetos/ideias<span>há 2 min</span></div><div class="row">pessoal/viagem<span>ontem</span></div><div class="row">receitas<span>12 out</span></div>
+<span class="inp">nome do documento</span><span class="btn">Abrir ou criar</span></div>
+<div class="ed"><span class="k"># Ideias para o trimestre</span>
+- landing nova com depoimentos
+- migrar fotos pro bucket
+- revisar preços do plano pro
+  e do plano anual: R$ 29 / R$ 290
+- testar o websocket 😀 ação</div></div></div>
+
+<div class="option" data-choice="d" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">D</div><h3 style="margin:.2rem 0 .6rem">Tudo em Martian Mono (mais larga e com personalidade)</h3>
+<div class="s fd"><div class="ui"><h5>Seus documentos</h5>
+<div class="row">projetos/ideias<span>há 2 min</span></div><div class="row">pessoal/viagem<span>ontem</span></div><div class="row">receitas<span>12 out</span></div>
+<span class="inp">nome do documento</span><span class="btn">Abrir ou criar</span></div>
+<div class="ed"><span class="k"># Ideias para o trimestre</span>
+- landing nova com depoimentos
+- migrar fotos pro bucket
+- revisar preços do plano pro
+  e do plano anual: R$ 29 / R$ 290
+- testar o websocket 😀 ação</div></div></div>
+
+</div>

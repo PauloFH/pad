@@ -1,0 +1,52 @@
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+.w{--bg:#16181f;--bar:#1b1e27;--fg:#d7dae4;--mut:#7d8396;--line:#262a35;--acc:#7c5cff;--field:#1f2330;font-family:'Space Grotesk',system-ui;background:var(--bg);color:var(--fg);border-radius:12px;overflow:hidden;height:360px;display:flex;flex-direction:column;font-size:13px}
+.b1{background:linear-gradient(var(--acc),color-mix(in srgb,var(--acc) 82%,#000));color:#fff;border-radius:9px;padding:7px 14px;font-weight:600;box-shadow:inset 0 1px 0 #ffffff40,0 1px 2px #0005,0 4px 12px color-mix(in srgb,var(--acc) 35%,transparent);text-align:center}
+.b2{background:var(--field);border-radius:9px;padding:6px 10px;box-shadow:inset 0 1px 0 #ffffff14,0 0 0 1px var(--line)}
+.in{background:var(--field);border-radius:9px;padding:8px 11px;box-shadow:inset 0 1px 3px #0004,0 0 0 1px var(--line);color:var(--mut)}
+.top{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--line)}
+.av{width:26px;height:26px;border-radius:50%;background:#2c3142;display:grid;place-items:center;font-weight:600;font-size:12px}
+.mono{font-family:'JetBrains Mono',monospace}
+.mut{color:var(--mut)}
+.side{width:200px;background:var(--bar);border-right:1px solid var(--line);padding:10px 8px;font-size:12.5px}
+.side .h{color:var(--mut);font-size:11px;padding:4px 8px}
+.side .it{padding:5px 8px;border-radius:7px}
+.st{display:flex;gap:14px;padding:5px 12px;font-size:11px;color:var(--mut);background:var(--bar);border-top:1px solid var(--line)}
+.row{display:flex;justify-content:space-between;padding:9px 4px;border-bottom:1px solid var(--line)}
+</style>
+
+<h2>Login e a tela de entrada</h2>
+<p class="subtitle">O login é uma proposta só, para você reagir. Embaixo, duas formas de chegar depois de entrar.</p>
+
+<h3 style="margin:1rem 0 .5rem">Login</h3>
+<div class="w" style="height:330px;align-items:center;justify-content:center;background:radial-gradient(120% 90% at 50% 0%,#211d3a 0%,#16181f 60%)">
+ <div style="width:290px;display:grid;gap:10px">
+  <div class="mono" style="font-size:22px;font-weight:600;letter-spacing:-.02em">pad<span style="color:var(--acc)">_</span></div>
+  <div class="mut" style="font-size:12.5px;margin-top:-4px">Blocos de notas compartilhados, ao vivo.</div>
+  <div class="in">usuário</div><div class="in">senha</div>
+  <div class="b1">Entrar</div>
+  <div class="mut" style="font-size:12px">Sem conta? Escreva na <span style="color:#a48bff">área pública</span>, sem login.</div>
+ </div>
+</div>
+
+<div class="options" style="margin-top:1.4rem">
+
+<div class="option" data-choice="a" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">A</div><h3 style="margin:.2rem 0 .3rem">Página inicial própria</h3>
+<p style="margin:0 0 .6rem;color:#555;font-size:13px">Depois de entrar, uma página com a busca, o campo de novo documento e os recentes. A coluna lateral só aparece dentro do editor.</p>
+<div class="w"><div class="top"><span class="mono" style="font-weight:600">pad</span><span style="flex:1"></span><span class="b2">Área pública</span><span class="b2">Convidar</span><span class="av">p</span></div>
+<div style="padding:22px 28px;display:grid;gap:12px;max-width:560px">
+ <div style="font-size:20px;font-weight:600">Olá, paulo</div>
+ <div style="display:flex;gap:8px"><div class="in" style="flex:1">nome do novo documento (ex.: projetos/ideias)</div><div class="b1">Criar</div></div>
+ <div><div class="row"><span class="mono">projetos/ideias</span><span class="mut">há 2 min · com Ana</span></div><div class="row"><span class="mono">pessoal/viagem</span><span class="mut">ontem</span></div><div class="row"><span class="mono">receitas</span><span class="mut">12 out</span></div><div class="row" style="border:0"><span class="mono">ana/viagem</span><span class="mut">compartilhado por Ana</span></div></div>
+</div></div></div>
+
+<div class="option" data-choice="b" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">B</div><h3 style="margin:.2rem 0 .3rem">Direto no editor</h3>
+<p style="margin:0 0 .6rem;color:#555;font-size:13px">Sem página inicial: você cai no editor com a coluna aberta, num espaço vazio que convida a criar. A coluna faz o papel da lista.</p>
+<div class="w"><div class="top"><span class="b2">◧</span><span class="mono" style="font-weight:600">pad</span><span style="flex:1"></span><span class="b2">Convidar</span><span class="av">p</span></div>
+<div style="flex:1;display:flex;min-height:0"><div class="side"><div class="h">documentos</div><div class="it">▾ projetos</div><div class="it" style="padding-left:20px">ideias</div><div class="it">▸ pessoal</div><div class="it">receitas</div><div class="h" style="margin-top:8px">compartilhados</div><div class="it">ana/viagem</div><div class="h" style="margin-top:8px">área pública</div></div>
+<div style="flex:1;display:grid;place-items:center"><div style="display:grid;gap:10px;width:300px;text-align:center"><div style="font-size:16px;font-weight:600">Comece um documento</div><div class="in" style="text-align:left">nome (ex.: projetos/ideias)</div><div class="b1">Criar</div><div class="mut" style="font-size:12px">ou abra um da lista ao lado</div></div></div></div>
+<div class="st"><span>tema: Grafite ▾</span></div></div></div>
+
+</div>

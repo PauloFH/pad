@@ -38,7 +38,7 @@ const (
 //go:embed templates.html
 var tmplFS embed.FS
 
-//go:embed static/*.js
+//go:embed static/*.js static/*.css static/fonts/*
 var staticFS embed.FS
 
 var (
@@ -184,7 +184,7 @@ func openApp(dataDir string) (*app, error) {
 // staticSub é static/ sem o prefixo, para servir em /_static/.
 var staticSub = func() fs.FS { sub, _ := fs.Sub(staticFS, "static"); return sub }()
 
-// noCache faz o navegador revalidar o JS a cada carga: o binário o embute e muda a cada deploy.
+// noCache faz o navegador revalidar o JS, o CSS e as fontes a cada carga: o binário os embute e muda a cada deploy.
 func noCache(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/") { // sem listagem do diretório
@@ -192,6 +192,9 @@ func noCache(h http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
+		if strings.HasSuffix(r.URL.Path, ".woff2") { // o mime do Go não conhece .woff2 sem /etc/mime.types (imagem do Docker)
+			w.Header().Set("Content-Type", "font/woff2")
+		}
 		h.ServeHTTP(w, r)
 	})
 }

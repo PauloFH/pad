@@ -1,0 +1,88 @@
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+.cg{display:grid;gap:1rem}
+.kit{font-family:'Space Grotesk',system-ui;display:grid;grid-template-columns:1fr 1fr;border-radius:10px;overflow:hidden}
+@media(max-width:800px){.kit{grid-template-columns:1fr}}
+.pane{padding:16px;display:flex;flex-direction:column;gap:12px;font-size:13px}
+.pane.d{background:#16181f;color:#d7dae4;--acc:#7c5cff;--on:#fff;--line:#2b3040;--field:#1d2029;--mut:#7d8396;--err:#f87171;--hov:#232735}
+.pane.l{background:#f3f4f7;color:#222634;--acc:#7c5cff;--on:#fff;--line:#d3d7e1;--field:#fff;--mut:#7a8093;--err:#dc2626;--hov:#e7e9ef}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.b{font:inherit;font-weight:600;padding:7px 13px;cursor:pointer}
+.i{font:inherit;padding:7px 10px;min-width:0;flex:1;color:inherit}
+.menu{border:1px solid var(--line);padding:4px;width:13rem;background:var(--field)}
+.menu div{padding:6px 8px;display:flex;gap:8px;align-items:center}
+.menu div.on{background:var(--hov)}
+.sq{width:10px;height:10px;border-radius:50%;display:inline-block}
+.toast{padding:8px 12px;font-size:12px;display:flex;gap:8px;align-items:center}
+.themes{display:flex;gap:6px}
+.themes span{width:22px;height:22px;display:inline-block;border:2px solid transparent}
+.themes span.on{border-color:var(--acc)}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+
+/* A — Plano */
+.A .b{border:1px solid transparent;border-radius:6px}.A .b1{background:var(--acc);color:var(--on)}.A .b2{background:var(--hov);color:inherit;border-color:var(--line)}.A .b3{background:none;color:var(--err);border-color:var(--line)}
+.A .i{border:1px solid var(--line);border-radius:6px;background:var(--field)}.A .i.f{border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 25%,transparent)}
+.A .menu{border-radius:8px}.A .menu div{border-radius:5px}
+.A .toast{border-radius:6px;background:var(--field);border:1px solid var(--line);border-left:3px solid #e11d48}
+.A .themes span{border-radius:6px}
+
+/* B — Relevo */
+.B .b{border:0;border-radius:9px}.B .b1{background:linear-gradient(var(--acc),color-mix(in srgb,var(--acc) 82%,#000));color:var(--on);box-shadow:inset 0 1px 0 #ffffff40,0 1px 2px #0005,0 4px 12px color-mix(in srgb,var(--acc) 35%,transparent)}.B .b2{background:var(--field);color:inherit;box-shadow:inset 0 1px 0 #ffffff14,0 0 0 1px var(--line),0 2px 6px #0003}.B .b3{background:none;color:var(--err);box-shadow:0 0 0 1px color-mix(in srgb,var(--err) 40%,transparent)}
+.B .i{border:0;border-radius:9px;background:var(--field);box-shadow:inset 0 1px 3px #0004,0 0 0 1px var(--line)}.B .i.f{box-shadow:inset 0 1px 3px #0004,0 0 0 2px var(--acc)}
+.B .menu{border-radius:12px;box-shadow:0 10px 30px #0006}.B .menu div{border-radius:8px}
+.B .toast{border-radius:10px;background:var(--field);box-shadow:0 8px 24px #0005,0 0 0 1px var(--line)}
+.B .themes span{border-radius:50%}
+
+/* C — Contorno */
+.C .b{background:none;border:1px solid var(--line);border-radius:3px;color:inherit}.C .b1{border-color:var(--acc);color:var(--acc)}.C .b1:hover{background:var(--acc);color:var(--on)}.C .b3{color:var(--err);border-color:color-mix(in srgb,var(--err) 45%,transparent)}
+.C .i{border:0;border-bottom:1px solid var(--line);border-radius:0;background:none;padding-left:2px}.C .i.f{border-bottom:2px solid var(--acc)}
+.C .menu{border-radius:3px}.C .menu div.on{background:none;box-shadow:inset 2px 0 0 var(--acc)}
+.C .toast{border-radius:3px;border:1px solid #e11d48;color:inherit}
+.C .themes span{border-radius:2px}
+</style>
+
+<h2>Qual estilo de botões e campos?</h2>
+<p class="subtitle">Mesmos componentes nos temas Grafite e Papel: botões, campo, menu de pessoas, aviso de trava e seletor de tema.</p>
+
+<div class="options cg">
+
+<div class="option" data-choice="a" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">A</div><h3 style="margin:.2rem 0 .6rem">Plano — bordas finas, cantos de 6px, sem sombra</h3>
+<div class="kit A">
+<div class="pane d"><div class="row"><button class="b b1">Abrir ou criar</button><button class="b b2">Compartilhar</button><button class="b b3">Apagar</button></div>
+<div class="row"><input class="i" placeholder="nome do documento"><input class="i f" value="projetos/ideias"></div>
+<div class="row" style="align-items:flex-start"><div class="menu"><div class="on"><span class="sq" style="background:#e11d48"></span>Ana<span style="color:var(--mut);font-size:11px;margin-left:auto">linha 2</span></div><div><span class="sq" style="background:#0d9488"></span>Bruno<span style="color:var(--mut);font-size:11px;margin-left:auto">lendo</span></div></div>
+<div style="display:grid;gap:8px"><div class="toast">🔒 trecho travado por Ana</div><div class="themes"><span class="on" style="background:#16181f"></span><span style="background:#0e1726"></span><span style="background:#1b1613"></span><span style="background:#f3f4f7"></span></div></div></div></div>
+<div class="pane l"><div class="row"><button class="b b1">Abrir ou criar</button><button class="b b2">Compartilhar</button><button class="b b3">Apagar</button></div>
+<div class="row"><input class="i" placeholder="nome do documento"><input class="i f" value="projetos/ideias"></div>
+<div class="row" style="align-items:flex-start"><div class="menu"><div class="on"><span class="sq" style="background:#e11d48"></span>Ana<span style="color:var(--mut);font-size:11px;margin-left:auto">linha 2</span></div><div><span class="sq" style="background:#0d9488"></span>Bruno<span style="color:var(--mut);font-size:11px;margin-left:auto">lendo</span></div></div>
+<div style="display:grid;gap:8px"><div class="toast">🔒 trecho travado por Ana</div><div class="themes"><span style="background:#16181f"></span><span style="background:#0e1726"></span><span style="background:#1b1613"></span><span class="on" style="background:#f3f4f7;border-color:#7c5cff"></span></div></div></div></div>
+</div></div>
+
+<div class="option" data-choice="b" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">B</div><h3 style="margin:.2rem 0 .6rem">Relevo — cantos de 9px, leve brilho e sombra, botão principal “aceso”</h3>
+<div class="kit B">
+<div class="pane d"><div class="row"><button class="b b1">Abrir ou criar</button><button class="b b2">Compartilhar</button><button class="b b3">Apagar</button></div>
+<div class="row"><input class="i" placeholder="nome do documento"><input class="i f" value="projetos/ideias"></div>
+<div class="row" style="align-items:flex-start"><div class="menu"><div class="on"><span class="sq" style="background:#e11d48"></span>Ana<span style="color:var(--mut);font-size:11px;margin-left:auto">linha 2</span></div><div><span class="sq" style="background:#0d9488"></span>Bruno<span style="color:var(--mut);font-size:11px;margin-left:auto">lendo</span></div></div>
+<div style="display:grid;gap:8px"><div class="toast">🔒 trecho travado por Ana</div><div class="themes"><span class="on" style="background:#16181f"></span><span style="background:#0e1726"></span><span style="background:#1b1613"></span><span style="background:#f3f4f7"></span></div></div></div></div>
+<div class="pane l"><div class="row"><button class="b b1">Abrir ou criar</button><button class="b b2">Compartilhar</button><button class="b b3">Apagar</button></div>
+<div class="row"><input class="i" placeholder="nome do documento"><input class="i f" value="projetos/ideias"></div>
+<div class="row" style="align-items:flex-start"><div class="menu"><div class="on"><span class="sq" style="background:#e11d48"></span>Ana<span style="color:var(--mut);font-size:11px;margin-left:auto">linha 2</span></div><div><span class="sq" style="background:#0d9488"></span>Bruno<span style="color:var(--mut);font-size:11px;margin-left:auto">lendo</span></div></div>
+<div style="display:grid;gap:8px"><div class="toast">🔒 trecho travado por Ana</div><div class="themes"><span style="background:#16181f"></span><span style="background:#0e1726"></span><span style="background:#1b1613"></span><span class="on" style="background:#f3f4f7;border-color:#7c5cff"></span></div></div></div></div>
+</div></div>
+
+<div class="option" data-choice="c" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">C</div><h3 style="margin:.2rem 0 .6rem">Contorno — só linhas, cantos quase retos, campo sublinhado</h3>
+<div class="kit C">
+<div class="pane d"><div class="row"><button class="b b1">Abrir ou criar</button><button class="b b2">Compartilhar</button><button class="b b3">Apagar</button></div>
+<div class="row"><input class="i" placeholder="nome do documento"><input class="i f" value="projetos/ideias"></div>
+<div class="row" style="align-items:flex-start"><div class="menu"><div class="on"><span class="sq" style="background:#e11d48"></span>Ana<span style="color:var(--mut);font-size:11px;margin-left:auto">linha 2</span></div><div><span class="sq" style="background:#0d9488"></span>Bruno<span style="color:var(--mut);font-size:11px;margin-left:auto">lendo</span></div></div>
+<div style="display:grid;gap:8px"><div class="toast">🔒 trecho travado por Ana</div><div class="themes"><span class="on" style="background:#16181f"></span><span style="background:#0e1726"></span><span style="background:#1b1613"></span><span style="background:#f3f4f7"></span></div></div></div></div>
+<div class="pane l"><div class="row"><button class="b b1">Abrir ou criar</button><button class="b b2">Compartilhar</button><button class="b b3">Apagar</button></div>
+<div class="row"><input class="i" placeholder="nome do documento"><input class="i f" value="projetos/ideias"></div>
+<div class="row" style="align-items:flex-start"><div class="menu"><div class="on"><span class="sq" style="background:#e11d48"></span>Ana<span style="color:var(--mut);font-size:11px;margin-left:auto">linha 2</span></div><div><span class="sq" style="background:#0d9488"></span>Bruno<span style="color:var(--mut);font-size:11px;margin-left:auto">lendo</span></div></div>
+<div style="display:grid;gap:8px"><div class="toast">🔒 trecho travado por Ana</div><div class="themes"><span style="background:#16181f"></span><span style="background:#0e1726"></span><span style="background:#1b1613"></span><span class="on" style="background:#f3f4f7;border-color:#7c5cff"></span></div></div></div></div>
+</div></div>
+
+</div>

@@ -18,9 +18,9 @@ const lockIdle = 30 * time.Second
 // log curto: quem está mais atrás que isso recebe um init novo; var para o teste baixar
 var logMax = 1000
 
-// tons médios: aparecem nos fundos claro e escuro e aguentam etiqueta branca (TestPaletaContraste)
+// tons médios: aparecem no fundo dos 8 temas e aguentam etiqueta branca (TestPaletaContraste)
 var palette = [...]string{
-	"#dc2626", "#2563eb", "#16a34a", "#ea580c", "#8b5cf6", "#0d9488",
+	"#dc2626", "#2563eb", "#15803d", "#ea580c", "#8b5cf6", "#0d9488",
 	"#db2777", "#a16207", "#0891b2", "#c026d3", "#4d7c0f", "#64748b",
 }
 

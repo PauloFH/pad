@@ -242,12 +242,26 @@ func TestStatic(t *testing.T) {
 	if res.Header.Get("Cache-Control") != "no-cache" {
 		t.Errorf("Cache-Control = %q", res.Header.Get("Cache-Control"))
 	}
-	if res, err = http.Get(srv.URL + "/_static/"); err != nil {
-		t.Fatal(err)
+	for _, dir := range []string{"/_static/", "/_static/fonts/"} {
+		if res, err = http.Get(srv.URL + dir); err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 404 {
+			t.Errorf("listagem de %s: status %d", dir, res.StatusCode)
+		}
 	}
-	res.Body.Close()
-	if res.StatusCode != 404 {
-		t.Errorf("listagem do diretório: status %d", res.StatusCode)
+	for path, tipo := range map[string]string{
+		"/_static/pad.css": "text/css",
+		"/_static/fonts/jetbrains-mono-latin-400-normal.woff2": "font/woff2",
+	} {
+		if res, err = http.Get(srv.URL + path); err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 200 || !strings.HasPrefix(res.Header.Get("Content-Type"), tipo) {
+			t.Errorf("%s: status %d, tipo %q", path, res.StatusCode, res.Header.Get("Content-Type"))
+		}
 	}
 }
 

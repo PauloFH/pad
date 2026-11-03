@@ -1,0 +1,111 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Instrument+Sans:wght@400;600&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap" rel="stylesheet">
+<style>
+.dir{display:grid;gap:1.4rem}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+@media(max-width:900px){.pair{grid-template-columns:1fr}}
+.scr{border-radius:10px;overflow:hidden;height:250px;position:relative;font-size:12px}
+.sw{display:flex;gap:.35rem;align-items:center;margin:.5rem 0 0;font-size:12px;color:#666}
+.sw i{width:16px;height:16px;border-radius:50%;display:inline-block;border:1px solid #0002}
+.cur{display:inline-block;width:2px;height:1.15em;vertical-align:-.2em;position:relative}
+.cur b{position:absolute;bottom:100%;left:0;font:600 9px/1.3 system-ui;color:#fff;padding:0 .25rem;border-radius:3px 3px 3px 0;white-space:nowrap}
+.dots span{width:20px;height:20px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font:600 10px system-ui;margin-left:-5px}
+
+/* A — Marcador */
+.A{font-family:'Bricolage Grotesque',system-ui;padding:12px}
+.A .bar{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:999px}
+.A .bar b{font-weight:700;font-size:13px}
+.A .pill{padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600}
+.A .txt{font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.7;white-space:pre;padding:16px 8px 0 14px}
+.A.l{background:#f4f6fb;color:#1b2230}.A.l .bar{background:#fff;box-shadow:0 1px 2px #1b223012,0 8px 24px #1b22300d}.A.l .pill{background:#3355ff;color:#fff}.A.l .mut{color:#7a8296}
+.A.d{background:#11141b;color:#e6e9f2}.A.d .bar{background:#1b2030;box-shadow:0 8px 24px #0006}.A.d .pill{background:#8fa2ff;color:#11141b}.A.d .mut{color:#8790a6}
+.A .dots span{border:2px solid}.A.l .dots span{border-color:#fff}.A.d .dots span{border-color:#1b2030}
+
+/* B — Oficina */
+.B{font-family:'JetBrains Mono',monospace;display:flex;flex-direction:column}
+.B .bar{display:flex;align-items:center;gap:10px;padding:7px 10px;font-size:11px}
+.B .tab{padding:3px 8px;border-radius:5px}
+.B .body{flex:1;display:flex}
+.B .gut{padding:10px 8px;text-align:right;font-size:11px;line-height:1.7}
+.B .txt{font-size:11.5px;line-height:1.7;white-space:pre;padding:10px 12px}
+.B .st{padding:4px 10px;font-size:10px;display:flex;gap:12px}
+.B.l{background:#f3f4f7;color:#222634}.B.l .bar{background:#e7e9ef;border-bottom:1px solid #d9dce5}.B.l .tab{background:#fff;color:#222634}.B.l .gut{color:#a3a8b8;border-right:1px solid #e1e3ea}.B.l .st{background:#7c5cff;color:#fff}.B.l .mut{color:#80869a}
+.B.d{background:#16181f;color:#d7dae4}.B.d .bar{background:#1d2029;border-bottom:1px solid #262a35}.B.d .tab{background:#16181f;color:#d7dae4}.B.d .gut{color:#4d5263;border-right:1px solid #232733}.B.d .st{background:#6d4dff;color:#fff}.B.d .mut{color:#7d8396}
+.B .dots span{border:2px solid}.B.l .dots span{border-color:#e7e9ef}.B.d .dots span{border-color:#1d2029}
+
+/* C — Folha */
+.C{font-family:'Instrument Sans',system-ui;padding:14px 18px}
+.C .bar{display:flex;align-items:center;gap:10px;font-size:11px}
+.C h4{font-family:'Newsreader',serif;font-weight:600;font-size:22px;margin:14px 0 6px;letter-spacing:-.01em}
+.C .txt{font-family:'Newsreader',serif;font-size:14px;line-height:1.65;white-space:pre-wrap;max-width:30em}
+.C.l{background:#eef2ec;color:#1f2a24}.C.l .mut{color:#6d7a72}.C.l .chip{background:#dfe8dc}
+.C.d{background:#171c19;color:#e3e9e4}.C.d .mut{color:#87938b}.C.d .chip{background:#232a26}
+.C .chip{padding:3px 9px;border-radius:7px}
+.C .dots span{border:2px solid}.C.l .dots span{border-color:#eef2ec}.C.d .dots span{border-color:#171c19}
+</style>
+
+<h2>Que direção visual combina com o pad?</h2>
+<p class="subtitle">O mesmo documento nas três propostas, no tema claro e no escuro. As bolinhas abaixo de cada uma são outros temas de cor que viriam junto.</p>
+
+<div class="options dir">
+
+<div class="option" data-choice="a" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">A</div>
+<h3 style="margin:.2rem 0">Marcador — leve e colaborativo</h3>
+<p style="margin:.2rem 0 .7rem;color:#555;font-size:13px">Fundo claro e arejado, barra flutuante arredondada, as cores das pessoas são o destaque. Interface em Bricolage Grotesque, texto em JetBrains Mono.</p>
+<div class="pair">
+ <div class="scr A l"><div class="bar"><span class="mut">←</span><b>projetos/ideias</b><span class="mut" style="font-size:11px">salvo</span><span style="flex:1"></span><span class="dots"><span style="background:#e11d48">A</span><span style="background:#0d9488">B</span></span><span class="pill">compartilhar</span></div>
+ <div class="txt"># Ideias para o trimestre
+- landing nova com depo<span class="cur" style="background:#e11d48"><b style="background:#e11d48">ana</b></span>
+- migrar fotos pro bucket
+<span style="background:#0d948833">- revisar preços do plano pro</span>
+- testar o websocket</div></div>
+ <div class="scr A d"><div class="bar"><span class="mut">←</span><b>projetos/ideias</b><span class="mut" style="font-size:11px">salvo</span><span style="flex:1"></span><span class="dots"><span style="background:#e11d48">A</span><span style="background:#0d9488">B</span></span><span class="pill">compartilhar</span></div>
+ <div class="txt"># Ideias para o trimestre
+- landing nova com depo<span class="cur" style="background:#fb7185"><b style="background:#e11d48">ana</b></span>
+- migrar fotos pro bucket
+<span style="background:#2dd4bf33">- revisar preços do plano pro</span>
+- testar o websocket</div></div>
+</div>
+<div class="sw">outros temas: <i style="background:#3355ff"></i><i style="background:#ff6b35"></i><i style="background:#16a34a"></i><i style="background:#9333ea"></i></div>
+</div>
+
+<div class="option" data-choice="b" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">B</div>
+<h3 style="margin:.2rem 0">Oficina — cara de editor de código</h3>
+<p style="margin:.2rem 0 .7rem;color:#555;font-size:13px">Painéis e abas, numeração de linhas em destaque, barra de status embaixo. Tudo em JetBrains Mono, compacto e denso.</p>
+<div class="pair">
+ <div class="scr B l"><div class="bar"><span class="tab">projetos/ideias</span><span class="mut">salvo</span><span style="flex:1"></span><span class="dots"><span style="background:#e11d48">A</span><span style="background:#0d9488">B</span></span></div>
+ <div class="body"><div class="gut">1<br>2<br>3<br>4<br>5</div><div class="txt"># Ideias para o trimestre
+- landing nova com depo<span class="cur" style="background:#e11d48"><b style="background:#e11d48">ana</b></span>
+- migrar fotos pro bucket
+<span style="background:#0d948833">- revisar preços do plano pro</span>
+- testar o websocket</div></div>
+ <div class="st"><span>● 3 pessoas</span><span>linha 2, col 22</span><span style="flex:1"></span><span>UTF-8</span></div></div>
+ <div class="scr B d"><div class="bar"><span class="tab">projetos/ideias</span><span class="mut">salvo</span><span style="flex:1"></span><span class="dots"><span style="background:#e11d48">A</span><span style="background:#0d9488">B</span></span></div>
+ <div class="body"><div class="gut">1<br>2<br>3<br>4<br>5</div><div class="txt"># Ideias para o trimestre
+- landing nova com depo<span class="cur" style="background:#fb7185"><b style="background:#e11d48">ana</b></span>
+- migrar fotos pro bucket
+<span style="background:#2dd4bf33">- revisar preços do plano pro</span>
+- testar o websocket</div></div>
+ <div class="st"><span>● 3 pessoas</span><span>linha 2, col 22</span><span style="flex:1"></span><span>UTF-8</span></div></div>
+</div>
+<div class="sw">outros temas: <i style="background:#7c5cff"></i><i style="background:#0ea5e9"></i><i style="background:#f59e0b"></i><i style="background:#ef4444"></i></div>
+</div>
+
+<div class="option" data-choice="c" onclick="toggleSelect(this)" style="display:block">
+<div class="letter">C</div>
+<h3 style="margin:.2rem 0">Folha — foco na escrita</h3>
+<p style="margin:.2rem 0 .7rem;color:#555;font-size:13px">Interface quase invisível, título grande, texto numa coluna confortável com fonte de leitura (Newsreader). Fundos levemente tingidos em vez de branco puro.</p>
+<div class="pair">
+ <div class="scr C l"><div class="bar"><span class="mut">← documentos</span><span style="flex:1"></span><span class="dots"><span style="background:#e11d48">A</span><span style="background:#0d9488">B</span></span><span class="chip">compartilhar</span></div>
+ <h4>Ideias para o trimestre</h4>
+ <div class="txt">Landing nova com depo<span class="cur" style="background:#e11d48"><b style="background:#e11d48">ana</b></span>. Migrar as fotos pro bucket. <span style="background:#0d948833">Revisar preços do plano pro</span> e testar o websocket.</div></div>
+ <div class="scr C d"><div class="bar"><span class="mut">← documentos</span><span style="flex:1"></span><span class="dots"><span style="background:#e11d48">A</span><span style="background:#0d9488">B</span></span><span class="chip">compartilhar</span></div>
+ <h4>Ideias para o trimestre</h4>
+ <div class="txt">Landing nova com depo<span class="cur" style="background:#fb7185"><b style="background:#e11d48">ana</b></span>. Migrar as fotos pro bucket. <span style="background:#2dd4bf33">Revisar preços do plano pro</span> e testar o websocket.</div></div>
+</div>
+<div class="sw">outros temas: <i style="background:#eef2ec"></i><i style="background:#eef0f7"></i><i style="background:#f6eef0"></i><i style="background:#f3f0e6"></i></div>
+</div>
+
+</div>

@@ -1,0 +1,63 @@
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+.eg{display:grid;gap:1.2rem}
+.w{--bg:#16181f;--bar:#1b1e27;--fg:#d7dae4;--mut:#7d8396;--line:#262a35;--acc:#7c5cff;--field:#1f2330;font-family:'Space Grotesk',system-ui;background:var(--bg);color:var(--fg);border-radius:12px;overflow:hidden;height:380px;display:flex;flex-direction:column;font-size:13px;position:relative}
+.top{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--line)}
+.top .back{color:var(--mut)}
+.crumb{font-family:'JetBrains Mono',monospace;font-size:12.5px}.crumb .m{color:var(--mut)}
+.saved{font-size:11px;color:var(--mut);display:flex;align-items:center;gap:5px}.saved i{width:6px;height:6px;border-radius:50%;background:#34d399;display:inline-block}
+.dots span{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font:600 11px 'Space Grotesk';margin-left:-6px;border:2px solid var(--bar)}
+.b1{background:linear-gradient(var(--acc),color-mix(in srgb,var(--acc) 82%,#000));color:#fff;border-radius:9px;padding:6px 12px;font-weight:600;box-shadow:inset 0 1px 0 #ffffff40,0 1px 2px #0005,0 4px 12px color-mix(in srgb,var(--acc) 35%,transparent)}
+.b2{background:var(--field);border-radius:9px;padding:6px 10px;box-shadow:inset 0 1px 0 #ffffff14,0 0 0 1px var(--line)}
+.av{width:26px;height:26px;border-radius:50%;background:#2c3142;display:grid;place-items:center;font-weight:600;font-size:12px}
+.mid{flex:1;display:flex;min-height:0}
+.gut{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.75;color:#4d5263;text-align:right;padding:14px 10px 0 14px;border-right:1px solid var(--line)}
+.gut .on{color:#fb7185;font-weight:600}.gut .on2{color:#2dd4bf;font-weight:600}
+.txt{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.75;white-space:pre;padding:14px 16px 0}
+.txt .k{color:#a48bff}
+.cur{display:inline-block;width:2px;height:1.15em;vertical-align:-.2em;position:relative;background:#fb7185}
+.cur b{position:absolute;bottom:100%;left:0;font:600 9px/1.3 'Space Grotesk';color:#fff;background:#e11d48;padding:0 .3rem;border-radius:4px 4px 4px 0;white-space:nowrap}
+.sel{background:#2dd4bf2e}.lock{font:600 9px 'Space Grotesk';background:#0d9488;color:#fff;padding:1px 5px;border-radius:4px;margin-left:4px}
+.st{display:flex;gap:14px;align-items:center;padding:5px 12px;font-size:11px;color:var(--mut);background:var(--bar);border-top:1px solid var(--line)}
+.st .acc{color:var(--fg)}
+.side{width:200px;background:var(--bar);border-right:1px solid var(--line);padding:10px 8px;font-size:12.5px}
+.side .h{color:var(--mut);font-size:11px;padding:4px 8px;display:flex;justify-content:space-between}
+.side div.it{padding:5px 8px;border-radius:7px;display:flex;gap:6px;align-items:center}
+.side div.it.on{background:var(--field);box-shadow:0 0 0 1px var(--line)}
+.side .f{color:var(--mut)}
+.side .new{margin:8px;color:var(--mut);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;font-size:12px}
+.tabs{display:flex;gap:2px;padding:6px 10px 0;background:var(--bar);border-bottom:1px solid var(--line)}
+.tabs span{padding:6px 12px;border-radius:8px 8px 0 0;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mut)}
+.tabs span.on{background:var(--bg);color:var(--fg)}
+</style>
+
+<h2>Editor com a lista de documentos recolhível</h2>
+<p class="subtitle">O botão no canto esquerdo da barra abre e fecha a coluna. Recolhida, a tela fica como a opção A, mas com as abas.</p>
+<h3 style="margin:1rem 0 .5rem">Aberta</h3><div class="w">
+<div class="top"><span class="b2" title="recolher">◧</span><span class="crumb" style="font-weight:600">pad</span><span style="flex:1"></span><span class="dots"><span style="background:#e11d48">A</span><span style="background:#0d9488">B</span><span style="background:#7c5cff">P</span></span><span class="b2">Compartilhar</span><span class="av">p</span></div>
+<div class="mid"><div class="side"><div class="h"><span>documentos</span><span>⌕</span></div>
+<div class="it f">▾ projetos</div><div class="it on" style="padding-left:20px">ideias</div><div class="it" style="padding-left:20px">roadmap</div><div class="it f">▸ pessoal</div><div class="it">receitas</div><div class="h" style="margin-top:8px"><span>compartilhados</span></div><div class="it">ana/viagem</div>
+<div class="new">+ novo documento</div></div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0"><div class="tabs"><span class="on">ideias</span><span>roadmap</span><span>receitas</span></div>
+<div class="mid"><div class="gut">1<br><span class="on">2</span><br>3<br><span class="on2">4</span><br><span class="on2">5</span><br>6</div><div class="txt"><span class="k"># Ideias para o trimestre</span>
+- landing nova com depo<span class="cur"><b>Ana</b></span>
+- migrar fotos pro bucket
+<span class="sel">- revisar preços do plano pro</span>
+<span class="sel">  e do plano anual</span><span class="lock">🔒 Bruno</span>
+- testar o websocket</div></div></div></div>
+<div class="st"><span class="acc">● 3 pessoas</span><span>linha 6, coluna 20</span><span style="flex:1"></span><span class="saved"><i></i>salvo</span><span>tema: Grafite ▾</span></div>
+</div></div>
+
+
+<h3 style="margin:1.4rem 0 .5rem">Recolhida</h3><div class="w">
+<div class="top"><span class="b2" title="abrir documentos">☰</span><span class="crumb"><span class="m">projetos/</span>ideias</span><span class="saved"><i></i>salvo</span><span style="flex:1"></span><span class="dots"><span style="background:#e11d48">A</span><span style="background:#0d9488">B</span><span style="background:#7c5cff">P</span></span><span class="b2">Compartilhar</span><span class="av">p</span></div>
+<div class="tabs"><span class="on">ideias</span><span>roadmap</span><span>receitas</span></div><div class="mid"><div class="gut">1<br><span class="on">2</span><br>3<br><span class="on2">4</span><br><span class="on2">5</span><br>6<br>7</div><div class="txt"><span class="k"># Ideias para o trimestre</span>
+- landing nova com depo<span class="cur"><b>Ana</b></span>
+- migrar fotos pro bucket
+<span class="sel">- revisar preços do plano pro</span>
+<span class="sel">  e do plano anual</span><span class="lock">🔒 Bruno</span>
+
+- testar o websocket</div></div>
+<div class="st"><span class="acc">● 3 pessoas</span><span>linha 7, coluna 20</span><span style="flex:1"></span><span>tema: Grafite ▾</span></div>
+</div></div>
+
