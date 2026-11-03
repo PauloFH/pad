@@ -215,8 +215,10 @@
     gaveta.addEventListener('change', fecharGaveta);
     btn.addEventListener('click', () => {
       // no celular a gaveta abre por cima e começa fechada; no resto a escolha fica guardada
-      if (gaveta.matches) body.classList.toggle('gaveta');
-      else body.classList.toggle('sem-col', !coluna.alternar(u, visivel()));
+      // a gaveta vem depois da barra no HTML: o foco entra nela, senão o Tab passaria pela barra antes
+      if (gaveta.matches) {
+        if (body.classList.toggle('gaveta')) col.querySelector('a, button, input')?.focus();
+      } else body.classList.toggle('sem-col', !coluna.alternar(u, visivel()));
       marcar();
     });
     document.addEventListener('keydown', (e) => {
@@ -227,6 +229,9 @@
     });
     document.addEventListener('pointerdown', (e) => {
       if (body.classList.contains('gaveta') && !col.contains(e.target) && !btn.contains(e.target)) fecharGaveta();
+    });
+    col.addEventListener('focusout', (e) => {
+      if (body.classList.contains('gaveta') && e.relatedTarget && !col.contains(e.relatedTarget) && e.relatedTarget !== btn) fecharGaveta();
     });
     col.addEventListener('click', (e) => {
       const p = e.target.closest('.pasta');

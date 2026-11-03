@@ -41,7 +41,7 @@
 .menu-item:focus-visible{outline-offset:-2px}
 
 /* pílula ("só leitura", "público") */
-.selo{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;background:var(--hov);color:var(--fg);font-size:11px;white-space:nowrap}
+.selo{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;background:var(--hov);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line);font-size:11px;white-space:nowrap}
 
 /* bloco da tela de entrada (B2) */
 .cartao{display:block;min-width:0;padding:10px 12px;border-radius:10px;background:var(--field);color:var(--fg);text-decoration:none;
@@ -62,7 +62,7 @@ a.cartao:hover{background:var(--hov)}
 .chave:checked::before,.chave[aria-checked="true"]::before{transform:translateX(14px);background:var(--on)}
 
 /* avatar com a inicial */
-.av{display:inline-grid;place-items:center;flex:none;width:26px;height:26px;padding:0;border:0;border-radius:50%;background:var(--hov);color:var(--fg);
+.av{display:inline-grid;place-items:center;flex:none;width:26px;height:26px;padding:0;border:0;border-radius:50%;background:var(--hov);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line);
   font:600 12px/1 var(--ui);cursor:pointer}
 
 /* telas de cartão centralizado: login, criar conta, convite e mensagens */
