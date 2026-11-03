@@ -136,6 +136,7 @@ func (d *liveDoc) since(rev int) ([]Op, error) {
 }
 
 func (d *liveDoc) submit(p *peer, rev, seq int, op Op, a, h int, now time.Time) (Op, error) {
+	d.touch(p, now)
 	if !p.canEdit {
 		return nil, errReadOnly
 	}
@@ -163,7 +164,8 @@ func (d *liveDoc) submit(p *peer, rev, seq int, op Op, a, h int, now time.Time) 
 	if err != nil {
 		return nil, errInvalid
 	}
-	if utf8Len(text) > d.max {
+	// documento que já veio do disco acima do limite ainda pode encolher
+	if n := utf8Len(text); n > d.max && n > utf8Len(d.text) {
 		if d.publico {
 			return nil, msgErr{errTooBig, "documento da área pública passa de 256 KB"}
 		}
@@ -178,10 +180,8 @@ func (d *liveDoc) submit(p *peer, rev, seq int, op Op, a, h int, now time.Time) 
 	if p.cid != "" {
 		d.seqs[p.cid] = seq
 	}
+	// p também anda, para o place comparar a seleção antiga e a nova no mesmo texto
 	for q := range d.peers {
-		if q == p {
-			continue
-		}
 		if q.lock {
 			// bordas da trava não engolem insert vizinho: o início anda, o fim fica
 			s, e := &q.a, &q.h
@@ -198,6 +198,7 @@ func (d *liveDoc) submit(p *peer, rev, seq int, op Op, a, h int, now time.Time) 
 }
 
 func (d *liveDoc) setSel(p *peer, rev, a, h int, now time.Time) error {
+	d.touch(p, now)
 	later, err := d.since(rev)
 	if err != nil {
 		return err
@@ -209,16 +210,36 @@ func (d *liveDoc) setSel(p *peer, rev, a, h int, now time.Time) error {
 	return nil
 }
 
-// place grava a seleção de p, que acabou de falar, e refaz as travas.
+// touch conta qualquer mensagem da aba, aceita ou recusada, como atividade.
+// Quem volta do ócio entra no fim da fila da trava.
+func (d *liveDoc) touch(p *peer, now time.Time) {
+	p.active = now
+	if p.idle {
+		p.idle, p.selSince = false, now
+		d.recomputeLocks()
+	}
+}
+
+// place grava a seleção de p e refaz as travas.
 func (d *liveDoc) place(p *peer, a, h int, now time.Time) {
 	a, h = min(max(a, 0), len(d.text)), min(max(h, 0), len(d.text))
-	// a prioridade da trava conta de quando a seleção começou, não da última mudança
-	if p.a == p.h && a != h {
+	s, e := min(a, h), max(a, h)
+	// estender a seleção mantém a prioridade; uma seleção em outro lugar é nova
+	if !overlaps(s, e, min(p.a, p.h), max(p.a, p.h)) {
 		p.selSince = now
 	}
-	p.a, p.h, p.active, p.idle = a, h, now, false
+	p.a, p.h = a, h
+	// trava concedida só cai pelo próprio dono: quem avança sobre a de outro perde a sua
+	for q := range d.peers {
+		if p.lock && q != p && q.lock && overlaps(s, e, min(q.a, q.h), max(q.a, q.h)) {
+			p.lock = false
+		}
+	}
 	d.recomputeLocks()
 }
+
+// overlaps diz se [s1,e1) e [s2,e2) dividem alguma unidade; trecho vazio não divide.
+func overlaps(s1, e1, s2, e2 int) bool { return s1 < e1 && s2 < e2 && s1 < e2 && s2 < e1 }
 
 // expireLocks marca como ociosas as abas paradas há mais de lockIdle e diz
 // se alguma trava mudou.
@@ -231,8 +252,8 @@ func (d *liveDoc) expireLocks(now time.Time) bool {
 	return d.recomputeLocks()
 }
 
-// recomputeLocks concede as travas por ordem de selSince a quem não se
-// sobrepõe a uma trava já concedida. Diz se alguma mudou.
+// recomputeLocks concede as travas a quem não se sobrepõe a uma já concedida:
+// primeiro quem já trava, depois por ordem de selSince. Diz se alguma mudou.
 func (d *liveDoc) recomputeLocks() bool {
 	var cand []*peer
 	for p := range d.peers {
@@ -241,6 +262,12 @@ func (d *liveDoc) recomputeLocks() bool {
 		}
 	}
 	slices.SortFunc(cand, func(x, y *peer) int {
+		if x.lock != y.lock {
+			if x.lock {
+				return -1
+			}
+			return 1
+		}
 		if c := x.selSince.Compare(y.selSince); c != 0 {
 			return c
 		}
@@ -252,7 +279,7 @@ next:
 	for _, p := range cand {
 		s, e := min(p.a, p.h), max(p.a, p.h)
 		for _, g := range granted {
-			if s < g[1] && g[0] < e {
+			if overlaps(s, e, g[0], g[1]) {
 				continue next
 			}
 		}

@@ -343,3 +343,95 @@ func TestCursorAndaComInsercao(t *testing.T) {
 		t.Fatal("estado do autor")
 	}
 }
+
+func TestTravaNaoTomadaPorEspera(t *testing.T) {
+	d := newLiveDoc("ana/x", "0123456789abcdefghijk")
+	a := novoPeer(d, "1", "u:1", "ana", "Capivara", true)
+	b := novoPeer(d, "2", "u:2", "bruno", "Tatu", true)
+	c := novoPeer(d, "3", "u:3", "carla", "Arara", true)
+	sel(t, d, a, 5, 10, t0)
+	sel(t, d, b, 8, 20, t0.Add(time.Second))
+	sel(t, d, c, 12, 15, t0.Add(2*time.Second))
+	if !a.lock || b.lock || !c.lock {
+		t.Fatalf("A %v B %v C %v", a.lock, b.lock, c.lock)
+	}
+	sel(t, d, a, 5, 5, t0.Add(3*time.Second))
+	if b.lock || !c.lock {
+		t.Fatalf("A soltou e C perdeu: B %v C %v", b.lock, c.lock)
+	}
+	// C digita dentro da própria seleção: B, que espera há mais tempo, não toma a trava
+	if err := envia(t, d, c, d.rev, Op{{Retain: 13}, {Insert: "x"}, {Retain: 8}}, 12, 16, t0.Add(4*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if b.lock || !c.lock {
+		t.Fatalf("depois de C digitar: B %v C %v", b.lock, c.lock)
+	}
+	sel(t, d, c, 12, 12, t0.Add(5*time.Second))
+	if !b.lock {
+		t.Fatal("C soltou: B deveria travar")
+	}
+}
+
+func TestTravaNaoTomadaPorSalto(t *testing.T) {
+	d := newLiveDoc("ana/x", "0123456789abcdef")
+	b := novoPeer(d, "2", "u:2", "bruno", "Tatu", true)
+	c := novoPeer(d, "3", "u:3", "carla", "Arara", true)
+	sel(t, d, b, 1, 3, t0)
+	sel(t, d, c, 12, 15, t0.Add(time.Second))
+	sel(t, d, b, 13, 14, t0.Add(2*time.Second)) // pula direto, sem passar por seleção vazia
+	if b.lock || !c.lock {
+		t.Fatalf("B %v C %v", b.lock, c.lock)
+	}
+	if !b.selSince.Equal(t0.Add(2 * time.Second)) {
+		t.Fatal("seleção nova sem sobreposição deveria renovar selSince")
+	}
+}
+
+func TestTravaVoltaDoIdle(t *testing.T) {
+	d := newLiveDoc("ana/x", "0123456789abcdef")
+	b := novoPeer(d, "2", "u:2", "bruno", "Tatu", true)
+	c := novoPeer(d, "3", "u:3", "carla", "Arara", true)
+	sel(t, d, b, 5, 10, t0)
+	d.expireLocks(t0.Add(31 * time.Second))
+	sel(t, d, c, 8, 12, t0.Add(32*time.Second))
+	if !c.lock {
+		t.Fatal("C deveria travar com B ocioso")
+	}
+	sel(t, d, b, 5, 10, t0.Add(40*time.Second)) // B volta com a seleção antiga
+	if b.lock || !c.lock {
+		t.Fatalf("B voltou: B %v C %v", b.lock, c.lock)
+	}
+	sel(t, d, c, 8, 8, t0.Add(41*time.Second))
+	if !b.lock {
+		t.Fatal("C soltou: B deveria travar")
+	}
+}
+
+func TestSubmitRecusadoContaAtividade(t *testing.T) {
+	d := newLiveDoc("ana/x", "0123456789abcdef")
+	b := novoPeer(d, "2", "u:2", "bruno", "Tatu", true)
+	sel(t, d, b, 5, 10, t0)
+	d.expireLocks(t0.Add(31 * time.Second))
+	now := t0.Add(32 * time.Second)
+	if err := envia(t, d, b, 99, ins(0, "x", 16), 1, 1, now); !errors.Is(err, errStale) {
+		t.Fatalf("err = %v", err)
+	}
+	if b.idle || !b.active.Equal(now) || !b.lock {
+		t.Fatalf("recusa deveria contar como atividade: idle %v lock %v", b.idle, b.lock)
+	}
+	if d.expireLocks(t0.Add(40 * time.Second)) {
+		t.Fatal("ativa há 8 s, não expira")
+	}
+}
+
+func TestSubmitDocJaAcima(t *testing.T) {
+	d := newLiveDoc("publico/x", strings.Repeat("a", maxPublicoDoc+10))
+	a := novoPeer(d, "1", "v:1", "", "Capivara", true)
+	n := len(d.text)
+	if err := envia(t, d, a, 0, Op{{Delete: 1}, {Retain: n - 1}}, 0, 0, t0); err != nil {
+		t.Fatalf("encolher deveria passar: %v", err)
+	}
+	if err := envia(t, d, a, 1, ins(0, "b", n-1), 1, 1, t0); !errors.Is(err, errTooBig) {
+		t.Fatalf("crescer acima do limite: %v", err)
+	}
+}
