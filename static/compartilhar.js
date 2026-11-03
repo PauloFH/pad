@@ -1,5 +1,6 @@
-// Painel de compartilhar: abre pelo botão, fecha com Esc ou clique fora.
-// Abre sozinho (data-aberto) quando o servidor devolveu o erro de alvo não encontrado.
+// Painel de compartilhar: abre pelo botão, fecha com Esc, clique fora ou foco que sai dele.
+// O HTML vem aberto (sem JS os formulários continuam alcançáveis); aqui ele fecha, exceto
+// com data-aberto, que o servidor põe quando o alvo não foi encontrado.
 (function () {
   const raiz = document.getElementById('compartilhar');
   if (!raiz) return;
@@ -13,7 +14,7 @@
     botao.setAttribute('aria-expanded', 'true');
     alvo.focus();
   }
-  // o clique fora não devolve o foco: ele já foi para onde a pessoa clicou
+  // o clique fora e o Tab para fora não devolvem o foco: ele já foi para onde a pessoa quis
   function fechar(devolverFoco) {
     painel.hidden = true;
     botao.setAttribute('aria-expanded', 'false');
@@ -27,8 +28,10 @@
   document.addEventListener('click', (e) => {
     if (aberto() && !raiz.contains(e.target)) fechar(false);
   });
-  if (painel.hasAttribute('data-aberto')) {
-    painel.removeAttribute('data-aberto');
-    abrir();
-  }
+  // relatedTarget nulo é clique em texto do painel ou janela perdendo o foco: não fecha
+  raiz.addEventListener('focusout', (e) => {
+    if (aberto() && e.relatedTarget && !raiz.contains(e.relatedTarget)) fechar(false);
+  });
+  if (painel.hasAttribute('data-aberto')) abrir();
+  else fechar(false);
 })();

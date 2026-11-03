@@ -146,13 +146,13 @@ document.getElementById('copiar').onclick = function () {
 </body></html>{{end}}
 
 
-{{/* painel de compartilhar do dono; abre e fecha em compartilhar.js (sem JS fica fechado e o resto da página segue igual) */}}
-{{define "compartilhar"}}{{if .Owner}}<span id="compartilhar"><button type="button" id="comp-abrir" class="btn" aria-haspopup="dialog" aria-expanded="{{.NotFound}}" aria-controls="comp-painel">Compartilhar</button>
-<div id="comp-painel" class="pop" role="dialog" aria-labelledby="comp-titulo" {{if .NotFound}}data-aberto{{else}}hidden{{end}}>
+{{/* painel de compartilhar do dono; abre e fecha em compartilhar.js (o HTML vem aberto e o JS fecha, para os formulários valerem sem JS) */}}
+{{define "compartilhar"}}{{if .Owner}}<span id="compartilhar"><button type="button" id="comp-abrir" class="btn" aria-haspopup="dialog" aria-expanded="true" aria-controls="comp-painel">Compartilhar</button>
+<div id="comp-painel" class="pop" role="dialog" aria-labelledby="comp-titulo" {{if .NotFound}}data-aberto{{end}}>
 <h2 id="comp-titulo">Compartilhar {{.Name}}</h2>
 {{if .NotFound}}<p class="err" role="alert">Usuário ou grupo não encontrado.</p>{{end}}
 <form method="post" action="/_share/{{.Name}}">
-<div class="seg" role="radiogroup" aria-label="Compartilhar com"><label><input type="radio" name="tipo" value="user" checked><span>Usuário</span></label><label><input type="radio" name="tipo" value="group"><span>Grupo</span></label></div>
+<div class="seg" role="radiogroup" aria-label="Compartilhar com"><label><input type="radio" name="tipo" value="user" checked>Usuário</label><label><input type="radio" name="tipo" value="group">Grupo</label></div>
 <div class="comp-linha"><input class="campo" name="alvo" placeholder="nome" required autocomplete="off" aria-label="Nome do usuário ou grupo"><button class="btn pri">Adicionar</button></div>
 </form>
 <ul class="comp-lista">
@@ -161,4 +161,4 @@ document.getElementById('copiar').onclick = function () {
 </ul>
 <form method="post" action="/_public/{{.Name}}" class="comp-pub"><input type="hidden" name="public" value="{{if .Public}}0{{else}}1{{end}}"><span id="comp-pub-t">Público, só leitura</span><button class="chave" role="switch" aria-checked="{{.Public}}" aria-labelledby="comp-pub-t"></button></form>
 <form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="btn perigo">Apagar documento</button></form>
-</div><script src="/_static/compartilhar.js" defer></script></span>{{end}}{{end}}
+</div><script src="/_static/compartilhar.js"></script></span>{{end}}{{end}}

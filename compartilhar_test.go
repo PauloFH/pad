@@ -6,6 +6,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -60,6 +61,10 @@ func TestPainelCompartilhar(t *testing.T) {
 		`/_static/compartilhar.js`)
 	if strings.Contains(priv, `Usuário ou grupo não encontrado`) || strings.Contains(priv, `data-aberto`) {
 		t.Error("painel aberto ou com erro sem falha")
+	}
+	// sem JS os formulários têm de estar alcançáveis: o painel não pode vir com hidden
+	if regexp.MustCompile(`<div id="comp-painel"[^>]*\shidden`).MatchString(priv) {
+		t.Error("painel vem com hidden")
 	}
 
 	if _, err := ana.PostForm(srv.URL+"/_public/ana/doc", url.Values{"public": {"1"}}); err != nil {

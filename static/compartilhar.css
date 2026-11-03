@@ -1,38 +1,29 @@
-/* painel de compartilhar: só posição, espaçamento e a estrutura própria dele.
-   A aparência de .btn, .campo, .seg, .pop, .av e .chave vem de componentes.css. */
+/* painel de compartilhar: só o que é próprio dele. A aparência de .btn, .campo, .seg, .pop, .av e .chave vem de componentes.css. */
 #compartilhar{position:relative;display:inline-block}
-#comp-painel{position:absolute;right:0;top:calc(100% + 8px);z-index:20;width:22rem;max-width:calc(100vw - 2rem);max-height:calc(100dvh - 5rem);overflow:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+#comp-painel{max-height:calc(100dvh - 5rem);overflow:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:10px;text-align:left}
 #comp-painel h2{margin:0;font-size:14px;font-weight:600;overflow-wrap:anywhere}
 #comp-painel p{margin:0;font-size:12px}
 #comp-painel form{margin:0}
 #comp-painel form:first-of-type{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 
-/* alternância usuário/grupo: os radios ficam atrás, o rótulo marcado vira o segmento ativo */
-#comp-painel .seg label{flex:1;position:relative;cursor:pointer;text-align:center}
-#comp-painel .seg input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
-#comp-painel .seg span{display:block;padding:5px;border-radius:7px}
-#comp-painel .seg input:checked+span{background:var(--field);box-shadow:0 0 0 1px var(--line)}
-#comp-painel .seg label:has(input:focus-visible){outline:2px solid var(--acc);outline-offset:1px;border-radius:7px}
-
 .comp-linha{display:flex;gap:8px}
-.comp-linha .campo{flex:1;min-width:0}
+.comp-linha .campo{flex:1}
 
-.comp-lista{list-style:none;margin:0;padding:0}
+/* #comp-painel na frente para vencer o `.pop ul` ainda solto no head */
+#comp-painel .comp-lista{list-style:none;margin:0;padding:0}
 .comp-lista:empty{display:none}
 .comp-lista li{display:flex;align-items:center;gap:8px;padding:4px 0}
 .comp-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.comp-lista .av{text-transform:uppercase;flex:none}
-.comp-rem{background:none;border:0;padding:6px 4px;color:var(--mut);font:inherit;font-size:12px;cursor:pointer;border-radius:6px}
+.comp-lista .av{text-transform:uppercase;cursor:default}
+/* botão de texto: componentes.css não tem uma variante de link para reaproveitar */
+.comp-rem{padding:6px 4px;border:0;border-radius:6px;background:none;color:var(--mut);font:inherit;font-size:12px;cursor:pointer}
 .comp-rem:hover{color:var(--err)}
-.comp-rem:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
-.comp-pub{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.comp-pub{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
 .comp-pub span{flex:1}
 
-/* celular: o painel ocupa a largura da tela, abaixo da barra, e os alvos de toque têm 40px */
-@media (max-width:600px){
-  #compartilhar{position:static}
-  #comp-painel{position:fixed;left:1rem;right:1rem;top:3.5rem;width:auto;max-width:none}
+/* celular: o painel ocupa a largura da tela. Sem top, o fixed fica onde estaria no fluxo, logo abaixo do botão, sem depender da altura da barra */
+@media (max-width:767px){
+  #comp-painel{position:fixed;top:auto;left:1rem;right:1rem;width:auto;max-width:none;margin-top:6px}
   .comp-rem{min-height:40px;padding:0 10px}
-  #comp-painel .seg span{padding:10px 5px}
 }
