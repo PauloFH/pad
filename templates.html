@@ -123,7 +123,17 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 <a href="/">← documentos</a><b>{{.Label}}</b>{{if .Public}}<span class="mut">público</span>{{end}}
 <span id="st" class="mut"></span>
 <span class="sp"></span>
-{{if .Owner}}<details {{if .NotFound}}open{{end}}><summary>compartilhar</summary><div class="pop">
+{{template "compartilhar" .}}
+{{template "peers"}}
+{{if .Me}}<span class="mut">{{.Me}}</span>{{template "logout"}}{{else}}<a href="/_login">entrar</a>{{end}}
+</header>
+{{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
+<textarea id="t" spellcheck="false" autofocus data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
+{{template "live"}}
+</body></html>{{end}}
+
+{{/* painel de compartilhar do dono (Task 5 redesenha) */}}
+{{define "compartilhar"}}{{if .Owner}}<details {{if .NotFound}}open{{end}}><summary>compartilhar</summary><div class="pop">
 {{if .NotFound}}<p class="err">Usuário ou grupo não encontrado.</p>{{end}}
 <form method="post" action="/_share/{{.Name}}">
 <select name="tipo"><option value="user">usuário</option><option value="group">grupo</option></select>
@@ -138,11 +148,4 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 {{else}}<input type="hidden" name="public" value="1"><p class="mut">Privado. <button class="link">tornar público (só leitura)</button></p>{{end}}
 </form>
 <form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="link err">apagar documento</button></form>
-</div></details>{{end}}
-{{template "peers"}}
-{{if .Me}}<span class="mut">{{.Me}}</span>{{template "logout"}}{{else}}<a href="/_login">entrar</a>{{end}}
-</header>
-{{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
-<textarea id="t" spellcheck="false" autofocus data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
-{{template "live"}}
-</body></html>{{end}}
+</div></details>{{end}}{{end}}
