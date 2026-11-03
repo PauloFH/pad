@@ -17,8 +17,14 @@ textarea{flex:1;width:100%;border:0;padding:1rem;font:14px/1.5 ui-monospace,mono
 details{position:relative} summary{cursor:pointer;color:var(--acc)}
 .pop{position:absolute;right:0;top:1.8rem;z-index:1;width:22rem;max-width:90vw;padding:1rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
 .pop ul{padding-left:1.2rem}
+.aviso{position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);max-width:90vw;padding:.4rem .8rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
 </style></head>
 {{end}}
+
+{{/* avisos e scripts do editor ao vivo, comuns ao doc e ao public */}}
+{{define "live"}}<p id="trava" class="aviso err" role="status" hidden></p>
+<p id="fim" class="aviso" role="alert" hidden><span></span><a href="">recarregar</a></p>
+<script src="/_static/ot.js"></script><script src="/_static/sync.js"></script><script src="/_static/editor.js"></script>{{end}}
 
 {{define "logout"}}<form method="post" action="/_logout" class="inline"><button class="link">sair</button></form>{{end}}
 
@@ -67,9 +73,10 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 </main></body></html>{{end}}
 
 {{define "public"}}{{template "head" .Name}}<body class="ed">
-<header><b>{{.Name}}</b><span class="mut">somente leitura</span><span class="sp"></span>
+<header><b>{{.Name}}</b><span class="mut">somente leitura</span><span id="st" class="mut"></span><span class="sp"></span>
 {{if .Me}}<a href="/">documentos</a>{{else}}<a href="/_login?next=/{{.Name}}">entrar</a>{{end}}</header>
-<textarea readonly spellcheck="false" aria-label="{{.Name}}">{{.Body}}</textarea>
+<textarea id="t" readonly spellcheck="false" aria-label="{{.Name}}" data-name="{{.Name}}" data-can-edit="false">{{.Body}}</textarea>
+{{template "live"}}
 </body></html>{{end}}
 
 {{define "doc"}}{{template "head" .Label}}<body class="ed">
@@ -95,22 +102,6 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 </div></details>{{end}}
 {{if .Me}}<span class="mut">{{.Me}}</span>{{template "logout"}}{{else}}<a href="/_login">entrar</a>{{end}}
 </header>
-<textarea id="t" spellcheck="false" autofocus>{{.Body}}</textarea>
-<script>
-const t = document.getElementById('t'), st = document.getElementById('st');
-let timer, dirty = false, queue = Promise.resolve();
-t.addEventListener('input', () => { dirty = true; st.textContent = '…'; clearTimeout(timer); timer = setTimeout(save, 700); });
-// salvamentos em fila, para chegarem ao servidor na ordem em que foram feitos
-function save() {
-  dirty = false;
-  const body = t.value;
-  queue = queue.then(() => fetch(location.pathname, {method: 'POST', body}))
-    .then(r => {
-      if (!r.ok) throw new Error(r.status === 401 ? 'sessão expirada: recarregue e entre de novo' : 'erro ao salvar (' + r.status + ')');
-      if (!dirty) st.textContent = 'salvo';
-    })
-    .catch(e => { dirty = true; st.textContent = e.message; });
-}
-addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
-</script>
+<textarea id="t" spellcheck="false" autofocus data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea>
+{{template "live"}}
 </body></html>{{end}}

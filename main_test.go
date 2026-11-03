@@ -250,3 +250,51 @@ func TestStatic(t *testing.T) {
 		t.Errorf("listagem do diretório: status %d", res.StatusCode)
 	}
 }
+
+func TestPaginaCarregaScripts(t *testing.T) {
+	a, err := openApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(a.db, []string{"useradd", "ana"}, strings.NewReader("senha-forte\n")); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(a.routes())
+	defer srv.Close()
+	jar, _ := cookiejar.New(nil)
+	ana := &http.Client{Jar: jar}
+	if _, err := ana.PostForm(srv.URL+"/_login", url.Values{"name": {"ana"}, "pass": {"senha-forte"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ana.Post(srv.URL+"/ana/doc", "text/plain", strings.NewReader("oi")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ana.PostForm(srv.URL+"/_public/ana/doc", url.Values{"public": {"1"}}); err != nil {
+		t.Fatal(err)
+	}
+	get := func(c *http.Client) string {
+		res, err := c.Get(srv.URL + "/ana/doc")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return string(b)
+	}
+	page := get(ana)
+	for _, s := range []string{"/_static/ot.js", "/_static/sync.js", "/_static/editor.js", `data-name="ana/doc"`, `data-can-edit="true"`} {
+		if !strings.Contains(page, s) {
+			t.Errorf("editor sem %q", s)
+		}
+	}
+	if strings.Contains(page, "fetch(location.pathname") {
+		t.Error("editor ainda grava por POST")
+	}
+	// público aberto sem login: o mesmo editor, só leitura
+	page = get(http.DefaultClient)
+	for _, s := range []string{"/_static/editor.js", `data-name="ana/doc"`, `data-can-edit="false"`} {
+		if !strings.Contains(page, s) {
+			t.Errorf("página pública sem %q", s)
+		}
+	}
+}
