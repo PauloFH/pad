@@ -1,0 +1,103 @@
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+.tg{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem}
+.t{font-family:'JetBrains Mono',monospace;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;height:190px;font-size:11px;background:var(--bg);color:var(--fg)}
+.t .bar{display:flex;align-items:center;gap:8px;padding:6px 9px;background:var(--bar);border-bottom:1px solid var(--line)}
+.t .tab{padding:2px 7px;border-radius:5px;background:var(--bg)}
+.t .body{flex:1;display:flex}
+.t .gut{padding:8px 7px;text-align:right;line-height:1.7;color:var(--mut);border-right:1px solid var(--line)}
+.t .txt{padding:8px 10px;white-space:pre;line-height:1.7}
+.t .st{padding:3px 9px;font-size:10px;background:var(--acc);color:var(--on);display:flex;gap:10px}
+.t .k{color:var(--acc)} .t .m{color:var(--mut)}
+.t .cur{display:inline-block;width:2px;height:1.1em;vertical-align:-.2em;background:#e11d48}
+.t .sel{background:color-mix(in srgb,#0d9488 28%,transparent)}
+.name{display:flex;justify-content:space-between;align-items:baseline;margin:.45rem .1rem 0}
+.name b{font-size:14px} .name span{font-size:12px;color:#777}
+</style>
+
+<h2>Quais temas o pad deve ter?</h2>
+<p class="subtitle">Todos na base Oficina. Marque quantos quiser (clique para marcar e desmarcar). O pad seguiria o claro ou escuro do sistema por padrão, e cada pessoa poderia trocar.</p>
+
+<div class="options tg" data-multiselect>
+
+<div class="option" data-choice="grafite" onclick="toggleSelect(this)" style="display:block;padding:.6rem">
+<div class="t" style="--bg:#16181f;--bar:#1d2029;--fg:#d7dae4;--mut:#4d5263;--line:#262a35;--acc:#7c5cff;--on:#fff">
+<div class="bar"><span class="tab">projetos/ideias</span><span class="m">salvo</span></div>
+<div class="body"><div class="gut">1<br>2<br>3<br>4</div><div class="txt"><span class="k"># Ideias</span>
+- landing nova<span class="cur"></span>
+<span class="sel">- revisar preços</span>
+- testar o websocket</div></div>
+<div class="st"><span>● 3 pessoas</span><span>linha 2</span></div></div>
+<div class="name"><b>Grafite</b><span>escuro · violeta</span></div></div>
+
+<div class="option" data-choice="madrugada" onclick="toggleSelect(this)" style="display:block;padding:.6rem">
+<div class="t" style="--bg:#0e1726;--bar:#142035;--fg:#d6e2f3;--mut:#4a5d7a;--line:#1d2a42;--acc:#38bdf8;--on:#06121f">
+<div class="bar"><span class="tab">projetos/ideias</span><span class="m">salvo</span></div>
+<div class="body"><div class="gut">1<br>2<br>3<br>4</div><div class="txt"><span class="k"># Ideias</span>
+- landing nova<span class="cur"></span>
+<span class="sel">- revisar preços</span>
+- testar o websocket</div></div>
+<div class="st"><span>● 3 pessoas</span><span>linha 2</span></div></div>
+<div class="name"><b>Madrugada</b><span>escuro · azul-céu</span></div></div>
+
+<div class="option" data-choice="cafe" onclick="toggleSelect(this)" style="display:block;padding:.6rem">
+<div class="t" style="--bg:#1b1613;--bar:#241d19;--fg:#ece2d8;--mut:#6b5b50;--line:#30271f;--acc:#f59e0b;--on:#1b1613">
+<div class="bar"><span class="tab">projetos/ideias</span><span class="m">salvo</span></div>
+<div class="body"><div class="gut">1<br>2<br>3<br>4</div><div class="txt"><span class="k"># Ideias</span>
+- landing nova<span class="cur"></span>
+<span class="sel">- revisar preços</span>
+- testar o websocket</div></div>
+<div class="st"><span>● 3 pessoas</span><span>linha 2</span></div></div>
+<div class="name"><b>Café</b><span>escuro · âmbar</span></div></div>
+
+<div class="option" data-choice="floresta" onclick="toggleSelect(this)" style="display:block;padding:.6rem">
+<div class="t" style="--bg:#111a15;--bar:#17231c;--fg:#d9eadf;--mut:#4b6655;--line:#1f2f26;--acc:#34d399;--on:#0b1510">
+<div class="bar"><span class="tab">projetos/ideias</span><span class="m">salvo</span></div>
+<div class="body"><div class="gut">1<br>2<br>3<br>4</div><div class="txt"><span class="k"># Ideias</span>
+- landing nova<span class="cur"></span>
+<span class="sel">- revisar preços</span>
+- testar o websocket</div></div>
+<div class="st"><span>● 3 pessoas</span><span>linha 2</span></div></div>
+<div class="name"><b>Floresta</b><span>escuro · verde-menta</span></div></div>
+
+<div class="option" data-choice="papel" onclick="toggleSelect(this)" style="display:block;padding:.6rem">
+<div class="t" style="--bg:#f3f4f7;--bar:#e7e9ef;--fg:#222634;--mut:#a3a8b8;--line:#d9dce5;--acc:#7c5cff;--on:#fff">
+<div class="bar"><span class="tab" style="background:#fff">projetos/ideias</span><span class="m">salvo</span></div>
+<div class="body"><div class="gut">1<br>2<br>3<br>4</div><div class="txt"><span class="k"># Ideias</span>
+- landing nova<span class="cur"></span>
+<span class="sel">- revisar preços</span>
+- testar o websocket</div></div>
+<div class="st"><span>● 3 pessoas</span><span>linha 2</span></div></div>
+<div class="name"><b>Papel</b><span>claro · violeta</span></div></div>
+
+<div class="option" data-choice="ceu" onclick="toggleSelect(this)" style="display:block;padding:.6rem">
+<div class="t" style="--bg:#f2f6fc;--bar:#e3ebf7;--fg:#1a2638;--mut:#9aa9c0;--line:#d3deee;--acc:#2563eb;--on:#fff">
+<div class="bar"><span class="tab" style="background:#fff">projetos/ideias</span><span class="m">salvo</span></div>
+<div class="body"><div class="gut">1<br>2<br>3<br>4</div><div class="txt"><span class="k"># Ideias</span>
+- landing nova<span class="cur"></span>
+<span class="sel">- revisar preços</span>
+- testar o websocket</div></div>
+<div class="st"><span>● 3 pessoas</span><span>linha 2</span></div></div>
+<div class="name"><b>Céu</b><span>claro · azul</span></div></div>
+
+<div class="option" data-choice="areia" onclick="toggleSelect(this)" style="display:block;padding:.6rem">
+<div class="t" style="--bg:#f5f2ec;--bar:#ebe5da;--fg:#2b241c;--mut:#b0a493;--line:#ddd4c5;--acc:#c2410c;--on:#fff">
+<div class="bar"><span class="tab" style="background:#fffdf8">projetos/ideias</span><span class="m">salvo</span></div>
+<div class="body"><div class="gut">1<br>2<br>3<br>4</div><div class="txt"><span class="k"># Ideias</span>
+- landing nova<span class="cur"></span>
+<span class="sel">- revisar preços</span>
+- testar o websocket</div></div>
+<div class="st"><span>● 3 pessoas</span><span>linha 2</span></div></div>
+<div class="name"><b>Areia</b><span>claro · laranja-queimado</span></div></div>
+
+<div class="option" data-choice="contraste" onclick="toggleSelect(this)" style="display:block;padding:.6rem">
+<div class="t" style="--bg:#000;--bar:#000;--fg:#fff;--mut:#bdbdbd;--line:#fff;--acc:#ffd400;--on:#000">
+<div class="bar"><span class="tab" style="border:1px solid #fff">projetos/ideias</span><span class="m">salvo</span></div>
+<div class="body"><div class="gut">1<br>2<br>3<br>4</div><div class="txt"><span class="k"># Ideias</span>
+- landing nova<span class="cur" style="background:#ff5c8a"></span>
+<span class="sel" style="background:#0d948866">- revisar preços</span>
+- testar o websocket</div></div>
+<div class="st"><span>● 3 pessoas</span><span>linha 2</span></div></div>
+<div class="name"><b>Alto contraste</b><span>acessibilidade · amarelo</span></div></div>
+
+</div>

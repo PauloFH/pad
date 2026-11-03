@@ -39,7 +39,7 @@ Decidido pelo Paulo: **cada um desfaz só o que fez**, como no Google Docs. O Ct
 ### Quem aparece e com que nome
 
 - **Documentos com login** (`/usuario/...`, inclusive os compartilhados): aparece o nome de login.
-- **Área `/publico`:** todo mundo aparece com um nome de visitante aleatório e engraçado, de bicho brasileiro com adjetivo ("Capivara Anônima", "Tatu Curioso", "Jabuti Apressado"), no estilo do Google Docs. Isso vale até para quem fez login, porque o `/publico` já esconde o nome próprio. *Mostrar o visitante mesmo com login é escolha minha.* Quem dá o nome é o servidor, para ninguém se passar por outra pessoa. O navegador guarda o nome e o reapresenta ao reconectar ou recarregar, para a pessoa continuar a mesma capivara.
+- **Área `/publico`:** quem fez login aparece com o nome da conta para todos, inclusive para anônimos; a mesma conta em duas abas é uma bolinha e uma cor. Quem não tem conta aparece com um nome de visitante aleatório e engraçado, de bicho brasileiro com adjetivo ("Capivara Anônima", "Tatu Curioso", "Jabuti Apressado"), no estilo do Google Docs. Quem dá o nome é o servidor, para ninguém se passar por outra pessoa. O navegador guarda o nome de visitante e o reapresenta ao reconectar ou recarregar, para a pessoa continuar a mesma capivara. *Mostrar o login no /publico é decisão posterior do dono, que reverteu o esconder-nome original.*
 - **Documento público só leitura:** quem lê sem acesso de edição também aparece nas bolinhas, vê o texto mudar ao vivo e não pode digitar nem travar trechos. Pode selecionar e mover o cursor, que os outros veem sem cadeado, e pode ser acompanhado. No menu aparece como "lendo". *Escolha minha.*
 - **Nomes num documento público** (`/usuario/...` com `public=1`): o nome de login só aparece entre quem tem acesso de edição. Quem só lê vê todo mundo como visitante, e quem só lê aparece como visitante para todos. Por isso o servidor monta a lista de presença para cada destinatário. *Escolha minha: hoje a página pública não revela quem tem acesso, e isso continua assim.*
 - **Mais de uma aba:** a mesma pessoa em duas abas é **uma** bolinha e uma cor, mas cada aba tem o próprio cursor. *Escolha minha.*
@@ -54,7 +54,7 @@ Decidido pelo Paulo: **cada um desfaz só o que fez**, como no Google Docs. O Ct
 
 - Perder qualquer coisa que alguém digitou.
 - O texto ficar diferente entre duas pessoas olhando o mesmo documento.
-- Expor o nome de login de alguém no `/publico`, ou deixar quem não tem acesso receber o texto ou a presença de um documento.
+- Expor o nome de login de alguém fora do `/publico` a quem não tem acesso de edição, ou deixar quem não tem acesso receber o texto ou a presença de um documento.
 - Uma trava que nunca se solta.
 
 ## Restrições
@@ -102,7 +102,7 @@ Decidido pelo Paulo: **cada um desfaz só o que fez**, como no Google Docs. O Ct
 
 ## Como saber que está pronto
 
-- Testes em Go para a transformação de operações (incluindo emoji e acentos), para as regras de trava (bordas, sobreposição, expiração por inatividade) e para o acesso pelo WebSocket (sem acesso não conecta, perder acesso derruba a conexão, `/publico` não expõe nome de login).
+- Testes em Go para a transformação de operações (incluindo emoji e acentos), para as regras de trava (bordas, sobreposição, expiração por inatividade) e para o acesso pelo WebSocket (sem acesso não conecta, perder acesso derruba a conexão, `/publico` mostra o login de quem tem conta e o nome de visitante dos anônimos).
 - Um teste de integração com dois ou três clientes WebSocket digitando ao mesmo tempo, que termina com o mesmo texto em todos e no disco.
 - `go test ./...` passando, e os testes atuais do `POST` continuando verdes.
 - Verificação manual no navegador com duas janelas: cursores, cores, travas, menu, acompanhar e reconexão.

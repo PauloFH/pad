@@ -9,16 +9,19 @@ const src = fs.readFileSync(__dirname + '/editor.js', 'utf8');
 
 function boot() {
   const L = {}, timers = [], sockets = [], events = [];
-  const el = (extra) => Object.assign({ textContent: '', hidden: true, addEventListener: (k, f) => (L[k] ||= []).push(f) }, extra);
+  const el = (extra) => {
+    const at = {};
+    return Object.assign({ textContent: '', hidden: true, addEventListener: (k, f) => (L[k] ||= []).push(f), setAttribute: (k, v) => { at[k] = String(v); }, getAttribute: (k) => at[k] ?? null }, extra);
+  };
   const t = el({
     value: 'oi', selectionStart: 0, selectionEnd: 0, selectionDirection: 'none', scrollTop: 0, readOnly: false,
     dataset: { name: 'ana/doc', canEdit: 'true' },
     setSelectionRange(s, e, d) { Object.assign(this, { selectionStart: s, selectionEnd: e, selectionDirection: d || 'none' }); },
   });
-  const st = el(), trava = el(), fim = el({ firstChild: { textContent: '' } });
+  const st = el(), salvo = el(), trava = el(), fim = el({ firstChild: { textContent: '' } });
   Object.assign(globalThis, {
     window: globalThis,
-    document: { getElementById: (id) => ({ t, st, trava, fim })[id], addEventListener() {}, dispatchEvent: (e) => events.push(e.detail ? [e.type, e.detail] : e.type), activeElement: t },
+    document: { getElementById: (id) => ({ t, st, salvo, trava, fim })[id], addEventListener() {}, dispatchEvent: (e) => events.push(e.detail ? [e.type, e.detail] : e.type), activeElement: t },
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
     location: { protocol: 'http:', host: 'h' },
     addEventListener() {},
@@ -34,7 +37,7 @@ function boot() {
   vm.runInThisContext(src); // sem `module`, como no navegador
   const ws = () => sockets.at(-1);
   return {
-    t, st, trava, fim, L, timers, sockets, events,
+    t, st, salvo, trava, fim, L, timers, sockets, events,
     ws,
     recv: (m) => ws().onmessage({ data: JSON.stringify(m) }),
     drop: (code = 1006, reason = '') => { ws().readyState = 3; ws().onclose({ code, reason }); },
@@ -66,6 +69,32 @@ test('init, op local, remota com pendente e ack', () => {
   assert.strictEqual(window.pad.sync.pending(), false);
   assert.ok(p.events.includes('pad:text'));
   assert.deepStrictEqual(p.events.filter((e) => e[0] === 'pad:op'), [['pad:op', { by: 'p2' }]]); // presença: quem digitou
+});
+
+test('barra de status: salvando… até o ack, depois salvo', () => {
+  const p = boot();
+  // salvo/salvando fica num span sem aria-live; #st (polite no HTML) só leva a queda e as recusas
+  const barra = () => [p.salvo.textContent, p.salvo.className, p.st.textContent];
+  p.recv({ t: 'init', rev: 1, text: 'oi', me: 'p1', canEdit: true, seq: 0 });
+  assert.deepStrictEqual(barra(), ['salvo', 'ok', '']);
+  p.type('oi!');
+  assert.deepStrictEqual(barra(), ['salvando…', '', '']);
+  p.recv({ t: 'ack', rev: 2 });
+  assert.deepStrictEqual(barra(), ['salvo', 'ok', '']);
+  p.drop();
+  assert.deepStrictEqual(barra(), ['', '', 'reconectando…']);
+  assert.strictEqual(p.st.getAttribute('aria-live'), null); // o editor não mexe no aria-live
+  // só leitura não salva nada: sem "salvo"
+  p.tick();
+  p.recv({ t: 'init', rev: 2, text: 'oi!', me: 'p1', canEdit: false, seq: 1 });
+  assert.deepStrictEqual(barra(), ['', '', '']);
+  // recusa: o motivo fica em #st, sem "salvo" ao lado
+  p.drop();
+  p.tick();
+  p.recv({ t: 'init', rev: 2, text: 'oi!', me: 'p1', canEdit: true, seq: 1 });
+  assert.deepStrictEqual(barra(), ['salvo', 'ok', '']);
+  p.recv({ t: 'reject', reason: 'trecho travado' });
+  assert.deepStrictEqual(barra(), ['', '', 'trecho travado']);
 });
 
 test('trava alheia barra o input; Ctrl+Z desfaz só o próprio', () => {

@@ -1,0 +1,128 @@
+/* Moldura Oficina do editor: barra de cima, coluna de documentos, abas, editor e barra de status.
+   Os seletores levam .ed ou uma classe própria para valer sobre as regras antigas do <style> do head. */
+
+textarea,#mir,.gut{font:400 14px/1.7 var(--mono)} /* uma regra só: o espelho e a calha medem o mesmo texto */
+
+.topo{display:flex;flex-wrap:nowrap;align-items:center;gap:10px;padding:6px 12px;min-height:44px;background:var(--bar);border-bottom:1px solid var(--line)}
+.topo>*{flex:none}
+.topo .crumb{display:flex;flex:0 1 auto;min-width:5rem;font:500 13px var(--mono)}
+/* sem espaço, as pastas encolhem primeiro e o nome do documento fica à vista */
+.crumb>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumb>.mut{flex:0 1000 auto}
+.topo .sp{flex:1}
+.topo .dot{border-color:var(--bar)}
+.topo .marca{font:600 13px var(--mono)}
+.conta,.tema{position:relative}
+.conta .menu,#peers .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:10;min-width:12rem}
+#peers .menu-item[aria-disabled]{cursor:default}
+#peers .menu-item small{display:block;color:var(--mut);font-size:11px}
+.menu-grupo{display:block;padding:6px 8px 2px;font-size:11px;color:var(--mut)}
+.conta form{margin:0}
+
+.meio{flex:1;display:flex;min-height:0;position:relative}
+.centro{flex:1;display:flex;flex-direction:column;min-width:0}
+
+/* coluna de documentos: nomes são caminhos, em mono, truncados com o caminho completo no title */
+.coluna{width:15rem;flex:none;overflow:auto;padding:10px 8px;background:var(--bar);border-right:1px solid var(--line);font-size:13px}
+.coluna ul{list-style:none;margin:0;padding:0}
+.coluna ul ul{padding-left:12px}
+.coluna .it{display:block;width:100%;padding:5px 8px;border:0;border-radius:7px;background:none;color:var(--fg);font:12.5px/1.5 var(--mono);text-align:left;text-decoration:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.coluna .it:hover{background:var(--hov)}
+.coluna .it[aria-current]{background:var(--field);box-shadow:0 0 0 1px var(--line)}
+.coluna .pasta{color:var(--mut)}
+.coluna .pasta::before{content:'▸ '}
+.coluna .pasta[aria-expanded="true"]::before{content:'▾ '}
+.coluna .pasta[aria-expanded="false"]+ul{display:none}
+.coluna .publico{margin-top:8px;font-family:var(--ui);color:var(--mut)}
+.col-h{padding:4px 8px;margin-top:8px;font-size:11px;color:var(--mut)}
+.col-h:first-child{margin-top:0}
+.coluna .novo{margin:8px 0 0}
+.coluna .novo .campo{width:100%;font:12px var(--mono)}
+
+/* abas: links para os documentos abertos neste navegador; rolam de lado, com a barra fina à vista para mostrar que há mais */
+.abas{display:flex;gap:2px;padding:6px 10px 0;overflow-x:auto;scrollbar-width:thin;background:var(--bar);border-bottom:1px solid var(--line)}
+.abas:empty{display:none}
+.aba{display:flex;align-items:center;flex:none;max-width:14rem;border-radius:8px 8px 0 0;color:var(--mut);font:12px var(--mono)}
+.aba a{min-width:0;padding:6px 2px 6px 12px;color:inherit;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aba button{padding:2px 8px;border:0;background:none;color:inherit;font:inherit;cursor:pointer;opacity:.85}
+.aba button:hover{opacity:1}
+.aba.on{background:var(--bg);color:var(--fg);box-shadow:inset 0 2px 0 var(--acc)}
+
+.ed .gut{background:var(--bg)}
+
+/* barra de status; o tema sobe dela */
+.status{display:flex;align-items:center;gap:14px;padding:4px 12px;background:var(--bar);border-top:1px solid var(--line);color:var(--mut);font-size:12px;white-space:nowrap}
+.status .forte{color:var(--fg)}
+.status .sp{flex:1}
+#salvo.ok::before{content:'';display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%;background:var(--ok);vertical-align:middle}
+/* os avisos flutuam acima da barra de status (31px; 45px no celular), sem cobrir o salvo e o tema */
+.ed .aviso{bottom:44px}
+#tema{padding:2px 4px;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
+.tema .menu{position:absolute;right:0;bottom:calc(100% + 8px);z-index:10;width:15rem;max-height:70vh;overflow:auto}
+.tema .menu-item{display:flex;align-items:center;gap:8px;width:100%}
+.tema .menu-item[aria-checked="true"]::after{content:'✓';margin-left:auto}
+.amostra{width:14px;height:14px;flex:none;border-radius:4px;background:var(--mut);box-shadow:0 0 0 1px #ffffff30}
+
+/* o .campo tem o próprio anel de foco (componentes.css) */
+.topo :focus-visible:not(.campo),.coluna :focus-visible:not(.campo),.abas :focus-visible:not(.campo),.status :focus-visible:not(.campo){outline:2px solid var(--acc);outline-offset:-2px}
+
+@media (min-width:768px){.sem-col .coluna{display:none}}
+
+/* celular: a coluna é uma gaveta por cima do editor, começa fechada; alvos de toque de 40px */
+@media (max-width:767px){
+  .coluna{position:absolute;inset:0 auto 0 0;z-index:8;width:min(18rem,85vw);box-shadow:8px 0 30px #0006;transform:translateX(-100%);visibility:hidden;transition:transform .2s,visibility .2s}
+  /* ao abrir a visibilidade troca já (o foco entra na gaveta); ao fechar espera o deslize */
+  .gaveta .coluna{transform:none;visibility:visible;transition:transform .2s}
+  .topo{gap:6px;padding:4px 8px}
+  .topo .btn,.topo .av,.coluna .it,.aba a,.aba button,#tema,.status .menu-item,.conta .menu-item,#peers .menu-item{min-height:40px}
+  .topo .btn,.topo .av{min-width:40px}
+  /* links com reticências não centralizam pelo min-height: o padding leva o texto ao meio dos 40px */
+  .coluna .it,.aba a{padding-top:11px;padding-bottom:11px}
+  .status{gap:10px;padding:2px 8px}
+  .status #lc{display:none}
+  .ed .aviso{bottom:56px}
+}
+@media (prefers-reduced-motion:reduce){.coluna,.gaveta .coluna{transition:none}}
+
+/* entrada (B2): campo de criar e os recentes em blocos, no centro da moldura */
+.entrada{width:100%;font-family:var(--ui);max-width:54rem;margin:0;padding:22px 26px;overflow:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-content:start}
+.entrada .criar{display:flex;gap:8px}
+.entrada .criar .campo{flex:1}
+.entrada h2{margin:6px 0 0;font-size:12px;font-weight:400;color:var(--mut)}
+.entrada>p{margin:0;font-size:13px}
+.cartoes{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(12rem,100%),1fr));gap:8px;margin:0;padding:0;list-style:none}
+/* nomes são caminhos: mono, truncados, com o caminho completo no title */
+.cartao .nome{display:block;font:12.5px/1.5 var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cartao .meta{display:block;margin-top:4px;font-size:11px;color:var(--mut)}
+.cartao:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media (max-width:767px){.entrada{padding:16px}.cartoes{grid-template-columns:minmax(0,1fr)}}
+
+/* painel de compartilhar: só o que é próprio dele. A aparência de .btn, .campo, .seg, .pop, .av e .chave vem de componentes.css. */
+#compartilhar{position:relative;display:inline-block}
+#comp-painel{max-height:calc(100dvh - 5rem);overflow:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:10px;text-align:left}
+#comp-painel h2{margin:0;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+#comp-painel p{margin:0;font-size:12px}
+#comp-painel form{margin:0}
+#comp-painel form:first-of-type{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+
+.comp-linha{display:flex;gap:8px}
+.comp-linha .campo{flex:1}
+
+/* lista sem marcadores nem recuo */
+#comp-painel .comp-lista{list-style:none;margin:0;padding:0}
+.comp-lista:empty{display:none}
+.comp-lista li{display:flex;align-items:center;gap:8px;padding:4px 0}
+.comp-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.comp-lista .av{text-transform:uppercase;cursor:default}
+/* botão de texto: componentes.css não tem uma variante de link para reaproveitar */
+.comp-rem{padding:6px 4px;border:0;border-radius:6px;background:none;color:var(--mut);font:inherit;font-size:12px;cursor:pointer}
+.comp-rem:hover{color:var(--err)}
+
+.comp-pub{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+.comp-pub span{flex:1}
+
+/* celular: o painel ocupa a largura da tela. Sem top, o fixed fica onde estaria no fluxo, logo abaixo do botão, sem depender da altura da barra */
+@media (max-width:767px){
+  #comp-painel{position:fixed;top:auto;left:1rem;right:1rem;width:auto;max-width:none;margin-top:6px}
+  .comp-rem{min-height:40px;padding:0 10px}
+}

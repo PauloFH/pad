@@ -1,0 +1,97 @@
+/* Componentes Relevo (componentes.html, opção B). Só usam os tokens do tema, nenhuma cor fixa além de brilhos e sombras. */
+
+/* :where não pesa nada: regras como textarea{outline:none} do editor continuam valendo */
+:where(:focus-visible){outline:2px solid var(--acc);outline-offset:2px}
+
+/* botões: .btn é o secundário; .pri o principal "aceso"; .perigo apaga */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:7px 13px;border:0;border-radius:9px;
+  font-family:var(--ui);font-size:inherit;font-weight:600;line-height:1.25;white-space:nowrap;text-decoration:none;cursor:pointer;
+  background:var(--field);color:var(--fg);box-shadow:inset 0 1px 0 #ffffff14,0 0 0 1px var(--line),0 2px 6px #0003;transition:background .15s,filter .15s}
+.btn:hover{background:var(--hov)}
+.btn.pri{background:linear-gradient(var(--acc),color-mix(in srgb,var(--acc) 82%,#000));color:var(--on);
+  box-shadow:inset 0 1px 0 #ffffff40,0 1px 2px #0005,0 4px 12px color-mix(in srgb,var(--acc) 35%,transparent)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.perigo{background:none;color:var(--err);box-shadow:0 0 0 1px color-mix(in srgb,var(--err) 40%,transparent)}
+.btn.perigo:hover{background:color-mix(in srgb,var(--err) 10%,transparent)}
+.btn:disabled{opacity:.55;cursor:default;filter:none}
+
+/* campos (input e select): sombra interna; no foco o contorno vira o anel de destaque */
+.campo{min-width:0;padding:8px 11px;border:0;border-radius:9px;font-family:inherit;font-size:inherit;line-height:1.25;
+  background:var(--field);color:var(--fg);box-shadow:inset 0 1px 3px #0004,0 0 0 1px var(--line)}
+.campo::placeholder{color:var(--mut);opacity:1}
+.campo:focus{outline:none;box-shadow:inset 0 1px 3px #0004,0 0 0 2px var(--acc)}
+
+/* alternância: botões com .on/aria-pressed, ou labels com um rádio escondido dentro */
+.seg{display:flex;padding:3px;border-radius:9px;background:var(--bg);box-shadow:inset 0 1px 3px #0005}
+.seg>*{flex:1;position:relative;padding:5px 10px;border:0;border-radius:7px;background:none;color:var(--mut);font:inherit;text-align:center;cursor:pointer}
+.seg>.on,.seg>[aria-pressed="true"],.seg>:has(:checked){background:var(--field);color:var(--fg);box-shadow:0 0 0 1px var(--line)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg>:has(:focus-visible){outline:2px solid var(--acc);outline-offset:1px}
+
+/* painel flutuante: por padrão abre embaixo, alinhado à direita do pai posicionado; quem usa pode mudar top/bottom e a largura */
+.pop{position:absolute;right:0;top:calc(100% + 6px);z-index:5;width:22rem;max-width:90vw;padding:14px;border-radius:12px;background:var(--field);color:var(--fg);box-shadow:0 14px 40px #0008,0 0 0 1px var(--line)}
+/* o .pop já tem o fundo --field do .btn: dentro dele o secundário sobe um tom */
+.pop .btn:not(.pri,.perigo){background:var(--hov)}
+.pop .btn:not(.pri,.perigo):hover{background:var(--bg)}
+
+/* menu e seus itens (pessoas, avatar, tema) */
+.menu{min-width:13rem;padding:4px;border-radius:12px;background:var(--field);color:var(--fg);box-shadow:0 10px 30px #0006,0 0 0 1px var(--line)}
+.menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:8px;background:none;color:inherit;font:inherit;text-align:left;text-decoration:none;cursor:pointer}
+.menu-item:hover,.menu-item:focus-visible,.menu-item.on,.menu-item[aria-checked="true"]{background:var(--hov)}
+.menu-item:focus-visible{outline-offset:-2px}
+
+/* pílula ("só leitura", "público") */
+.selo{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;background:var(--hov);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line);font-size:11px;white-space:nowrap}
+
+/* bloco da tela de entrada (B2) */
+.cartao{display:block;min-width:0;padding:10px 12px;border-radius:10px;background:var(--field);color:var(--fg);text-decoration:none;
+  box-shadow:inset 0 1px 0 #ffffff10,0 0 0 1px var(--line)}
+a.cartao:hover{background:var(--hov)}
+
+/* aviso flutuante embaixo (trava, fim da edição ao vivo) */
+.aviso{position:fixed;left:50%;bottom:1rem;z-index:10;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:min(90vw,32rem);margin:0;
+  padding:8px 12px;border-radius:10px;background:var(--field);color:var(--fg);font-size:13px;box-shadow:0 8px 24px #0005,0 0 0 1px var(--line)}
+.aviso.err{color:var(--err)}
+.aviso a{color:color-mix(in srgb,var(--acc) 70%,var(--fg))}
+
+/* interruptor: <input type="checkbox" class="chave" role="switch"> ou um botão com aria-checked */
+.chave{appearance:none;position:relative;flex:none;width:34px;height:20px;margin:0;padding:0;border:0;border-radius:99px;background:var(--hov);
+  box-shadow:inset 0 1px 3px #0005,0 0 0 1px var(--line);cursor:pointer;transition:background .15s}
+.chave::before{content:"";position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--mut);transition:transform .15s,background .15s}
+.chave:checked,.chave[aria-checked="true"]{background:var(--acc)}
+.chave:checked::before,.chave[aria-checked="true"]::before{transform:translateX(14px);background:var(--on)}
+
+/* avatar com a inicial */
+.av{display:inline-grid;place-items:center;flex:none;width:26px;height:26px;padding:0;border:0;border-radius:50%;background:var(--hov);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line);
+  font:600 12px/1 var(--ui);cursor:pointer}
+
+/* telas de cartão centralizado: login, criar conta, convite e mensagens */
+.tela-cartao{min-height:100dvh;display:grid;place-items:center;padding:1.5rem 1rem;
+  background:radial-gradient(120% 90% at 50% 0%,color-mix(in srgb,var(--acc) 8%,var(--bg)) 0%,var(--bg) 60%) fixed var(--bg)}
+.tela-cartao main{display:grid;gap:12px;width:100%;max-width:20rem;margin:0;padding:0}
+.tela-cartao main.largo{max-width:24rem}
+.tela-cartao h1,.tela-cartao h2,.tela-cartao p{margin:0}
+.tela-cartao form{display:grid;gap:12px}
+.tela-cartao .marca{font:600 26px/1.2 var(--mono);letter-spacing:-.02em}
+.tela-cartao .marca span{color:var(--acc)}
+.tela-cartao h2{font-size:20px;font-weight:600;line-height:1.3}
+.tela-cartao .sub{margin-top:-6px;color:var(--mut);font-size:14px}
+.tela-cartao .linha{display:flex;gap:8px}
+.tela-cartao .linha .campo{flex:1}
+.tela-cartao .mono{font-family:var(--mono);font-size:13px}
+.tela-cartao .pe{color:var(--mut);font-size:13px}
+.tela-cartao main>.btn{justify-self:start}
+/* link no tom do destaque puxado para o texto: passa a leitura também nos temas escuros */
+.tela-cartao a:not(.btn),.tela-cartao .link{color:color-mix(in srgb,var(--acc) 70%,var(--fg))}
+
+/* celular: alvos de toque de 40px; nos itens pequenos a área extra é um ::after transparente, sem mudar o desenho */
+@media (max-width:767px){
+  .btn,.campo,.menu-item{min-height:40px}
+  .chave,.av,.seg>*,.aviso a,.tela-cartao .pe a,.tela-cartao .pe .link{position:relative}
+  .chave::after,.av::after,.seg>::after,.aviso a::after,.tela-cartao .pe a::after,.tela-cartao .pe .link::after{
+    content:"";position:absolute;left:50%;top:50%;width:max(100%,40px);height:max(100%,40px);transform:translate(-50%,-50%)}
+}
+@media (prefers-reduced-motion:reduce){.btn,.chave,.chave::before{transition:none}}
+
+/* some da tela, fica para o leitor de tela */
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}

@@ -242,12 +242,26 @@ func TestStatic(t *testing.T) {
 	if res.Header.Get("Cache-Control") != "no-cache" {
 		t.Errorf("Cache-Control = %q", res.Header.Get("Cache-Control"))
 	}
-	if res, err = http.Get(srv.URL + "/_static/"); err != nil {
-		t.Fatal(err)
+	for _, dir := range []string{"/_static/", "/_static/fonts/"} {
+		if res, err = http.Get(srv.URL + dir); err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 404 {
+			t.Errorf("listagem de %s: status %d", dir, res.StatusCode)
+		}
 	}
-	res.Body.Close()
-	if res.StatusCode != 404 {
-		t.Errorf("listagem do diretório: status %d", res.StatusCode)
+	for path, tipo := range map[string]string{
+		"/_static/pad.css": "text/css",
+		"/_static/fonts/jetbrains-mono-latin-400-normal.woff2": "font/woff2",
+	} {
+		if res, err = http.Get(srv.URL + path); err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 200 || !strings.HasPrefix(res.Header.Get("Content-Type"), tipo) {
+			t.Errorf("%s: status %d, tipo %q", path, res.StatusCode, res.Header.Get("Content-Type"))
+		}
 	}
 }
 
@@ -296,5 +310,121 @@ func TestPaginaCarregaScripts(t *testing.T) {
 		if !strings.Contains(page, s) {
 			t.Errorf("página pública sem %q", s)
 		}
+	}
+}
+
+// login, criar conta, mensagem e convite usam o mesmo cartão centralizado
+func TestTelasSimplesUsamCartao(t *testing.T) {
+	a, err := openApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(a.db, []string{"useradd", "ana"}, strings.NewReader("senha-forte\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(a.db, []string{"admin", "ana"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(a.routes())
+	defer srv.Close()
+	jar, _ := cookiejar.New(nil)
+	ana := &http.Client{Jar: jar}
+	if _, err := ana.PostForm(srv.URL+"/_login", url.Values{"name": {"ana"}, "pass": {"senha-forte"}}); err != nil {
+		t.Fatal(err)
+	}
+	ler := func(res *http.Response, err error) (int, string) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return res.StatusCode, string(b)
+	}
+	_, convite := ler(ana.Post(srv.URL+"/_convite", "", nil))
+	join := regexp.MustCompile(`/_join/[A-Z0-9]+`).FindString(convite)
+	if join == "" {
+		t.Fatal("link de convite não apareceu")
+	}
+	for _, c := range []struct {
+		nome, path string
+		cli        *http.Client
+		status     int
+		tem        []string
+	}{
+		{"login", "/_login", http.DefaultClient, 200, []string{"pad<span", "Blocos de notas compartilhados, ao vivo."}},
+		{"criar conta", join, http.DefaultClient, 200, nil},
+		{"mensagem", "/zeca/nao-existe", ana, 404, nil},
+		{"convite", "/_convite", ana, 200, nil},
+	} {
+		code, page := ler(c.cli.Get(srv.URL + c.path))
+		if code != c.status {
+			t.Errorf("%s: status %d, queria %d", c.nome, code, c.status)
+		}
+		for _, s := range append(c.tem, `class="tela-cartao"`, "/_static/pad.css") {
+			if !strings.Contains(page, s) {
+				t.Errorf("%s sem %q", c.nome, s)
+			}
+		}
+	}
+	// o convite gerado traz o link, o Copiar e o Gerar outro
+	for _, s := range []string{"Copiar", "Gerar outro link"} {
+		if !strings.Contains(convite, s) {
+			t.Errorf("convite gerado sem %q", s)
+		}
+	}
+}
+
+// /_static/ revalida a cada carga (no-cache), mas com ETag do conteúdo embutido: sem mudança volta 304
+func TestStaticETag(t *testing.T) {
+	a, err := openApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(a.routes())
+	defer srv.Close()
+	tags := map[string]bool{}
+	for _, path := range []string{"/_static/pad.css", "/_static/ot.js", "/_static/fonts/space-grotesk-latin-400-normal.woff2"} {
+		res, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		tag := res.Header.Get("ETag")
+		if tag == "" || res.Header.Get("Cache-Control") != "no-cache" {
+			t.Fatalf("%s: ETag %q, Cache-Control %q", path, tag, res.Header.Get("Cache-Control"))
+		}
+		tags[tag] = true
+		req, _ := http.NewRequest("GET", srv.URL+path, nil)
+		req.Header.Set("If-None-Match", tag)
+		if res, err = http.DefaultClient.Do(req); err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusNotModified {
+			t.Errorf("%s com If-None-Match: status %d, quero 304", path, res.StatusCode)
+		}
+	}
+	if len(tags) != 3 {
+		t.Errorf("arquivos diferentes com o mesmo ETag: %v", tags)
+	}
+}
+
+// aba de um documento que sumiu ou perdeu o acesso: a página do 404 tira o nome das abas
+func TestAbaSemAcessoSai(t *testing.T) {
+	_, srv, login := wsApp(t)
+	ana, bia := login("ana"), login("bia")
+	post(t, bia, srv.URL+"/bia/fora", "text/plain", "x")
+	res, err := ana.Get(srv.URL + "/bia/fora")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 404 {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	if !regexp.MustCompile(`PadShell\.abas\.fechar\("ana",\s*"bia\\?/fora"\)`).Match(b) {
+		t.Errorf("404 não fecha a aba:\n%s", b)
 	}
 }

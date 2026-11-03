@@ -18,9 +18,9 @@ const lockIdle = 30 * time.Second
 // log curto: quem está mais atrás que isso recebe um init novo; var para o teste baixar
 var logMax = 1000
 
-// tons médios: aparecem nos fundos claro e escuro e aguentam etiqueta branca (TestPaletaContraste)
+// tons médios: aparecem no fundo dos 8 temas e aguentam etiqueta branca (TestPaletaContraste)
 var palette = [...]string{
-	"#dc2626", "#2563eb", "#16a34a", "#ea580c", "#8b5cf6", "#0d9488",
+	"#dc2626", "#2563eb", "#15803d", "#ea580c", "#8b5cf6", "#0d9488",
 	"#db2777", "#a16207", "#0891b2", "#c026d3", "#4d7c0f", "#64748b",
 }
 
@@ -43,7 +43,7 @@ func (e msgErr) Error() string        { return e.msg }
 func (e msgErr) Is(target error) bool { return target == e.base }
 
 // peer é uma aba conectada. key agrupa as abas da mesma identidade
-// ("u:"+uid para editor logado fora do /publico, "v:"+visitante no resto).
+// ("u:"+uid para editor logado, inclusive no /publico; "v:"+visitante no resto).
 type peer struct {
 	id, key, login, visitor, color string
 	cid                            string // identidade da aba, para descartar op repetida após reconexão
@@ -306,9 +306,10 @@ next:
 	return changed
 }
 
-// nameFor é o nome de p visto por to: login só entre editores fora do /publico.
+// nameFor é o nome de p visto por to: no /publico quem tem conta aparece pelo
+// login para todos; fora dele, o login só aparece entre editores.
 func (d *liveDoc) nameFor(to, p *peer) string {
-	if !d.publico && to.canEdit && p.canEdit && p.login != "" {
+	if p.login != "" && (d.publico || to.canEdit && p.canEdit) {
 		return p.login
 	}
 	return p.visitor

@@ -1,19 +1,20 @@
 {{define "head"}}<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{.}} · pad</title>
+{{/* tema antes da primeira pintura: a escolha guardada ou o claro/escuro do sistema (mesmas regras do theme.js) */}}
+<script>try{var t=localStorage.getItem('pad:tema')}catch(e){}document.documentElement.dataset.theme=/^(grafite|madrugada|cafe|floresta|papel|ceu|areia|contraste)$/.test(t)?t:matchMedia('(prefers-color-scheme: dark)').matches?'grafite':'papel'</script>
+<link rel="preload" href="/_static/fonts/space-grotesk-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/_static/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/_static/pad.css">
+<link rel="stylesheet" href="/_static/componentes.css"><link rel="stylesheet" href="/_static/moldura.css">
+<script src="/_static/theme.js" defer></script>
 <style>
-:root{color-scheme:light dark;--bg:#fafaf7;--fg:#222;--mut:#777;--line:#ddd;--acc:#2b6cb0;--err:#c53030}
-@media(prefers-color-scheme:dark){:root{--bg:#1a1b1e;--fg:#ddd;--mut:#888;--line:#333;--acc:#7aa7e0;--err:#f08080}}
 *{box-sizing:border-box} [hidden]{display:none!important}
-body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+body{margin:0;font:15px/1.5 var(--ui);background:var(--bg);color:var(--fg)}
 a{color:var(--acc)} .mut{color:var(--mut)} .err{color:var(--err)} .sp{flex:1}
-header{display:flex;flex-wrap:wrap;gap:.4rem 1rem;align-items:center;padding:.5rem 1rem;border-bottom:1px solid var(--line)}
-main{padding:1rem;max-width:50rem;margin:auto}
-input,select,button{font:inherit;padding:.3rem .5rem}
+input,button{font:inherit;padding:.3rem .5rem}
 form.inline{display:inline} button.link{background:none;border:0;color:var(--acc);cursor:pointer;padding:0}
-table{width:100%;border-collapse:collapse;margin-top:1rem} td{padding:.35rem 0;border-bottom:1px solid var(--line)}
 body.ed{display:flex;flex-direction:column;height:100dvh}
-textarea,#mir,.gut{font:14px/1.5 ui-monospace,monospace} /* uma regra só: o espelho e a calha medem o mesmo texto */
 textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);resize:none;outline:none}
 .area{flex:1;display:flex;min-height:0}
 .area.fol{outline:2px solid var(--fc);outline-offset:-2px}
@@ -24,7 +25,7 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 #lay div{position:absolute}
 #lay .s{opacity:.2;border-radius:2px}
 #lay .c{width:2px}
-#lay .c span,#lay .k{font:600 10px/1.4 system-ui,sans-serif;color:#fff;padding:0 .3rem;white-space:nowrap}
+#lay .c span,#lay .k{font:600 10px/1.4 var(--ui);color:#fff;padding:0 .3rem;white-space:nowrap}
 #lay .c span{font-size:9px;line-height:1.25;padding:0 .25rem}
 #lay .c span{position:absolute;bottom:100%;left:0;border-radius:3px 3px 3px 0}
 #lay .c.dn span{bottom:auto;top:100%;border-radius:0 3px 3px 3px}
@@ -33,24 +34,16 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 .gut div{position:absolute;right:.5rem} .gut .on{font-weight:700}
 #peers{position:relative}
 #quem{display:inline-flex;background:none;border:0;padding:0 0 0 6px;cursor:pointer}
-.dot{width:22px;height:22px;border-radius:50%;color:#fff;display:inline-grid;place-items:center;font:600 11px system-ui,sans-serif;margin-left:-6px;border:2px solid var(--bg)}
+.dot{width:22px;height:22px;border-radius:50%;color:#fff;display:inline-grid;place-items:center;font:600 11px var(--ui);margin-left:-6px;border:2px solid var(--bg)}
 .dot.ring{box-shadow:0 0 0 2px var(--c)}
-#quem-menu{position:absolute;right:0;top:1.9rem;z-index:2;min-width:13rem;padding:.35rem;background:var(--bg);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px #0003;font-size:13px}
-#quem-menu button{display:flex;align-items:center;gap:.5rem;width:100%;padding:.35rem .5rem;border:0;border-radius:6px;background:none;color:inherit;text-align:left;cursor:pointer}
-#quem-menu button:hover,#quem-menu button:focus-visible{background:var(--line)} #quem-menu button[aria-disabled]{cursor:default}
-#quem-menu small{display:block;color:var(--mut)}
 .sq{width:10px;height:10px;border-radius:50%;flex:none}
 .seguir{display:flex;gap:.5rem;padding:.3rem 1rem;color:#fff;font-size:13px} .seguir button{color:#fff;text-decoration:underline}
-details{position:relative} summary{cursor:pointer;color:var(--acc)}
-.pop{position:absolute;right:0;top:1.8rem;z-index:1;width:22rem;max-width:90vw;padding:1rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
-.pop ul{padding-left:1.2rem}
-.aviso{position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);max-width:90vw;padding:.4rem .8rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
 </style></head>
 {{end}}
 
 {{/* avisos e scripts do editor ao vivo, comuns ao doc e ao public */}}
 {{/* presença no cabeçalho: bolinhas e o menu delas (presence.js) */}}
-{{define "peers"}}<span id="peers"><button id="quem" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quem-menu" hidden></button><span id="quem-menu" role="menu" hidden></span></span>{{end}}
+{{define "peers"}}<span id="peers"><button id="quem" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quem-menu" hidden></button><span id="quem-menu" class="menu" role="menu" hidden></span></span>{{end}}
 
 {{/* faixa do acompanhar; o editor fica numa .area com a calha de linhas, o espelho e a camada de cursores */}}
 {{define "seguir"}}<div id="seguir" class="seguir" role="status" hidden>👁 acompanhando <b></b><span class="sp"></span><button type="button" class="link">parar</button></div>{{end}}
@@ -61,83 +54,149 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 
 {{define "logout"}}<form method="post" action="/_logout" class="inline"><button class="link">sair</button></form>{{end}}
 
-{{define "msg"}}{{template "head" "aviso"}}<body><main><p>{{.}}</p><p><a href="/">voltar</a></p></main></body></html>{{end}}
+{{define "msg"}}{{template "head" "aviso"}}<body class="tela-cartao"><main>
+<h1 class="marca">pad<span>_</span></h1>
+<p>{{.Msg}}</p>
+<a class="btn" href="/">Voltar</a>
+{{/* documento apagado ou sem acesso: sai das abas de quem tentou abrir */}}
+{{with .Aba}}<script src="/_static/shell.js"></script><script>PadShell.abas.fechar({{$.Me}}, {{.}})</script>{{end}}
+</main></body></html>{{end}}
 
-{{define "login"}}{{template "head" "entrar"}}<body><main style="max-width:20rem">
-<h1>pad</h1>
-{{if .Err}}<p class="err">{{.Err}}</p>{{end}}
+{{define "login"}}{{template "head" "entrar"}}<body class="tela-cartao"><main>
+<h1 class="marca">pad<span>_</span></h1>
+<p class="sub">Blocos de notas compartilhados, ao vivo.</p>
+{{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <form method="post" action="/_login">
 <input type="hidden" name="next" value="{{.Next}}">
-<p><input name="name" placeholder="usuário" autocomplete="username" required autofocus></p>
-<p><input name="pass" type="password" placeholder="senha" autocomplete="current-password" required></p>
-<button>entrar</button>
-<p class="mut">Sem conta? Use a <a href="/publico">área pública</a>: qualquer um lê e escreve, sem login.</p>
-</form></main></body></html>{{end}}
-
-{{define "invite"}}{{template "head" "convidar"}}<body>
-<header><a href="/">← documentos</a><b>convidar</b><span class="sp"></span><span class="mut">{{.Me}}</span>{{template "logout"}}</header>
-<main>
-<p>Cada link cria uma conta, vale uma vez só e vence em 7 dias.</p>
-<form method="post" action="/_convite"><button>gerar link de convite</button></form>
-{{if .Link}}<p><input value="{{.Link}}" readonly style="width:100%" onclick="this.select()" aria-label="link de convite"></p>
-<p class="mut">Mande esse link para a pessoa.</p>{{end}}
-</main></body></html>{{end}}
-
-{{define "join"}}{{template "head" "criar conta"}}<body><main style="max-width:20rem">
-<h1>pad</h1>
-<p class="mut">Você recebeu um convite. Escolha seu nome de usuário e uma senha.</p>
-{{if .Err}}<p class="err">{{.Err}}</p>{{end}}
-<form method="post">
-<p><input name="name" value="{{.Name}}" placeholder="usuário" autocomplete="username" required autofocus></p>
-<p><input name="pass" type="password" placeholder="senha (8+ caracteres)" autocomplete="new-password" required minlength="8" maxlength="72"></p>
-<p><input name="pass2" type="password" placeholder="repita a senha" autocomplete="new-password" required></p>
-<button>criar conta</button>
-</form></main></body></html>{{end}}
-
-{{define "home"}}{{template "head" "documentos"}}<body>
-<header><b>pad</b><span class="sp"></span><a href="/publico">área pública</a>{{if .Admin}}<a href="/_convite">convidar</a>{{end}}<span class="mut">{{.Me}}</span>{{template "logout"}}</header>
-<main>
-<form onsubmit="location='/{{.Me}}/'+this.n.value.trim();return false">
-<input name="n" placeholder="nome do documento (ex.: projetos/ideias)" required size="36" aria-label="nome do documento"> <button>abrir ou criar</button>
+<input class="campo" name="name" placeholder="usuário" aria-label="usuário" autocomplete="username" required autofocus>
+<input class="campo" name="pass" type="password" placeholder="senha" aria-label="senha" autocomplete="current-password" required>
+<button class="btn pri">Entrar</button>
 </form>
-{{if .Docs}}<table>{{range .Docs}}
-<tr><td><a href="/{{.Name}}">{{.Label}}</a></td><td class="mut" style="text-align:right">{{.Updated}}</td></tr>
-{{end}}</table>{{else}}<p class="mut">Nenhum documento ainda.</p>{{end}}
+<p class="pe">Sem conta? Escreva na <a href="/publico">área pública</a>, sem login.</p>
 </main></body></html>{{end}}
 
-{{define "public"}}{{template "head" .Name}}<body class="ed">
-<header><b>{{.Name}}</b><span class="mut">somente leitura</span><span id="st" class="mut"></span><span class="sp"></span>{{template "peers"}}
-{{if .Me}}<a href="/">documentos</a>{{else}}<a href="/_login?next=/{{.Name}}">entrar</a>{{end}}</header>
+{{define "invite"}}{{template "head" "convidar"}}<body class="tela-cartao"><main class="largo">
+<h2>Convidar alguém</h2>
+<p class="sub">Cada link cria uma conta, vale uma vez e vence em 7 dias.</p>
+{{if .Link}}<div class="linha"><input id="link" class="campo mono" value="{{.Link}}" readonly aria-label="link de convite" onclick="this.select()"><button type="button" id="copiar" class="btn">Copiar</button></div>{{end}}
+<form method="post" action="/_convite" class="linha"><button class="btn pri">{{if .Link}}Gerar outro link{{else}}Gerar link de convite{{end}}</button></form>
+<div class="pe"><a href="/">← documentos</a> · {{.Me}} · {{template "logout"}}</div>
+{{if .Link}}<script>
+// sem a API da área de transferência (http fora do localhost), seleciona o link para o Ctrl+C
+document.getElementById('copiar').onclick = function () {
+  var b = this, l = document.getElementById('link')
+  var avisa = function (t) { b.textContent = t; setTimeout(function () { b.textContent = 'Copiar' }, 2500) }
+  var seleciona = function () { l.select(); avisa('Selecionado: use Ctrl+C') }
+  if (navigator.clipboard) navigator.clipboard.writeText(l.value).then(function () { avisa('Copiado') }, seleciona)
+  else seleciona()
+}
+</script>{{end}}
+</main></body></html>{{end}}
+
+{{define "join"}}{{template "head" "criar conta"}}<body class="tela-cartao"><main>
+<h1 class="marca">pad<span>_</span></h1>
+<p class="sub">Você recebeu um convite. Escolha seu nome de usuário e uma senha.</p>
+{{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
+<form method="post">
+<input class="campo" name="name" value="{{.Name}}" placeholder="usuário" aria-label="usuário" autocomplete="username" required autofocus>
+<input class="campo" name="pass" type="password" placeholder="senha (8+ caracteres)" aria-label="senha (8+ caracteres)" autocomplete="new-password" required minlength="8" maxlength="72">
+<input class="campo" name="pass2" type="password" placeholder="repita a senha" aria-label="repita a senha" autocomplete="new-password" required>
+<button class="btn pri">Criar conta</button>
+</form>
+</main></body></html>{{end}}
+
+{{/* entrada (B2): a moldura com a coluna e, no centro, criar e os recentes em blocos */}}
+{{define "home"}}{{template "head" "documentos"}}<body class="ed">
+<header class="topo">{{template "moldura-topo" .}}<span class="marca">pad</span><span class="sp"></span>{{if .Admin}}<a class="btn" href="/_convite">Convidar</a>{{end}}{{template "conta" .}}</header>
+<div class="meio">{{template "coluna" .}}<div class="centro"><main class="entrada">
+<h1 class="vh">Documentos de {{.Me}}</h1>
+<form class="criar" onsubmit="location='/{{.Me}}/'+this.n.value.trim();return false">
+<input class="campo" name="n" placeholder="nome do novo documento" aria-label="nome do novo documento" required><button class="btn pri">Criar</button>
+</form>
+{{with .Recentes}}<h2>Continuar de onde parou</h2>{{template "cartoes" .}}{{else}}<p class="mut">Nenhum documento ainda. Dê um nome acima para criar o primeiro.</p>{{end}}
+{{with .Compartilhados}}<h2>Compartilhados com você</h2>{{template "cartoes" .}}{{end}}
+</main></div></div>
+{{template "status" false}}
+</body></html>{{end}}
+
+{{define "cartoes"}}<ul class="cartoes">{{range .}}<li><a class="cartao" href="/{{.Name}}" title="{{.Name}}"><span class="nome">{{.Label}}</span><span class="meta">{{.Meta}}</span></a></li>{{end}}</ul>{{end}}
+
+{{/* Moldura Oficina: barra de cima, coluna (só logado), abas, editor e barra de status.
+Os defines recebem um docPage (ou qualquer valor com Me, Admin, Name e Coluna). */}}
+
+{{/* começo da barra de cima: o shell.js, sem defer porque monta a coluna e as abas logo abaixo antes da
+primeira pintura (as telas de cartão não o carregam), e o botão que abre e fecha a coluna */}}
+{{define "moldura-topo"}}<script src="/_static/shell.js"></script>{{if .Coluna}}<button id="col" class="btn" type="button" aria-controls="coluna" aria-expanded="true" title="documentos" aria-label="documentos">◧</button>{{end}}{{end}}
+
+{{/* caminho com as pastas apagadas */}}
+{{define "caminho"}}<span class="crumb" title="{{.}}">{{with corta .}}<span class="mut">{{index . 0}}</span><span>{{index . 1}}</span>{{end}}</span>{{end}}
+
+{{/* avatar com o menu da conta; o visitante vê o Entrar que volta para a página */}}
+{{define "conta"}}{{if .Me}}<div class="conta"><button id="conta" class="av" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="conta-menu" title="{{.Me}}" aria-label="conta de {{.Me}}">{{slice .Me 0 1}}</button>
+<div id="conta-menu" class="menu" role="menu" hidden><span class="menu-grupo" role="presentation">{{.Me}}</span>
+<a class="menu-item" role="menuitem" href="/">documentos</a>{{if .Admin}}<a class="menu-item" role="menuitem" href="/_convite">convidar</a>{{end}}
+<form method="post" action="/_logout"><button class="menu-item" role="menuitem">sair</button></form></div></div>
+{{else}}<a class="btn pri" href="/_login?next=/{{.Name}}">Entrar</a>{{end}}{{end}}
+
+{{/* coluna de documentos; o estado (aberta, pastas) vem do navegador antes de pintar */}}
+{{define "coluna"}}{{with .Coluna}}<nav id="coluna" class="coluna" aria-label="documentos" data-user="{{$.Me}}">
+{{if .Arvore}}<div class="col-h">documentos</div>{{template "nos" (ramo .Atual .Arvore)}}{{end}}
+{{if .Compartilhados}}<div class="col-h">compartilhados</div><ul>{{range .Compartilhados}}<li><a class="it" href="/{{.Name}}" title="{{.Name}}"{{if eq .Name $.Coluna.Atual}} aria-current="page"{{end}}>{{.Name}}</a></li>{{end}}</ul>{{end}}
+<a class="it publico" href="/publico"{{if eq .Atual "publico"}} aria-current="page"{{end}}>área pública</a>
+<form class="novo" onsubmit="location='/{{$.Me}}/'+this.n.value.trim();return false"><input class="campo" name="n" placeholder="+ novo documento" aria-label="nome do novo documento" required></form>
+</nav><script>PadShell.montarColuna()</script>{{end}}{{end}}
+
+{{define "nos"}}<ul>{{range .Nos}}<li>{{if .Pasta}}<button class="it pasta" type="button" aria-expanded="false" data-pasta="{{.Caminho}}" title="{{.Caminho}}">{{.Nome}}</button>{{template "nos" (ramo $.Atual .Filhos)}}
+{{else}}<a class="it" href="/{{.Caminho}}" title="{{.Caminho}}"{{if eq .Caminho $.Atual}} aria-current="page"{{end}}>{{.Nome}}</a>{{end}}</li>{{end}}</ul>{{end}}
+
+{{/* abas dos documentos abertos neste navegador (shell.js) */}}
+{{define "abas"}}{{if .Coluna}}<nav id="abas" class="abas" aria-label="documentos abertos" data-atual="{{.Name}}"></nav><script>PadShell.montarAbas()</script>{{end}}{{end}}
+
+{{/* seletor de tema: o menu é montado pelo shell.js com os temas do theme.js */}}
+{{define "tema"}}<span class="tema"><button id="tema" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="tema-menu">tema</button><span id="tema-menu" class="menu" role="menu" hidden></span></span>{{end}}
+
+{{/* barra de status; true no editor (pessoas e linha), false na página só leitura (quem edita) */}}
+{{define "status"}}<footer class="status">{{if .}}<span id="pessoas" class="forte"></span><span id="lc"></span>{{else}}<span id="editando"></span>{{end}}<span class="sp"></span><span><span id="salvo"></span><span id="st" aria-live="polite"></span></span>{{template "tema"}}</footer>{{end}}
+
+{{define "public"}}{{template "head" .Label}}<body class="ed">
+<header class="topo">{{template "moldura-topo" .}}{{template "caminho" .Label}}<span class="selo">só leitura</span><span class="sp"></span>{{template "peers"}}{{template "conta" .}}</header>
+<div class="meio">{{template "coluna" .}}<div class="centro">{{template "abas" .}}
 {{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
 <textarea id="t" readonly spellcheck="false" aria-label="{{.Name}}" data-name="{{.Name}}" data-can-edit="false">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
+</div></div>
+{{template "status" false}}
 {{template "live"}}
 </body></html>{{end}}
 
 {{define "doc"}}{{template "head" .Label}}<body class="ed">
-<header>
-<a href="/">← documentos</a><b>{{.Label}}</b>{{if .Public}}<span class="mut">público</span>{{end}}
-<span id="st" class="mut"></span>
-<span class="sp"></span>
-{{if .Owner}}<details {{if .NotFound}}open{{end}}><summary>compartilhar</summary><div class="pop">
-{{if .NotFound}}<p class="err">Usuário ou grupo não encontrado.</p>{{end}}
-<form method="post" action="/_share/{{.Name}}">
-<select name="tipo"><option value="user">usuário</option><option value="group">grupo</option></select>
-<input name="alvo" placeholder="nome" required size="10"> <button>adicionar</button>
-</form>
-<ul>
-{{range .Users}}<li>{{.}} <form method="post" action="/_unshare/{{$.Name}}" class="inline"><input type="hidden" name="tipo" value="user"><input type="hidden" name="alvo" value="{{.}}"><button class="link">remover</button></form></li>{{end}}
-{{range .Groups}}<li>grupo {{.}} <form method="post" action="/_unshare/{{$.Name}}" class="inline"><input type="hidden" name="tipo" value="group"><input type="hidden" name="alvo" value="{{.}}"><button class="link">remover</button></form></li>{{end}}
-</ul>
-<form method="post" action="/_public/{{.Name}}">
-{{if .Public}}<input type="hidden" name="public" value="0"><p>Público: qualquer pessoa com o endereço lê sem login. <button class="link">tornar privado</button></p>
-{{else}}<input type="hidden" name="public" value="1"><p class="mut">Privado. <button class="link">tornar público (só leitura)</button></p>{{end}}
-</form>
-<form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="link err">apagar documento</button></form>
-</div></details>{{end}}
+<header class="topo">{{template "moldura-topo" .}}{{template "caminho" .Label}}{{if .Public}}<span class="selo">público</span>{{end}}<span class="sp"></span>
 {{template "peers"}}
-{{if .Me}}<span class="mut">{{.Me}}</span>{{template "logout"}}{{else}}<a href="/_login">entrar</a>{{end}}
+{{template "compartilhar" .}}
+{{template "conta" .}}
 </header>
+<div class="meio">{{template "coluna" .}}<div class="centro">{{template "abas" .}}
 {{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
-<textarea id="t" spellcheck="false" autofocus data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
+<textarea id="t" spellcheck="false" autofocus aria-label="{{.Label}}" data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
+</div></div>
+{{template "status" true}}
 {{template "live"}}
 </body></html>{{end}}
+
+
+{{/* painel de compartilhar do dono; abre e fecha em compartilhar.js (o HTML vem aberto e o JS fecha, para os formulários valerem sem JS) */}}
+{{define "compartilhar"}}{{if .Owner}}<span id="compartilhar"><button type="button" id="comp-abrir" class="btn" aria-haspopup="dialog" aria-expanded="true" aria-controls="comp-painel">Compartilhar</button>
+<div id="comp-painel" class="pop" role="dialog" aria-labelledby="comp-titulo" {{if .NotFound}}data-aberto{{end}}>
+<h2 id="comp-titulo">Compartilhar {{.Name}}</h2>
+{{if .NotFound}}<p class="err" role="alert">Usuário ou grupo não encontrado.</p>{{end}}
+<form method="post" action="/_share/{{.Name}}">
+<div class="seg" role="radiogroup" aria-label="Compartilhar com"><label><input type="radio" name="tipo" value="user" checked>Usuário</label><label><input type="radio" name="tipo" value="group">Grupo</label></div>
+<div class="comp-linha"><input class="campo" name="alvo" placeholder="nome" required autocomplete="off" aria-label="Nome do usuário ou grupo"><button class="btn pri">Adicionar</button></div>
+</form>
+<ul class="comp-lista">
+{{range .Users}}<li><span class="av" aria-hidden="true">{{printf "%.1s" .}}</span><span class="comp-nome">{{.}}</span><form method="post" action="/_unshare/{{$.Name}}"><input type="hidden" name="tipo" value="user"><input type="hidden" name="alvo" value="{{.}}"><button class="comp-rem" aria-label="Remover {{.}}">remover</button></form></li>{{end}}
+{{range .Groups}}<li><span class="av" aria-hidden="true">{{printf "%.1s" .}}</span><span class="comp-nome">grupo {{.}}</span><form method="post" action="/_unshare/{{$.Name}}"><input type="hidden" name="tipo" value="group"><input type="hidden" name="alvo" value="{{.}}"><button class="comp-rem" aria-label="Remover grupo {{.}}">remover</button></form></li>{{end}}
+</ul>
+<form method="post" action="/_public/{{.Name}}" class="comp-pub"><input type="hidden" name="public" value="{{if .Public}}0{{else}}1{{end}}"><span id="comp-pub-t">Público, só leitura</span><button class="chave" role="switch" aria-checked="{{.Public}}" aria-labelledby="comp-pub-t"></button></form>
+<form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="btn perigo">Apagar documento</button></form>
+</div>{{/* fecha já, antes de pintar, para o painel não piscar aberto enquanto o compartilhar.js chega */}}
+<script>{const p=document.getElementById('comp-painel');p.hidden=!p.hasAttribute('data-aberto')}</script><script src="/_static/compartilhar.js"></script></span>{{end}}{{end}}

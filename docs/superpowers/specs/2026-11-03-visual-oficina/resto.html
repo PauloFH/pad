@@ -1,0 +1,55 @@
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+.w{--bg:#16181f;--bar:#1b1e27;--fg:#d7dae4;--mut:#7d8396;--line:#262a35;--acc:#7c5cff;--field:#1f2330;--err:#f87171;font-family:'Space Grotesk',system-ui;background:var(--bg);color:var(--fg);border-radius:12px;overflow:hidden;font-size:13px;position:relative}
+.b1{background:linear-gradient(var(--acc),color-mix(in srgb,var(--acc) 82%,#000));color:#fff;border-radius:9px;padding:7px 14px;font-weight:600;box-shadow:inset 0 1px 0 #ffffff40,0 1px 2px #0005,0 4px 12px color-mix(in srgb,var(--acc) 35%,transparent);text-align:center;white-space:nowrap}
+.b2{background:var(--field);border-radius:9px;padding:6px 10px;box-shadow:inset 0 1px 0 #ffffff14,0 0 0 1px var(--line);white-space:nowrap}
+.in{background:var(--field);border-radius:9px;padding:8px 11px;box-shadow:inset 0 1px 3px #0004,0 0 0 1px var(--line);color:var(--mut)}
+.pop{background:var(--field);border-radius:12px;box-shadow:0 14px 40px #0008,0 0 0 1px var(--line);padding:14px;display:grid;gap:10px}
+.mono{font-family:'JetBrains Mono',monospace}.mut{color:var(--mut)}
+.top{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--line)}
+.p{display:flex;align-items:center;gap:8px;padding:6px 2px}
+.dot{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-weight:600;font-size:11px}
+.sw{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px}.sw i{width:14px;height:14px;border-radius:4px;display:inline-block;box-shadow:0 0 0 1px #ffffff30}
+.seg{display:flex;background:var(--bg);border-radius:9px;padding:3px;box-shadow:inset 0 1px 3px #0005}.seg span{flex:1;text-align:center;padding:5px;border-radius:7px}.seg .on{background:var(--field);box-shadow:0 0 0 1px var(--line)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+
+<h2>Compartilhar, temas, convite e página pública</h2>
+<p class="subtitle">Uma proposta para cada, para você reagir. Diga o que mudaria em qualquer uma.</p>
+
+<div class="grid">
+<div><h3 style="margin:.6rem 0 .5rem">Painel de compartilhar</h3>
+<div class="w" style="padding:14px;height:330px"><div class="pop" style="width:330px;margin-left:auto">
+ <div style="font-weight:600;font-size:14px">Compartilhar projetos/ideias</div>
+ <div class="seg"><span class="on">Usuário</span><span>Grupo</span></div>
+ <div style="display:flex;gap:8px"><div class="in" style="flex:1">nome</div><div class="b1">Adicionar</div></div>
+ <div><div class="p"><span class="dot" style="background:#e11d48">A</span>ana<span style="flex:1"></span><span class="mut" style="font-size:12px">remover</span></div><div class="p"><span class="dot" style="background:#475569">T</span>grupo time<span style="flex:1"></span><span class="mut" style="font-size:12px">remover</span></div></div>
+ <div style="border-top:1px solid var(--line);padding-top:10px;display:flex;align-items:center;gap:8px"><span>Público, só leitura</span><span style="flex:1"></span><span style="width:34px;height:20px;border-radius:99px;background:#2c3142;position:relative;display:inline-block"><span style="position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#7d8396"></span></span></div>
+ <div style="color:var(--err);font-size:12px">Apagar documento</div>
+</div></div></div>
+
+<div><h3 style="margin:.6rem 0 .5rem">Seletor de tema (na barra de baixo)</h3>
+<div class="w" style="padding:14px;height:330px;display:flex;flex-direction:column;justify-content:flex-end"><div class="pop" style="width:230px;gap:2px;margin-left:auto;margin-bottom:8px">
+ <div class="sw" style="background:var(--bg)"><i style="background:#7d8396"></i>Seguir o sistema<span style="flex:1"></span>✓</div>
+ <div class="mut" style="font-size:11px;padding:6px 8px 2px">escuros</div>
+ <div class="sw"><i style="background:#16181f;box-shadow:inset 0 0 0 3px #7c5cff"></i>Grafite</div><div class="sw"><i style="background:#0e1726;box-shadow:inset 0 0 0 3px #38bdf8"></i>Madrugada</div><div class="sw"><i style="background:#1b1613;box-shadow:inset 0 0 0 3px #f59e0b"></i>Café</div><div class="sw"><i style="background:#111a15;box-shadow:inset 0 0 0 3px #34d399"></i>Floresta</div>
+ <div class="mut" style="font-size:11px;padding:6px 8px 2px">claros</div>
+ <div class="sw"><i style="background:#f3f4f7;box-shadow:inset 0 0 0 3px #7c5cff"></i>Papel</div><div class="sw"><i style="background:#f2f6fc;box-shadow:inset 0 0 0 3px #2563eb"></i>Céu</div><div class="sw"><i style="background:#f5f2ec;box-shadow:inset 0 0 0 3px #c2410c"></i>Areia</div><div class="sw"><i style="background:#000;box-shadow:inset 0 0 0 3px #ffd400"></i>Alto contraste</div>
+</div><div style="display:flex;justify-content:flex-end;font-size:11px;color:var(--mut);border-top:1px solid var(--line);padding-top:6px">tema: Grafite ▴</div></div></div>
+
+<div><h3 style="margin:.6rem 0 .5rem">Convidar (admin)</h3>
+<div class="w" style="height:300px;display:grid;place-items:center"><div style="width:340px;display:grid;gap:10px">
+ <div style="font-size:18px;font-weight:600">Convidar alguém</div>
+ <div class="mut" style="font-size:12.5px">Cada link cria uma conta, vale uma vez e vence em 7 dias.</div>
+ <div style="display:flex;gap:8px"><div class="in mono" style="flex:1;color:var(--fg);font-size:12px;overflow:hidden;white-space:nowrap">pad.pauloholanda.com.br/_join/k3F9…</div><div class="b2">Copiar</div></div>
+ <div class="b1" style="justify-self:start">Gerar outro link</div>
+</div></div></div>
+
+<div><h3 style="margin:.6rem 0 .5rem">Documento público (visitante, só leitura)</h3>
+<div class="w" style="height:300px;display:flex;flex-direction:column"><div class="top"><span class="mono"><span class="mut">ana/</span>receita-bolo</span><span style="font-size:11px;padding:2px 8px;border-radius:99px;background:#2c3142;color:var(--mut)">só leitura</span><span style="flex:1"></span><span class="dot" style="background:#e11d48">A</span><span class="b1" style="padding:5px 12px">Entrar</span></div>
+<div style="flex:1;display:flex"><div class="mono" style="color:#4d5263;text-align:right;padding:14px 10px 0 14px;border-right:1px solid var(--line);font-size:12.5px;line-height:1.75">1<br>2<br>3<br>4</div><div class="mono" style="padding:14px 16px;font-size:12.5px;line-height:1.75;white-space:pre"><span style="color:#a48bff"># Bolo de cenoura</span>
+- 3 cenouras médias
+- 4 ovos
+- 1 xícara de óleo</div></div>
+<div style="padding:5px 12px;font-size:11px;color:var(--mut);background:var(--bar);border-top:1px solid var(--line)">Ana está editando agora</div></div></div>
+</div>

@@ -390,3 +390,23 @@ func (d *liveDoc) sendInit(p *peer, visitor string) {
 	}
 	d.sendJSON(p, m)
 }
+
+// editores dá os logins distintos de quem edita o documento agora, em ordem
+// alfabética. Leitores e visitantes não têm login; o /publico fica de fora.
+func (h *hub) editores(name string) []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	d := h.docs[name]
+	if d == nil {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	set := map[string]bool{}
+	for p := range d.peers {
+		if !d.publico && p.canEdit && p.login != "" {
+			set[p.login] = true
+		}
+	}
+	return slices.Sorted(maps.Keys(set))
+}
