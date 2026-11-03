@@ -867,3 +867,18 @@ func TestWriteLoopAckAntesDoKick(t *testing.T) {
 		srv.Close()
 	}
 }
+
+func TestHubEditores(t *testing.T) {
+	a, srv, login := wsApp(t)
+	ana := login("ana")
+	post(t, ana, srv.URL+"/ana/pub", "text/plain", "aberto")
+	post(t, ana, srv.URL+"/_public/ana/pub", "application/x-www-form-urlencoded", "public=1")
+	dialWS(t, srv, ana, "ana/pub", "e1", "")
+	dialWS(t, srv, ana, "ana/pub", "e2", "") // duas abas da mesma pessoa contam uma vez
+	dialWS(t, srv, &http.Client{}, "ana/pub", "l1", "")
+	eventually(t, "editores deviam ser [ana]", func() bool { return fmt.Sprint(a.hub.editores("ana/pub")) == "[ana]" })
+	dialWS(t, srv, ana, "publico/sala", "p1", "")
+	if got := a.hub.editores("publico/sala"); len(got) != 0 {
+		t.Errorf("editores do /publico = %v, quero []", got)
+	}
+}
