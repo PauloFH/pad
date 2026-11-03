@@ -7,23 +7,37 @@
   // compose tolerando null (sem operação)
   const join = (a, b) => (a && b ? OT.compose(a, b) : a || b);
 
+  // op que leva o texto local antigo ao novo, para o editor atualizar o textarea
+  const change = (a, b) => (a == null || a === b ? null : OT.diff(a, b, 0));
+
+  // getRandomValues funciona também fora de contexto seguro (http), ao contrário de randomUUID
+  const randomId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
+
   class SyncClient {
-    constructor(rev, text) { this.reset(rev, text); }
+    // cid + seq deixam o servidor reconhecer uma op já aplicada cujo ack se perdeu
+    constructor(rev, text, cid = randomId()) {
+      this.cid = cid;
+      this.seq = 0; // seq da última op enviada; o inflight é sempre ela
+      this.reset(rev, text);
+    }
 
     reset(rev, text) {
+      const old = this.text;
       this.rev = rev;
       this.text = text;
       this.serverText = text; // texto na revisão rev, sem o pendente
       this.inflight = null;
       this.buffer = null;
+      return change(old, text);
     }
 
-    msg() { return { t: 'op', rev: this.rev, op: this.inflight }; }
+    msg() { return { t: 'op', rev: this.rev, op: this.inflight, cid: this.cid, seq: this.seq }; }
 
     local(op) {
       this.text = OT.apply(this.text, op);
       if (this.inflight) { this.buffer = join(this.buffer, op); return null; }
       this.inflight = op;
+      this.seq++;
       return this.msg();
     }
 
@@ -32,7 +46,9 @@
       this.serverText = OT.apply(this.serverText, this.inflight);
       this.inflight = this.buffer;
       this.buffer = null;
-      return this.inflight ? this.msg() : null;
+      if (!this.inflight) return null;
+      this.seq++;
+      return this.msg();
     }
 
     // o cliente é sempre o `a` do transform, igual ao servidor
@@ -45,18 +61,28 @@
       return op;
     }
 
-    // init depois de reconectar: o servidor pode ter outro texto e outra revisão
-    rebase(rev, serverText) {
-      const pend = join(this.inflight, this.buffer);
+    // init depois de reconectar: o servidor pode ter outro texto e outra revisão.
+    // appliedSeq é a última seq deste cid que o servidor aplicou.
+    rebase(rev, serverText, appliedSeq) {
+      const old = this.text;
+      let base = this.serverText, pend = join(this.inflight, this.buffer), fresh = false;
+      if (this.inflight && this.seq <= appliedSeq) {
+        // o ack se perdeu: o inflight já está no servidor, só o buffer falta
+        base = OT.apply(base, this.inflight);
+        pend = this.buffer;
+        fresh = true;
+      }
       let p2 = null;
-      if (pend) [p2] = OT.transform(pend, OT.diff(this.serverText, serverText, serverText.length));
+      if (pend) [p2] = OT.transform(pend, OT.diff(base, serverText, 0));
       this.reset(rev, serverText);
+      let msg = null;
       if (p2 && !OT.isNoop(p2)) {
         this.text = OT.apply(serverText, p2);
         this.inflight = p2;
-        return this.msg();
+        if (fresh) this.seq++; // senão reenvia com a seq que o servidor nunca viu
+        msg = this.msg();
       }
-      return null;
+      return { msg, op: change(old, this.text) };
     }
 
     pending() { return this.inflight !== null; }
@@ -100,6 +126,13 @@
         }
         this[k] = out;
       }
+      this.last = -Infinity; // não funde o próximo record numa entrada anterior à remota
+    }
+
+    clear() {
+      this.undos = [];
+      this.redos = [];
+      this.last = -Infinity;
     }
 
     peekUndo() { return this.undos.at(-1) ?? null; }
