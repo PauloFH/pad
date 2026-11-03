@@ -72,6 +72,7 @@ func TestTemasContraste(t *testing.T) {
 	}{
 		{"--fg", "--bg", 4.5}, {"--fg", "--bar", 4.5}, {"--fg", "--field", 4.5},
 		{"--mut", "--bg", 4.5}, {"--mut", "--bar", 4.5}, {"--mut", "--field", 4.5},
+		{"--fg", "--hov", 4.5}, {"--mut", "--hov", 4.5}, // selo, item de menu em hover
 		{"--on", "--acc", 4.5},
 		{"--err", "--bg", 4.5}, {"--err", "--field", 4.5},
 		{"--acc", "--bg", 3}, {"--ok", "--bar", 3},

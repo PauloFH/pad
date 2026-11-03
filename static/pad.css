@@ -9,10 +9,10 @@
 :root{--ui:'Space Grotesk', system-ui, sans-serif;--mono:'JetBrains Mono', ui-monospace, monospace}
 
 /* Temas: o data-theme vem do script inline do head (theme.js). Contrastes conferidos em theme_test.go. */
-:root[data-theme="grafite"]{--bg:#16181f;--bar:#1d2029;--fg:#d7dae4;--mut:#858a9c;--line:#262a35;--acc:#7758f5;--on:#fff;--field:#1f2330;--hov:#282c39;--err:#f87171;--ok:#34d399;color-scheme:dark}
-:root[data-theme="madrugada"]{--bg:#0e1726;--bar:#142035;--fg:#d6e2f3;--mut:#7f93b3;--line:#1d2a42;--acc:#38bdf8;--on:#06121f;--field:#18263d;--hov:#203049;--err:#f87171;--ok:#34d399;color-scheme:dark}
-:root[data-theme="cafe"]{--bg:#1b1613;--bar:#241d19;--fg:#ece2d8;--mut:#a08e80;--line:#30271f;--acc:#f59e0b;--on:#1b1613;--field:#2a221d;--hov:#342a23;--err:#f87171;--ok:#34d399;color-scheme:dark}
-:root[data-theme="floresta"]{--bg:#111a15;--bar:#17231c;--fg:#d9eadf;--mut:#7d9a88;--line:#1f2f26;--acc:#34d399;--on:#0b1510;--field:#1b2921;--hov:#233429;--err:#f87171;--ok:#34d399;color-scheme:dark}
+:root[data-theme="grafite"]{--bg:#16181f;--bar:#1d2029;--fg:#d7dae4;--mut:#8e93a4;--line:#262a35;--acc:#7758f5;--on:#fff;--field:#1f2330;--hov:#282c39;--err:#f87171;--ok:#34d399;color-scheme:dark}
+:root[data-theme="madrugada"]{--bg:#0e1726;--bar:#142035;--fg:#d6e2f3;--mut:#8498b7;--line:#1d2a42;--acc:#38bdf8;--on:#06121f;--field:#18263d;--hov:#203049;--err:#f87171;--ok:#34d399;color-scheme:dark}
+:root[data-theme="cafe"]{--bg:#1b1613;--bar:#241d19;--fg:#ece2d8;--mut:#a29082;--line:#30271f;--acc:#f59e0b;--on:#1b1613;--field:#2a221d;--hov:#342a23;--err:#f87171;--ok:#34d399;color-scheme:dark}
+:root[data-theme="floresta"]{--bg:#111a15;--bar:#17231c;--fg:#d9eadf;--mut:#829e8c;--line:#1f2f26;--acc:#34d399;--on:#0b1510;--field:#1b2921;--hov:#233429;--err:#f87171;--ok:#34d399;color-scheme:dark}
 :root[data-theme="papel"]{--bg:#f3f4f7;--bar:#e7e9ef;--fg:#222634;--mut:#606677;--line:#d9dce5;--acc:#7758f5;--on:#fff;--field:#fff;--hov:#e7e9ef;--err:#b91c1c;--ok:#15803d;color-scheme:light}
 :root[data-theme="ceu"]{--bg:#f2f6fc;--bar:#e3ebf7;--fg:#1a2638;--mut:#596982;--line:#d3deee;--acc:#2563eb;--on:#fff;--field:#fff;--hov:#e3ebf7;--err:#b91c1c;--ok:#15803d;color-scheme:light}
 :root[data-theme="areia"]{--bg:#f5f2ec;--bar:#ebe5da;--fg:#2b241c;--mut:#6e6253;--line:#ddd4c5;--acc:#c2410c;--on:#fff;--field:#fffdf9;--hov:#ebe5da;--err:#b91c1c;--ok:#15803d;color-scheme:light}

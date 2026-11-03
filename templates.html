@@ -93,9 +93,10 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 // sem a API da área de transferência (http fora do localhost), seleciona o link para o Ctrl+C
 document.getElementById('copiar').onclick = function () {
   var b = this, l = document.getElementById('link')
-  var feito = function () { b.textContent = 'Copiado'; setTimeout(function () { b.textContent = 'Copiar' }, 2000) }
-  if (navigator.clipboard) navigator.clipboard.writeText(l.value).then(feito, function () { l.select() })
-  else l.select()
+  var avisa = function (t) { b.textContent = t; setTimeout(function () { b.textContent = 'Copiar' }, 2500) }
+  var seleciona = function () { l.select(); avisa('Selecionado: use Ctrl+C') }
+  if (navigator.clipboard) navigator.clipboard.writeText(l.value).then(function () { avisa('Copiado') }, seleciona)
+  else seleciona()
 }
 </script>{{end}}
 </main></body></html>{{end}}
@@ -106,7 +107,7 @@ document.getElementById('copiar').onclick = function () {
 {{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <form method="post">
 <input class="campo" name="name" value="{{.Name}}" placeholder="usuário" aria-label="usuário" autocomplete="username" required autofocus>
-<input class="campo" name="pass" type="password" placeholder="senha (8+ caracteres)" aria-label="senha" autocomplete="new-password" required minlength="8" maxlength="72">
+<input class="campo" name="pass" type="password" placeholder="senha (8+ caracteres)" aria-label="senha (8+ caracteres)" autocomplete="new-password" required minlength="8" maxlength="72">
 <input class="campo" name="pass2" type="password" placeholder="repita a senha" aria-label="repita a senha" autocomplete="new-password" required>
 <button class="btn pri">Criar conta</button>
 </form>

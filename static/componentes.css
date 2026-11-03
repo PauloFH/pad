@@ -1,6 +1,7 @@
 /* Componentes Relevo (componentes.html, opção B). Só usam os tokens do tema, nenhuma cor fixa além de brilhos e sombras. */
 
-:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+/* :where não pesa nada: regras como textarea{outline:none} do editor continuam valendo */
+:where(:focus-visible){outline:2px solid var(--acc);outline-offset:2px}
 
 /* botões: .btn é o secundário; .pri o principal "aceso"; .perigo apaga */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:7px 13px;border:0;border-radius:9px;
@@ -37,7 +38,7 @@
 .menu-item:focus-visible{outline-offset:-2px}
 
 /* pílula ("só leitura", "público") */
-.selo{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;background:var(--hov);color:var(--mut);font-size:11px;white-space:nowrap}
+.selo{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;background:var(--hov);color:var(--fg);font-size:11px;white-space:nowrap}
 
 /* bloco da tela de entrada (B2) */
 .cartao{display:block;min-width:0;padding:10px 12px;border-radius:10px;background:var(--field);color:var(--fg);text-decoration:none;
@@ -48,6 +49,7 @@ a.cartao:hover{background:var(--hov)}
 .aviso{position:fixed;left:50%;bottom:1rem;z-index:10;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:min(90vw,32rem);margin:0;
   padding:8px 12px;border-radius:10px;background:var(--field);color:var(--fg);font-size:13px;box-shadow:0 8px 24px #0005,0 0 0 1px var(--line)}
 .aviso.err{color:var(--err)}
+.aviso a{color:color-mix(in srgb,var(--acc) 70%,var(--fg))}
 
 /* interruptor: <input type="checkbox" class="chave" role="switch"> ou um botão com aria-checked */
 .chave{appearance:none;position:relative;flex:none;width:34px;height:20px;margin:0;padding:0;border:0;border-radius:99px;background:var(--hov);
@@ -79,5 +81,11 @@ a.cartao:hover{background:var(--hov)}
 /* link no tom do destaque puxado para o texto: passa a leitura também nos temas escuros */
 .tela-cartao a:not(.btn),.tela-cartao .link{color:color-mix(in srgb,var(--acc) 70%,var(--fg))}
 
-@media (max-width:767px){.btn,.campo,.menu-item{min-height:40px}}
+/* celular: alvos de toque de 40px; nos itens pequenos a área extra é um ::after transparente, sem mudar o desenho */
+@media (max-width:767px){
+  .btn,.campo,.menu-item{min-height:40px}
+  .chave,.av,.seg>*,.aviso a,.tela-cartao .pe a,.tela-cartao .pe .link{position:relative}
+  .chave::after,.av::after,.seg>::after,.aviso a::after,.tela-cartao .pe a::after,.tela-cartao .pe .link::after{
+    content:"";position:absolute;left:50%;top:50%;width:max(100%,40px);height:max(100%,40px);transform:translate(-50%,-50%)}
+}
 @media (prefers-reduced-motion:reduce){.btn,.chave,.chave::before{transition:none}}
