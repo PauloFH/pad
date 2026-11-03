@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -42,7 +43,7 @@ var tmplFS embed.FS
 var staticFS embed.FS
 
 var (
-	tmpl = template.Must(template.ParseFS(tmplFS, "templates.html"))
+	tmpl = template.Must(template.New("").Funcs(template.FuncMap{"ramo": ramo, "corta": corta}).ParseFS(tmplFS, "templates.html"))
 	// o nome vira caminho de arquivo: sem "..", "/" inicial, "//" ou ponto
 	validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9_-]+)*$`)
 	// o usuário é o primeiro trecho do endereço (/paulo/notas): só minúsculas, para Paulo e paulo não coexistirem
@@ -514,17 +515,21 @@ func docName(w http.ResponseWriter, r *http.Request) (string, bool) {
 }
 
 // Label é o nome sem "/eu/" na frente: na própria interface o usuário não precisa ver o próprio nome.
-type docRow struct{ Name, Label, Updated string }
+// Owner é o dono quando não é o próprio usuário.
+type docRow struct {
+	Name, Label, Updated, Owner string
+	UpdatedAt                   time.Time
+}
 
-func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
+// userDocs lista os documentos de u e os compartilhados com ele, do mais recente ao mais antigo.
+func (a *app) userDocs(u user) ([]docRow, error) {
 	rows, err := a.db.Query(`SELECT d.name, d.updated FROM docs d
 		WHERE d.owner_id = ?1
 		OR d.name IN (SELECT doc FROM user_shares WHERE user_id = ?1)
 		OR d.name IN (SELECT g.doc FROM group_shares g JOIN members m ON m.group_id = g.group_id WHERE m.user_id = ?1)
 		ORDER BY d.updated DESC`, u.ID)
 	if err != nil {
-		serverError(w, err)
-		return
+		return nil, err
 	}
 	defer rows.Close()
 	var docs []docRow
@@ -532,14 +537,23 @@ func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 		var d docRow
 		var t int64
 		if err := rows.Scan(&d.Name, &t); err != nil {
-			serverError(w, err)
-			return
+			return nil, err
 		}
 		d.Label = strings.TrimPrefix(d.Name, u.Name+"/")
-		d.Updated = time.Unix(t, 0).Format("02/01/2006 15:04")
+		d.UpdatedAt = time.Unix(t, 0)
+		d.Updated = d.UpdatedAt.Format("02/01/2006 15:04")
+		// só se cria documento dentro do próprio usuário: o dono é o primeiro trecho do nome
+		if dono, _, _ := strings.Cut(d.Name, "/"); dono != u.Name {
+			d.Owner = dono
+		}
 		docs = append(docs, d)
 	}
-	if err := rows.Err(); err != nil {
+	return docs, rows.Err()
+}
+
+func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
+	docs, err := a.userDocs(u)
+	if err != nil {
 		serverError(w, err)
 		return
 	}
@@ -550,11 +564,99 @@ func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 	}{u.Name, u.Admin, docs})
 }
 
+// noArvore é uma pasta ou um documento da coluna; Caminho é o nome completo.
+type noArvore struct {
+	Nome, Caminho string
+	Pasta         bool
+	Filhos        []noArvore
+}
+
+// arvore monta as pastas de me a partir dos nomes (me/a/b vira a pasta a com b),
+// pastas antes de documentos e cada grupo em ordem alfabética. Os de outros donos ficam de fora.
+func arvore(docs []docRow, me string) []noArvore {
+	var raiz []noArvore
+	for _, d := range docs {
+		if resto, ok := strings.CutPrefix(d.Name, me+"/"); ok {
+			raiz = inserir(raiz, strings.Split(resto, "/"), me)
+		}
+	}
+	ordenar(raiz)
+	return raiz
+}
+
+// um nome pode ser documento e pasta ao mesmo tempo (me/p e me/p/x): viram dois nós
+func inserir(nos []noArvore, partes []string, pai string) []noArvore {
+	caminho := pai + "/" + partes[0]
+	if len(partes) == 1 {
+		return append(nos, noArvore{Nome: partes[0], Caminho: caminho})
+	}
+	i := slices.IndexFunc(nos, func(n noArvore) bool { return n.Pasta && n.Nome == partes[0] })
+	if i < 0 {
+		nos = append(nos, noArvore{Nome: partes[0], Caminho: caminho, Pasta: true})
+		i = len(nos) - 1
+	}
+	nos[i].Filhos = inserir(nos[i].Filhos, partes[1:], caminho)
+	return nos
+}
+
+func ordenar(nos []noArvore) {
+	slices.SortFunc(nos, func(a, b noArvore) int {
+		if a.Pasta != b.Pasta {
+			if a.Pasta {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.Nome, b.Nome)
+	})
+	for i := range nos {
+		ordenar(nos[i].Filhos)
+	}
+}
+
+// colunaData é a coluna de documentos de quem está logado; Atual é o documento aberto.
+type colunaData struct {
+	Arvore         []noArvore
+	Compartilhados []docRow
+	Atual          string
+}
+
+func (a *app) coluna(u user, atual string) (*colunaData, error) {
+	docs, err := a.userDocs(u)
+	if err != nil {
+		return nil, err
+	}
+	c := &colunaData{Arvore: arvore(docs, u.Name), Atual: atual}
+	for _, d := range docs {
+		if d.Owner != "" {
+			c.Compartilhados = append(c.Compartilhados, d)
+		}
+	}
+	slices.SortFunc(c.Compartilhados, func(a, b docRow) int { return strings.Compare(a.Name, b.Name) })
+	return c, nil
+}
+
+// ramo leva o documento atual para dentro do template recursivo da árvore.
+func ramo(atual string, nos []noArvore) any {
+	return struct {
+		Atual string
+		Nos   []noArvore
+	}{atual, nos}
+}
+
+// corta separa as pastas do último trecho: "a/b/c" dá "a/b/" e "c".
+func corta(s string) [2]string {
+	i := strings.LastIndex(s, "/") + 1
+	return [2]string{s[:i], s[i:]}
+}
+
 type docPage struct {
 	Name, Label, Body, Me string
+	Admin                 bool
 	Exists, Owner, Public bool
 	NotFound              bool
 	Users, Groups         []string
+	Coluna                *colunaData // nil para visitante
 }
 
 func (a *app) view(w http.ResponseWriter, r *http.Request) {
@@ -567,13 +669,20 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	var col *colunaData
+	if logged {
+		if col, err = a.coluna(u, name); err != nil {
+			serverError(w, err)
+			return
+		}
+	}
 	if isPublico(name) {
 		body, err := a.readDoc(name)
 		if err != nil {
 			serverError(w, err)
 			return
 		}
-		render(w, http.StatusOK, "doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Exists: body != ""})
+		render(w, http.StatusOK, "doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Admin: u.Admin, Exists: body != "", Coluna: col})
 		return
 	}
 	exists, allowed, owner, public, err := a.access(name, u.ID)
@@ -590,7 +699,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 			serverError(w, err)
 			return
 		}
-		render(w, http.StatusOK, "public", struct{ Name, Body, Me string }{name, body, u.Name})
+		render(w, http.StatusOK, "public", docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Body: body, Me: u.Name, Admin: u.Admin, Coluna: col})
 		return
 	case !logged:
 		// mesma resposta para privado e inexistente: visitante não descobre quais nomes existem
@@ -601,7 +710,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "documento não encontrado ou sem acesso. Seus documentos ficam em /"+u.Name+"/...")
 		return
 	}
-	p := docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Me: u.Name,
+	p := docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Me: u.Name, Admin: u.Admin, Coluna: col,
 		Exists: exists, Owner: owner, Public: public, NotFound: r.URL.Query().Has("erro")}
 	if exists {
 		if p.Body, err = a.readDoc(name); err != nil {

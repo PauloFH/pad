@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/_static/pad.css">
 <link rel="stylesheet" href="/_static/componentes.css"><link rel="stylesheet" href="/_static/moldura.css"><link rel="stylesheet" href="/_static/entrada.css"><link rel="stylesheet" href="/_static/compartilhar.css">
 <script src="/_static/theme.js" defer></script>
+<script src="/_static/shell.js"></script>
 <style>
 *{box-sizing:border-box} [hidden]{display:none!important}
 body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
@@ -124,25 +125,63 @@ document.getElementById('copiar').onclick = function () {
 {{end}}</table>{{else}}<p class="mut">Nenhum documento ainda.</p>{{end}}
 </main></body></html>{{end}}
 
-{{define "public"}}{{template "head" .Name}}<body class="ed">
-<header><b>{{.Name}}</b><span class="mut">somente leitura</span><span id="st" class="mut"></span><span class="sp"></span>{{template "peers"}}
-{{if .Me}}<a href="/">documentos</a>{{else}}<a href="/_login?next=/{{.Name}}">entrar</a>{{end}}</header>
+{{/* Moldura Oficina: barra de cima, coluna (só logado), abas, editor e barra de status.
+Os defines recebem um docPage (ou qualquer valor com Me, Admin, Name e Coluna). */}}
+
+{{/* botão que abre e fecha a coluna */}}
+{{define "moldura-topo"}}{{if .Coluna}}<button id="col" class="btn" type="button" aria-controls="coluna" aria-expanded="true" title="documentos" aria-label="documentos">◧</button>{{end}}{{end}}
+
+{{/* caminho com as pastas apagadas */}}
+{{define "caminho"}}<span class="crumb" title="{{.}}">{{with corta .}}<span class="mut">{{index . 0}}</span>{{index . 1}}{{end}}</span>{{end}}
+
+{{/* avatar com o menu da conta; o visitante vê o Entrar que volta para a página */}}
+{{define "conta"}}{{if .Me}}<span class="conta"><button id="conta" class="av" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="conta-menu" title="{{.Me}}" aria-label="conta de {{.Me}}">{{slice .Me 0 1}}</button>
+<span id="conta-menu" class="menu" role="menu" hidden><span class="menu-grupo">{{.Me}}</span>
+<a class="menu-item" role="menuitem" href="/">documentos</a>{{if .Admin}}<a class="menu-item" role="menuitem" href="/_convite">convidar</a>{{end}}
+<form method="post" action="/_logout"><button class="menu-item" role="menuitem">sair</button></form></span></span>
+{{else}}<a class="btn pri" href="/_login?next=/{{.Name}}">Entrar</a>{{end}}{{end}}
+
+{{/* coluna de documentos; o estado (aberta, pastas) vem do navegador antes de pintar */}}
+{{define "coluna"}}{{with .Coluna}}<nav id="coluna" class="coluna" aria-label="documentos" data-user="{{$.Me}}">
+{{if .Arvore}}<div class="col-h">documentos</div>{{template "nos" (ramo .Atual .Arvore)}}{{end}}
+{{if .Compartilhados}}<div class="col-h">compartilhados</div><ul>{{range .Compartilhados}}<li><a class="it" href="/{{.Name}}" title="{{.Name}}"{{if eq .Name $.Coluna.Atual}} aria-current="page"{{end}}>{{.Name}}</a></li>{{end}}</ul>{{end}}
+<a class="it publico" href="/publico"{{if eq .Atual "publico"}} aria-current="page"{{end}}>área pública</a>
+<form class="novo" onsubmit="location='/{{$.Me}}/'+this.n.value.trim();return false"><input class="campo" name="n" placeholder="+ novo documento" aria-label="nome do novo documento" required></form>
+</nav><script>PadShell.montarColuna()</script>{{end}}{{end}}
+
+{{define "nos"}}<ul>{{range .Nos}}<li>{{if .Pasta}}<button class="it pasta" type="button" aria-expanded="false" data-pasta="{{.Caminho}}" title="{{.Caminho}}">{{.Nome}}</button>{{template "nos" (ramo $.Atual .Filhos)}}
+{{else}}<a class="it" href="/{{.Caminho}}" title="{{.Caminho}}"{{if eq .Caminho $.Atual}} aria-current="page"{{end}}>{{.Nome}}</a>{{end}}</li>{{end}}</ul>{{end}}
+
+{{/* abas dos documentos abertos neste navegador (shell.js) */}}
+{{define "abas"}}{{if .Coluna}}<nav id="abas" class="abas" aria-label="documentos abertos" data-atual="{{.Name}}"></nav><script>PadShell.montarAbas()</script>{{end}}{{end}}
+
+{{/* seletor de tema: o menu é montado pelo shell.js com os temas do theme.js */}}
+{{define "tema"}}<span class="tema"><button id="tema" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="tema-menu">tema</button><span id="tema-menu" class="menu" role="menu" hidden></span></span>{{end}}
+
+{{/* barra de status; true no editor (pessoas e linha), false na página só leitura (quem edita) */}}
+{{define "status"}}<footer class="status">{{if .}}<span id="pessoas" class="forte"></span><span id="lc"></span>{{else}}<span id="editando"></span>{{end}}<span class="sp"></span><span id="st" role="status"></span>{{template "tema"}}</footer>{{end}}
+
+{{define "public"}}{{template "head" .Label}}<body class="ed">
+<header class="topo">{{template "moldura-topo" .}}{{template "caminho" .Label}}<span class="selo">só leitura</span><span class="sp"></span>{{template "peers"}}{{template "conta" .}}</header>
+<div class="meio">{{template "coluna" .}}<div class="centro">{{template "abas" .}}
 {{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
 <textarea id="t" readonly spellcheck="false" aria-label="{{.Name}}" data-name="{{.Name}}" data-can-edit="false">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
+</div></div>
+{{template "status" false}}
 {{template "live"}}
 </body></html>{{end}}
 
 {{define "doc"}}{{template "head" .Label}}<body class="ed">
-<header>
-<a href="/">← documentos</a><b>{{.Label}}</b>{{if .Public}}<span class="mut">público</span>{{end}}
-<span id="st" class="mut"></span>
-<span class="sp"></span>
-{{template "compartilhar" .}}
+<header class="topo">{{template "moldura-topo" .}}{{template "caminho" .Label}}{{if .Public}}<span class="selo">público</span>{{end}}<span class="sp"></span>
 {{template "peers"}}
-{{if .Me}}<span class="mut">{{.Me}}</span>{{template "logout"}}{{else}}<a href="/_login">entrar</a>{{end}}
+{{template "compartilhar" .}}
+{{template "conta" .}}
 </header>
+<div class="meio">{{template "coluna" .}}<div class="centro">{{template "abas" .}}
 {{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
-<textarea id="t" spellcheck="false" autofocus data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
+<textarea id="t" spellcheck="false" autofocus aria-label="{{.Label}}" data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
+</div></div>
+{{template "status" true}}
 {{template "live"}}
 </body></html>{{end}}
 

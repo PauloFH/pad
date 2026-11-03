@@ -56,6 +56,18 @@
     }, 50);
   }
 
+  // "salvo" quando o servidor já confirmou tudo (ele grava em disco logo depois); só leitura não salva nada
+  function saveState() {
+    const ok = !t.readOnly && !pad.sync.pending();
+    st.textContent = t.readOnly ? '' : ok ? 'salvo' : 'salvando…';
+    st.className = ok ? 'ok' : '';
+  }
+
+  function say(text) {
+    st.textContent = text;
+    st.className = '';
+  }
+
   function warn(text) {
     lockMsg.textContent = text;
     lockMsg.hidden = false;
@@ -110,6 +122,7 @@
     pad.undo.record(op, before, Date.now());
     send(pad.sync.local(op));
     changed();
+    saveState();
   }
 
   function history(redo) {
@@ -123,6 +136,7 @@
     show(OT.apply(prev, op), op, true);
     send(pad.sync.local(op));
     changed();
+    saveState();
   }
 
   function init(m) {
@@ -146,9 +160,10 @@
     if (t.value !== pad.sync.text) show(pad.sync.text, OT.diff(t.value, pad.sync.text, 0), false);
     changed();
     send(msg);
-    st.textContent = resetNext; // depois de um reject, o motivo fica à vista
-    resetNext = '';
     t.readOnly = !(canEditPage && m.canEdit);
+    if (resetNext) say(resetNext); // depois de um reject, o motivo fica à vista
+    else saveState();
+    resetNext = '';
     sendSel();
     fire('pad:peers');
   }
@@ -160,8 +175,8 @@
       if (m.t === 'init') init(m);
       else if (m.t === 'ack') {
         shift(pad.peers, pad.sync.inflight);
-        st.textContent = '';
         const msg = pad.sync.ack(m.rev);
+        saveState();
         if (msg) send(msg);
         else sendSel();
       } else if (m.t === 'op') {
@@ -175,7 +190,7 @@
         pad.peers = m.peers;
         fire('pad:peers');
       } else if (m.t === 'reject') {
-        st.textContent = resetNext = m.reason || 'operação recusada';
+        say((resetNext = m.reason || 'operação recusada'));
       }
     } catch (err) {
       // estado fora de compasso: reconecta; se nem o rebase serviu, o próximo init recomeça do servidor
@@ -187,7 +202,7 @@
 
   function connect() {
     t.readOnly = true;
-    st.textContent = 'reconectando…';
+    say('reconectando…');
     const url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/_ws/' + t.dataset.name +
       '?c=' + cid + (visitor ? '&v=' + encodeURIComponent(visitor) : '');
     const ws = (pad.socket = new WebSocket(url));
@@ -196,12 +211,12 @@
       t.readOnly = true;
       queue = []; // o próximo init ressincroniza
       if (e.code === 4000) {
-        st.textContent = '';
+        say('');
         fim.firstChild.textContent = e.reason + ' ';
         fim.hidden = false;
         return;
       }
-      st.textContent = 'reconectando…';
+      say('reconectando…');
       setTimeout(connect, delay);
       delay = Math.min(delay * 2, 10000);
     };

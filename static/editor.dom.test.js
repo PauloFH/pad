@@ -68,6 +68,22 @@ test('init, op local, remota com pendente e ack', () => {
   assert.deepStrictEqual(p.events.filter((e) => e[0] === 'pad:op'), [['pad:op', { by: 'p2' }]]); // presença: quem digitou
 });
 
+test('barra de status: salvando… até o ack, depois salvo', () => {
+  const p = boot();
+  p.recv({ t: 'init', rev: 1, text: 'oi', me: 'p1', canEdit: true, seq: 0 });
+  assert.deepStrictEqual([p.st.textContent, p.st.className], ['salvo', 'ok']);
+  p.type('oi!');
+  assert.deepStrictEqual([p.st.textContent, p.st.className], ['salvando…', '']);
+  p.recv({ t: 'ack', rev: 2 });
+  assert.deepStrictEqual([p.st.textContent, p.st.className], ['salvo', 'ok']);
+  p.drop();
+  assert.deepStrictEqual([p.st.textContent, p.st.className], ['reconectando…', '']);
+  // só leitura não salva nada: sem "salvo"
+  p.tick();
+  p.recv({ t: 'init', rev: 2, text: 'oi!', me: 'p1', canEdit: false, seq: 1 });
+  assert.strictEqual(p.st.textContent, '');
+});
+
 test('trava alheia barra o input; Ctrl+Z desfaz só o próprio', () => {
   const p = boot();
   p.recv({ t: 'init', rev: 1, text: 'olá', me: 'p1', canEdit: true, seq: 0 });

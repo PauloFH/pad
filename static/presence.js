@@ -307,6 +307,7 @@
   document.addEventListener('pad:op', (e) => { last[e.detail.by] = Date.now(); schedule(); });
   t.addEventListener('scroll', schedule);
   new ResizeObserver(schedule).observe(t);
+  document.fonts?.ready.then(schedule); // a fonte embutida chega depois e muda a medida do texto
   const quit = (e) => { if (follow && stopsFollow(e)) stop(); };
   t.addEventListener('input', (e) => { last[pad.me] = Date.now(); quit(e); });
   t.addEventListener('keydown', quit);
