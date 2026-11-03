@@ -13,21 +13,23 @@ input,select,button{font:inherit;padding:.3rem .5rem}
 form.inline{display:inline} button.link{background:none;border:0;color:var(--acc);cursor:pointer;padding:0}
 table{width:100%;border-collapse:collapse;margin-top:1rem} td{padding:.35rem 0;border-bottom:1px solid var(--line)}
 body.ed{display:flex;flex-direction:column;height:100dvh}
-textarea{width:100%;border:0;padding:1rem;font:14px/1.5 ui-monospace,monospace;background:var(--bg);color:var(--fg);resize:none;outline:none}
+textarea,#mir,.gut{font:14px/1.5 ui-monospace,monospace} /* uma regra só: o espelho e a calha medem o mesmo texto */
+textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);resize:none;outline:none}
 .area{flex:1;display:flex;min-height:0}
 .area.fol{outline:2px solid var(--fc);outline-offset:-2px}
 .box{flex:1;position:relative;overflow:hidden}
 .box textarea{position:absolute;inset:0;height:100%}
-#mir{position:absolute;top:0;left:0;visibility:hidden;padding:1rem;font:14px/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:break-word}
+#mir{position:absolute;top:0;left:0;visibility:hidden;padding:1rem;white-space:pre-wrap;overflow-wrap:break-word}
 #lay{position:absolute;top:0;left:0;overflow:hidden;pointer-events:none}
 #lay div{position:absolute}
 #lay .s{opacity:.2;border-radius:2px}
 #lay .c{width:2px}
 #lay .c span,#lay .k{font:600 10px/1.4 system-ui,sans-serif;color:#fff;padding:0 .3rem;white-space:nowrap}
+#lay .c span{font-size:9px;line-height:1.25;padding:0 .25rem}
 #lay .c span{position:absolute;bottom:100%;left:0;border-radius:3px 3px 3px 0}
 #lay .c.dn span{bottom:auto;top:100%;border-radius:0 3px 3px 3px}
 #lay .k{border-radius:3px;display:flex;align-items:center}
-.gut{position:relative;overflow:hidden;flex:none;font:14px/1.5 ui-monospace,monospace;color:var(--mut);border-right:1px solid var(--line);user-select:none}
+.gut{position:relative;overflow:hidden;flex:none;color:var(--mut);border-right:1px solid var(--line);user-select:none}
 .gut div{position:absolute;right:.5rem} .gut .on{font-weight:700}
 #peers{position:relative}
 #quem{display:inline-flex;background:none;border:0;padding:0 0 0 6px;cursor:pointer}

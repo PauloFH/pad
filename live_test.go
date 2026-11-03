@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -433,5 +435,50 @@ func TestSubmitDocJaAcima(t *testing.T) {
 	}
 	if err := envia(t, d, a, 1, ins(0, "b", n-1), 1, 1, t0); !errors.Is(err, errTooBig) {
 		t.Fatalf("crescer acima do limite: %v", err)
+	}
+}
+
+// luminância relativa do WCAG de uma cor "#rrggbb"
+func luminance(t *testing.T, hex string) float64 {
+	if len(hex) != 7 || hex[0] != '#' {
+		t.Fatalf("cor inválida %q", hex)
+	}
+	var rgb [3]float64
+	for i := range rgb {
+		v, err := strconv.ParseUint(hex[1+2*i:3+2*i], 16, 8)
+		if err != nil {
+			t.Fatalf("cor inválida %q", hex)
+		}
+		c := float64(v) / 255
+		if c <= 0.04045 {
+			c /= 12.92
+		} else {
+			c = math.Pow((c+0.055)/1.055, 2.4)
+		}
+		rgb[i] = c
+	}
+	return 0.2126*rgb[0] + 0.7152*rgb[1] + 0.0722*rgb[2]
+}
+
+// cada cor vira cursor e seleção sobre o fundo claro e o escuro, e fundo de etiqueta com texto branco
+func TestPaletaContraste(t *testing.T) {
+	ratio := func(a, b string) float64 {
+		x, y := luminance(t, a), luminance(t, b)
+		return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+	}
+	seen := map[string]bool{}
+	for _, c := range palette {
+		if seen[c] {
+			t.Errorf("cor repetida %q", c)
+		}
+		seen[c] = true
+		for _, bg := range []string{"#fafaf7", "#1a1b1e", "#ffffff"} { // --bg claro, --bg escuro, texto da etiqueta
+			if r := ratio(c, bg); r < 3 {
+				t.Errorf("%s contra %s: %.2f:1, quero 3:1", c, bg, r)
+			}
+		}
+	}
+	if len(seen) != 12 {
+		t.Errorf("%d cores distintas, quero 12", len(seen))
 	}
 }

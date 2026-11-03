@@ -66,7 +66,19 @@
     return [a, old.length - b, now.length - b];
   }
 
-  if (typeof module !== 'undefined') module.exports = { lineStarts, lineAt, span, state, groups, pick, stopsFollow, changed };
+  // leitor que nunca mexeu no cursor: sem isso os anônimos se empilham na linha 1
+  const parked = (p) => p.reading && p.a === 0 && p.h === 0;
+
+  // item do menu que recebe o foco com a tecla; i = -1 quando o foco está fora dos itens
+  function nextIndex(i, n, key) {
+    if (key === 'Home') return 0;
+    if (key === 'End') return n - 1;
+    if (key === 'ArrowDown') return (i + 1) % n;
+    if (key === 'ArrowUp') return i <= 0 ? n - 1 : i - 1;
+    return -1;
+  }
+
+  if (typeof module !== 'undefined') module.exports = { lineStarts, lineAt, span, state, groups, pick, stopsFollow, changed, parked, nextIndex };
   if (typeof document === 'undefined') return;
 
   const $ = (id) => document.getElementById(id);
@@ -99,6 +111,7 @@
   // posições do servidor no texto local; a própria aba usa a seleção do textarea, mais atual
   function local(p) {
     if (p.id === pad.me) return { ...p, a: t.selectionStart, h: t.selectionEnd };
+    if (parked(p)) return { ...p, parked: true };
     const clamp = (i, stick) => Math.max(0, Math.min(text.length, pad.sync.localIndex(i, stick)));
     const s = clamp(Math.min(p.a, p.h), true), e = p.a === p.h ? s : clamp(Math.max(p.a, p.h), false);
     return { ...p, a: p.a > p.h ? e : s, h: p.a > p.h ? s : e };
@@ -149,10 +162,10 @@
   function overlay(view, v0, v1) {
     const o = mir.getBoundingClientRect(), dx = -o.left - t.scrollLeft, dy = -o.top - t.scrollTop, out = [];
     for (const p of view) {
-      if (p.id === pad.me) continue; // a própria aba já tem o caret e a seleção nativos
+      if (p.id === pad.me || p.parked) continue; // a própria aba já tem o caret e a seleção nativos
       const s = Math.min(p.a, p.h), e = Math.max(p.a, p.h);
       let end = null;
-      for (let L = Math.max(v0, lineAt(starts, s)); s !== e && L <= v1 && starts[L] <= e; L++) {
+      for (let L = Math.max(v0, lineAt(starts, s)); s !== e && L <= v1 && starts[L] < e; L++) {
         for (const r of rects(L, s, e)) {
           const d = el('div', 's');
           d.style.background = p.color;
@@ -169,10 +182,14 @@
       }
       const r = caret(p.h), y = r.top + dy;
       if (y + r.height < 0 || y > t.clientHeight) continue;
-      const c = el('div', y < 16 ? 'c dn' : 'c'), flag = el('span', '', p.name);
-      c.style.background = flag.style.background = p.color;
+      const c = el('div', y < 16 ? 'c dn' : 'c');
+      c.style.background = p.color;
       place(c, r.left + dx, y, null, r.height);
-      c.append(flag);
+      if (!(p.lock && end)) { // com trava, o selo já diz o nome
+        const flag = el('span', '', p.name);
+        flag.style.background = p.color;
+        c.append(flag);
+      }
       out.push(c);
     }
     Object.assign(lay.style, { width: t.clientWidth + 'px', height: t.clientHeight + 'px' });
@@ -182,6 +199,7 @@
   function gutter(view, v0, v1) {
     const on = new Map(); // linha → cor de quem está nela
     for (const p of view) {
+      if (p.parked) continue;
       const [x, y] = span(p, starts);
       for (let L = Math.max(x, v0); L <= Math.min(y, v1); L++) if (!on.has(L)) on.set(L, p.color);
     }
@@ -203,27 +221,45 @@
     };
     btn.hidden = !gs.length;
     btn.setAttribute('aria-label', gs.length + (gs.length === 1 ? ' pessoa' : ' pessoas') + ' no documento');
-    btn.replaceChildren(...gs.map((g) => {
-      const d = el('span', g.key === follow ? 'dot ring' : 'dot', g.initial);
+    keyed(btn, gs, () => el('span')).forEach((d, i) => {
+      const g = gs[i];
+      d.className = g.key === follow ? 'dot ring' : 'dot';
+      d.textContent = g.initial;
       d.style.background = g.color;
       d.style.setProperty('--c', g.color);
       d.title = (g.mine ? 'você' : g.name) + ' · ' + st(g);
-      return d;
-    }));
+    });
     if (menu.hidden) return;
     const focused = menu.contains(document.activeElement) ? document.activeElement.dataset.key : null;
-    menu.replaceChildren(...gs.map((g) => {
-      const b = el('button'), sq = el('span', 'sq'), txt = el('span', '', g.mine ? 'você' : g.name);
-      Object.assign(b, { type: 'button', onclick: () => choose(g) });
+    const items = keyed(menu, gs, () => {
+      const b = el('button');
+      Object.assign(b, { type: 'button', onclick: () => choose(b.dataset.key) });
       b.setAttribute('role', 'menuitem');
-      b.dataset.key = g.key;
-      if (g.mine) b.setAttribute('aria-disabled', 'true');
-      sq.style.background = g.color;
-      txt.append(el('small', '', st(g) + (g.key === follow ? ' · acompanhando' : '')));
-      b.append(sq, txt);
+      b.append(el('span', 'sq'), el('span'));
+      b.lastChild.append(el('span'), el('small'));
       return b;
-    }));
-    if (focused != null) [...menu.children].find((b) => b.dataset.key === focused)?.focus();
+    });
+    items.forEach((b, i) => {
+      const g = gs[i], [name, small] = b.lastChild.children;
+      b.toggleAttribute('aria-disabled', g.mine);
+      b.firstChild.style.background = g.color;
+      name.textContent = g.mine ? 'você' : g.name;
+      small.textContent = st(g) + (g.key === follow ? ' · acompanhando' : '');
+    });
+    if (focused != null && !menu.contains(document.activeElement)) items.find((b) => b.dataset.key === focused)?.focus();
+  }
+
+  // um filho por key, refeito só quando o conjunto de keys muda: um clique no meio de
+  // um redesenho não cai num botão já removido, e o foco fica onde estava
+  function keyed(parent, gs, make) {
+    if ([...parent.children].map((c) => c.dataset.key).join('\n') !== gs.map((g) => g.key).join('\n')) {
+      parent.replaceChildren(...gs.map((g) => {
+        const c = make();
+        c.dataset.key = g.key;
+        return c;
+      }));
+    }
+    return [...parent.children];
   }
 
   function draw() {
@@ -256,9 +292,9 @@
     menu.querySelector('button')?.focus();
   }
 
-  function choose(g) {
-    if (g.mine) return;
-    follow = g.key;
+  function choose(key) {
+    if (key === groups(pad.peers, pad.me).find((g) => g.mine)?.key) return;
+    follow = key;
     chase = true;
     open(false);
     btn.focus();
@@ -282,10 +318,13 @@
     if (e.key === 'Escape') {
       open(false);
       btn.focus();
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    } else {
+      const items = [...menu.children], i = nextIndex(items.indexOf(document.activeElement), items.length, e.key);
+      if (i < 0) return;
       e.preventDefault();
-      const items = [...menu.children], i = items.indexOf(document.activeElement), n = items.length;
-      items[(i + (e.key === 'ArrowDown' ? 1 : n - 1)) % n]?.focus();
+      items[i]?.focus();
     }
   });
+  // Tab para fora fecha; sem relatedTarget (foco para a janela, item refeito) fica aberto
+  box.addEventListener('focusout', (e) => { if (!menu.hidden && e.relatedTarget && !box.contains(e.relatedTarget)) open(false); });
 })();

@@ -68,3 +68,21 @@ test('linhas trocadas entre dois textos', () => {
   assert.deepStrictEqual(P.changed(['x', 'x'], ['x']), [1, 2, 1]); // prefixo e sufixo não se cruzam
   assert.deepStrictEqual(P.changed([], ['a']), [0, 0, 1]);
 });
+
+test('leitor parado no início não ganha cursor', () => {
+  assert.ok(P.parked({ reading: true, a: 0, h: 0 }));
+  assert.ok(!P.parked({ reading: true, a: 0, h: 3 })); // leitor que selecionou aparece
+  assert.ok(!P.parked({ reading: true, a: 5, h: 5 }));
+  assert.ok(!P.parked({ reading: false, a: 0, h: 0 }));
+});
+
+test('teclas do menu', () => {
+  assert.strictEqual(P.nextIndex(0, 3, 'ArrowDown'), 1);
+  assert.strictEqual(P.nextIndex(2, 3, 'ArrowDown'), 0);
+  assert.strictEqual(P.nextIndex(0, 3, 'ArrowUp'), 2);
+  assert.strictEqual(P.nextIndex(-1, 3, 'ArrowUp'), 2); // foco ainda no botão das bolinhas
+  assert.strictEqual(P.nextIndex(-1, 3, 'ArrowDown'), 0);
+  assert.strictEqual(P.nextIndex(1, 3, 'Home'), 0);
+  assert.strictEqual(P.nextIndex(1, 3, 'End'), 2);
+  assert.strictEqual(P.nextIndex(1, 3, 'a'), -1);
+});
