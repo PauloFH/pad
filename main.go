@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS group_shares (
 	doc TEXT NOT NULL REFERENCES docs ON DELETE CASCADE,
 	group_id INTEGER NOT NULL REFERENCES groups ON DELETE CASCADE,
 	PRIMARY KEY (doc, group_id));
+CREATE TABLE IF NOT EXISTS secrets (k TEXT PRIMARY KEY, v BLOB NOT NULL);
 `
 
 type app struct {
@@ -90,6 +91,8 @@ type app struct {
 	docsDir string
 	// serializa salvar/apagar: sem isso, um autosave em curso recria o arquivo de um doc recém-apagado
 	writeMu sync.Mutex
+	// assina os tokens de visitante do /publico
+	visitorKey []byte
 }
 
 type user struct {
@@ -148,7 +151,11 @@ func openApp(dataDir string) (*app, error) {
 			}
 		}
 	}
-	return &app{db: db, docsDir: docsDir}, nil
+	key, err := loadVisitorKey(db)
+	if err != nil {
+		return nil, err
+	}
+	return &app{db: db, docsDir: docsDir, visitorKey: key}, nil
 }
 
 // staticSub é static/ sem o prefixo, para servir em /_static/.
