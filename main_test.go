@@ -312,3 +312,65 @@ func TestPaginaCarregaScripts(t *testing.T) {
 		}
 	}
 }
+
+// login, criar conta, mensagem e convite usam o mesmo cartão centralizado
+func TestTelasSimplesUsamCartao(t *testing.T) {
+	a, err := openApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(a.db, []string{"useradd", "ana"}, strings.NewReader("senha-forte\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(a.db, []string{"admin", "ana"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(a.routes())
+	defer srv.Close()
+	jar, _ := cookiejar.New(nil)
+	ana := &http.Client{Jar: jar}
+	if _, err := ana.PostForm(srv.URL+"/_login", url.Values{"name": {"ana"}, "pass": {"senha-forte"}}); err != nil {
+		t.Fatal(err)
+	}
+	ler := func(res *http.Response, err error) (int, string) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return res.StatusCode, string(b)
+	}
+	_, convite := ler(ana.Post(srv.URL+"/_convite", "", nil))
+	join := regexp.MustCompile(`/_join/[A-Z0-9]+`).FindString(convite)
+	if join == "" {
+		t.Fatal("link de convite não apareceu")
+	}
+	for _, c := range []struct {
+		nome, path string
+		cli        *http.Client
+		status     int
+		tem        []string
+	}{
+		{"login", "/_login", http.DefaultClient, 200, []string{"pad<span", "Blocos de notas compartilhados, ao vivo."}},
+		{"criar conta", join, http.DefaultClient, 200, nil},
+		{"mensagem", "/zeca/nao-existe", ana, 404, nil},
+		{"convite", "/_convite", ana, 200, nil},
+	} {
+		code, page := ler(c.cli.Get(srv.URL + c.path))
+		if code != c.status {
+			t.Errorf("%s: status %d, queria %d", c.nome, code, c.status)
+		}
+		for _, s := range append(c.tem, `class="tela-cartao"`, "/_static/pad.css") {
+			if !strings.Contains(page, s) {
+				t.Errorf("%s sem %q", c.nome, s)
+			}
+		}
+	}
+	// o convite gerado traz o link, o Copiar e o Gerar outro
+	for _, s := range []string{"Copiar", "Gerar outro link"} {
+		if !strings.Contains(convite, s) {
+			t.Errorf("convite gerado sem %q", s)
+		}
+	}
+}

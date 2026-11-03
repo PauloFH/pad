@@ -47,9 +47,7 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 .sq{width:10px;height:10px;border-radius:50%;flex:none}
 .seguir{display:flex;gap:.5rem;padding:.3rem 1rem;color:#fff;font-size:13px} .seguir button{color:#fff;text-decoration:underline}
 details{position:relative} summary{cursor:pointer;color:var(--acc)}
-.pop{position:absolute;right:0;top:1.8rem;z-index:1;width:22rem;max-width:90vw;padding:1rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
 .pop ul{padding-left:1.2rem}
-.aviso{position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);max-width:90vw;padding:.4rem .8rem;background:var(--bg);border:1px solid var(--line);border-radius:6px}
 </style></head>
 {{end}}
 
@@ -66,38 +64,53 @@ details{position:relative} summary{cursor:pointer;color:var(--acc)}
 
 {{define "logout"}}<form method="post" action="/_logout" class="inline"><button class="link">sair</button></form>{{end}}
 
-{{define "msg"}}{{template "head" "aviso"}}<body><main><p>{{.}}</p><p><a href="/">voltar</a></p></main></body></html>{{end}}
-
-{{define "login"}}{{template "head" "entrar"}}<body><main style="max-width:20rem">
-<h1>pad</h1>
-{{if .Err}}<p class="err">{{.Err}}</p>{{end}}
-<form method="post" action="/_login">
-<input type="hidden" name="next" value="{{.Next}}">
-<p><input name="name" placeholder="usuário" autocomplete="username" required autofocus></p>
-<p><input name="pass" type="password" placeholder="senha" autocomplete="current-password" required></p>
-<button>entrar</button>
-<p class="mut">Sem conta? Use a <a href="/publico">área pública</a>: qualquer um lê e escreve, sem login.</p>
-</form></main></body></html>{{end}}
-
-{{define "invite"}}{{template "head" "convidar"}}<body>
-<header><a href="/">← documentos</a><b>convidar</b><span class="sp"></span><span class="mut">{{.Me}}</span>{{template "logout"}}</header>
-<main>
-<p>Cada link cria uma conta, vale uma vez só e vence em 7 dias.</p>
-<form method="post" action="/_convite"><button>gerar link de convite</button></form>
-{{if .Link}}<p><input value="{{.Link}}" readonly style="width:100%" onclick="this.select()" aria-label="link de convite"></p>
-<p class="mut">Mande esse link para a pessoa.</p>{{end}}
+{{define "msg"}}{{template "head" "aviso"}}<body class="tela-cartao"><main>
+<h1 class="marca">pad<span>_</span></h1>
+<p>{{.}}</p>
+<a class="btn" href="/">Voltar</a>
 </main></body></html>{{end}}
 
-{{define "join"}}{{template "head" "criar conta"}}<body><main style="max-width:20rem">
-<h1>pad</h1>
-<p class="mut">Você recebeu um convite. Escolha seu nome de usuário e uma senha.</p>
-{{if .Err}}<p class="err">{{.Err}}</p>{{end}}
+{{define "login"}}{{template "head" "entrar"}}<body class="tela-cartao"><main>
+<h1 class="marca">pad<span>_</span></h1>
+<p class="sub">Blocos de notas compartilhados, ao vivo.</p>
+{{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
+<form method="post" action="/_login">
+<input type="hidden" name="next" value="{{.Next}}">
+<input class="campo" name="name" placeholder="usuário" aria-label="usuário" autocomplete="username" required autofocus>
+<input class="campo" name="pass" type="password" placeholder="senha" aria-label="senha" autocomplete="current-password" required>
+<button class="btn pri">Entrar</button>
+</form>
+<p class="pe">Sem conta? Escreva na <a href="/publico">área pública</a>, sem login.</p>
+</main></body></html>{{end}}
+
+{{define "invite"}}{{template "head" "convidar"}}<body class="tela-cartao"><main class="largo">
+<h2>Convidar alguém</h2>
+<p class="sub">Cada link cria uma conta, vale uma vez e vence em 7 dias.</p>
+{{if .Link}}<div class="linha"><input id="link" class="campo mono" value="{{.Link}}" readonly aria-label="link de convite" onclick="this.select()"><button type="button" id="copiar" class="btn">Copiar</button></div>{{end}}
+<form method="post" action="/_convite" class="linha"><button class="btn pri">{{if .Link}}Gerar outro link{{else}}Gerar link de convite{{end}}</button></form>
+<div class="pe"><a href="/">← documentos</a> · {{.Me}} · {{template "logout"}}</div>
+{{if .Link}}<script>
+// sem a API da área de transferência (http fora do localhost), seleciona o link para o Ctrl+C
+document.getElementById('copiar').onclick = function () {
+  var b = this, l = document.getElementById('link')
+  var feito = function () { b.textContent = 'Copiado'; setTimeout(function () { b.textContent = 'Copiar' }, 2000) }
+  if (navigator.clipboard) navigator.clipboard.writeText(l.value).then(feito, function () { l.select() })
+  else l.select()
+}
+</script>{{end}}
+</main></body></html>{{end}}
+
+{{define "join"}}{{template "head" "criar conta"}}<body class="tela-cartao"><main>
+<h1 class="marca">pad<span>_</span></h1>
+<p class="sub">Você recebeu um convite. Escolha seu nome de usuário e uma senha.</p>
+{{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <form method="post">
-<p><input name="name" value="{{.Name}}" placeholder="usuário" autocomplete="username" required autofocus></p>
-<p><input name="pass" type="password" placeholder="senha (8+ caracteres)" autocomplete="new-password" required minlength="8" maxlength="72"></p>
-<p><input name="pass2" type="password" placeholder="repita a senha" autocomplete="new-password" required></p>
-<button>criar conta</button>
-</form></main></body></html>{{end}}
+<input class="campo" name="name" value="{{.Name}}" placeholder="usuário" aria-label="usuário" autocomplete="username" required autofocus>
+<input class="campo" name="pass" type="password" placeholder="senha (8+ caracteres)" aria-label="senha" autocomplete="new-password" required minlength="8" maxlength="72">
+<input class="campo" name="pass2" type="password" placeholder="repita a senha" aria-label="repita a senha" autocomplete="new-password" required>
+<button class="btn pri">Criar conta</button>
+</form>
+</main></body></html>{{end}}
 
 {{define "home"}}{{template "head" "documentos"}}<body>
 <header><b>pad</b><span class="sp"></span><a href="/publico">área pública</a>{{if .Admin}}<a href="/_convite">convidar</a>{{end}}<span class="mut">{{.Me}}</span>{{template "logout"}}</header>
