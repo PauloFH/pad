@@ -120,7 +120,7 @@ Decisão do Paulo: os dois jeitos de `@pad`, e o agente lê e escreve.
 
 ## Restrições
 
-- Go, binário único, SQLite, como o pad já é. Rotas novas entram em `routes()` no `main.go`. `/<usuário>/_mcp` não colide com documento porque `validName` não aceita trecho começando com `_`.
+- Go, binário único, SQLite, como o pad já é. Rotas novas entram em `routes()` no `main.go`. `/<usuário>/_mcp` fica reservado: um documento de nome `_mcp` logo abaixo do usuário não abre pelo navegador.
 - Respeitar a ordem de locks do `hub.go` (`a.writeMu` → `hub.mu` → `liveDoc.mu`).
 - A tela da área MCP segue o visual Oficina e os temas das outras telas (`templates.html`, `static/moldura.css`).
 - Dependência nova só se compensar. A SDK oficial de Go do MCP (`github.com/modelcontextprotocol/go-sdk`) é candidata. Implementar à mão só o necessário (`initialize`, `tools/*`, `resources/list`, `resources/read`, `ping`) também vale. **Fica com quem constrói**, desde que funcione com o Claude Code e o Codex atuais.
