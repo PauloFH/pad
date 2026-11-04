@@ -44,6 +44,21 @@ func pagina(t *testing.T, c *http.Client, u string) string {
 	return string(b)
 }
 
+func TestRaizVisitanteVeApresentacao(t *testing.T) {
+	_, srv, login := wsApp(t)
+	page := pagina(t, &http.Client{}, srv.URL+"/")
+	for _, s := range []string{"Um bloco de notas em cada endereço", `href="/publico"`, `href="/_login"`, "/_static/landing.js"} {
+		if !strings.Contains(page, s) {
+			t.Errorf("apresentação sem %q", s)
+		}
+	}
+	// com sessão a raiz continua sendo a lista de documentos
+	page = pagina(t, login("ana"), srv.URL+"/")
+	if !strings.Contains(page, `id="coluna"`) || strings.Contains(page, "landing.js") {
+		t.Error("quem tem sessão não recebeu os documentos em /")
+	}
+}
+
 func TestVisitanteSemColuna(t *testing.T) {
 	_, srv, login := wsApp(t)
 	ana := login("ana")

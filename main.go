@@ -258,7 +258,7 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_convite", a.auth(a.invite))
 	mux.Handle("GET /_static/", noCache(http.StripPrefix("/_static/", http.FileServerFS(staticSub))))
 	mux.HandleFunc("GET /_ws/{name...}", a.liveWS)
-	mux.HandleFunc("GET /{$}", a.auth(a.home))
+	mux.HandleFunc("GET /{$}", a.inicio)
 	mux.HandleFunc("GET /{name...}", a.view)  // sem auth: documento público abre sem login
 	mux.HandleFunc("POST /{name...}", a.save) // confere a sessão por dentro: /publico grava sem login
 	mux.HandleFunc("POST /_public/{name...}", a.auth(a.setPublic))
@@ -610,6 +610,19 @@ func (a *app) userDocs(u user) ([]docRow, error) {
 
 // cartao é um bloco da entrada; Meta junta quando mudou e quem está nele agora.
 type cartao struct{ Name, Label, Meta string }
+
+// inicio é o endereço raiz: quem tem sessão vê os documentos; o visitante, a apresentação do pad.
+func (a *app) inicio(w http.ResponseWriter, r *http.Request) {
+	u, ok, err := a.currentUser(w, r)
+	switch {
+	case err != nil:
+		serverError(w, err)
+	case ok:
+		a.home(w, r, u)
+	default:
+		render(w, http.StatusOK, "landing", nil)
+	}
+}
 
 func (a *app) home(w http.ResponseWriter, r *http.Request, u user) {
 	docs, err := a.userDocs(u)
