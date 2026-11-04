@@ -290,6 +290,11 @@ func (a *app) chatMsgs(w http.ResponseWriter, r *http.Request, u user) {
 		serverError(w, err)
 		return
 	}
+	if len(ms) > 0 { // a pessoa viu: o "N novas" dela no painel zera
+		if err := a.lidoPor(u.ID, nome, u.Name); err != nil {
+			log.Print(err)
+		}
+	}
 	out := struct {
 		Mensagens []msgJSON `json:"mensagens"`
 		Agentes   []string  `json:"agentes"`

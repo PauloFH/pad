@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -267,6 +268,66 @@ func TestMCPNotificacao(t *testing.T) {
 	if res.StatusCode != 202 || len(b) != 0 {
 		t.Fatalf("notificação: %d %q", res.StatusCode, b)
 	}
+	if res, _ := c.post(`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":99}}`); res.StatusCode != 202 {
+		t.Fatalf("cancelar o que não está em curso: %d", res.StatusCode)
+	}
+	c.sessao = "x"
+	if res, _ := c.post(`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":2}}`); res.StatusCode != 404 {
+		t.Fatalf("notificação de sessão desconhecida: %d", res.StatusCode)
+	}
+}
+
+// O cliente que desiste (Esc) manda notifications/cancelled e larga a resposta, sem fechar o HTTP:
+// o esperar cancelado volta na hora e não consome a mensagem, que vai para o outro esperar.
+func TestMCPCancelarEsperar(t *testing.T) {
+	a, srv := mcpApp(t, "ana")
+	pai := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "desktop"), "claude-code")
+	filho := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "note"), "codex")
+	pai.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é")
+	filho.quer("apresentar", map[string]any{"apelido": "filho"}, false, "você é")
+	pai.quer("criar_conversa", map[string]any{"nome": "login", "mensagem": "task"}, false, "criada")
+	esperarCom := func(id int) <-chan resultado {
+		ch := make(chan resultado, 1)
+		go func() {
+			t0 := time.Now()
+			_, b := pai.post(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"esperar","arguments":{}}}`, id))
+			ch <- resultado{texto: string(b), dur: time.Since(t0)}
+		}()
+		return ch
+	}
+	esperandoSer := func(n int) {
+		t.Helper()
+		for range 200 {
+			var e int
+			pai.sessaoEm(a, func(s *sessao) { e = s.esperando })
+			if e == n {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("esperando não chegou a %d", n)
+	}
+	primeiro := esperarCom(7)
+	esperandoSer(1)
+	segundo := esperarCom(8)
+	esperandoSer(2)
+	if res, _ := pai.post(`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":7,"reason":"Esc"}}`); res.StatusCode != 202 {
+		t.Fatalf("cancelar: %d", res.StatusCode)
+	}
+	if r := receber(t, primeiro); r.dur > 2*time.Second || !strings.Contains(r.texto, `"id":7`) {
+		t.Fatalf("o esperar cancelado: %+v", r)
+	}
+	esperandoSer(1)
+	pai.sessaoEm(a, func(s *sessao) {
+		if len(s.chamadas) != 1 {
+			t.Errorf("chamadas em curso: %d", len(s.chamadas))
+		}
+	})
+	filho.quer("enviar", map[string]any{"conversa": "login", "texto": "resposta"}, false, "enviada")
+	if r := receber(t, segundo); !strings.Contains(r.texto, `"id":8`) || !strings.Contains(r.texto, "resposta") {
+		t.Fatalf("o segundo esperar: %+v", r)
+	}
+	esperandoSer(0)
 }
 
 func TestMCPErrosRPC(t *testing.T) {

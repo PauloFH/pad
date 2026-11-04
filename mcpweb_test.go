@@ -367,6 +367,40 @@ func TestChatMCP(t *testing.T) {
 	}
 }
 
+// Abrir o chat põe em dia o "N novas" da pessoa no painel, sem mexer no lido dos agentes.
+func TestPainelMCPLidoDaPessoa(t *testing.T) {
+	a, srv := mcpApp(t, "ana")
+	ana := entrarWeb(t, srv, "ana")
+	pai := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "desktop"), "claude-code")
+	pai.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é")
+	pai.quer("criar_conversa", map[string]any{"nome": "login", "mensagem": "task"}, false, "criada")
+	if _, err := a.enviarMensagem(1, "login", msg("filho", "filho · codex · note", "dúvida")); err != nil {
+		t.Fatal(err)
+	}
+	painel := func() string {
+		t.Helper()
+		res, err := ana.Get(srv.URL + "/ana/_mcp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return string(b)
+	}
+	if p := painel(); !strings.Contains(p, ">login · 2 novas</span>") {
+		t.Fatal("antes de abrir o chat, o painel devia mostrar 2 novas")
+	}
+	if _, st, _ := pegarMsgs(t, ana, srv.URL+"/ana/_mcp/c/login/msgs?depois=0"); st != 200 {
+		t.Fatalf("msgs: %d", st)
+	}
+	if p := painel(); !strings.Contains(p, ">login</span>") {
+		t.Error("depois de abrir o chat, o painel ainda mostra novas")
+	}
+	pai.quer("conversas", nil, false, "login · última: filho · codex · note")
+	pai.quer("conversas", nil, false, " · 1 não lida")
+	pai.quer("ler", map[string]any{"conversa": "login"}, false, "dúvida")
+}
+
 func TestChatEncerraLongPoll(t *testing.T) {
 	velho := esperaWeb
 	esperaWeb = time.Minute

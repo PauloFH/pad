@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strings"
@@ -171,13 +172,22 @@ func lerMensagens(q consulta, cid, depois int64, outrosDe string) ([]mensagem, e
 	return ms, rows.Err()
 }
 
-// mensagens é para o navegador e só lê: nunca mexe no "lido" dos agentes.
+// mensagens é para o navegador e só lê; o lido da pessoa o chatMsgs grava à parte, com lidoPor.
 func (a *app) mensagens(uid int64, conversa string, depois int64) ([]mensagem, error) {
 	cid, err := conversaID(a.db, uid, conversa)
 	if err != nil {
 		return nil, err
 	}
 	return lerMensagens(a.db, cid, depois, "")
+}
+
+// lidoPor põe em dia o lido de quem leu pelo navegador; é pelo login, que o apresentar nunca dá a um agente.
+func (a *app) lidoPor(uid int64, conversa, login string) error {
+	cid, err := conversaID(a.db, uid, conversa)
+	if err != nil {
+		return err
+	}
+	return marcarLido(a.db, cid, login)
 }
 
 // marcarLido grava ate = maior id da conversa.
@@ -194,8 +204,9 @@ const desdeSQL = `COALESCE(
 	(SELECT ate FROM mcp_lido WHERE conversa_id = c.id AND apelido = :apelido),
 	(SELECT MAX(id) FROM mcp_mensagens WHERE conversa_id = c.id AND autor = :apelido), 0)`
 
-func (a *app) lerConversa(uid int64, conversa, apelido string, tudo bool) ([]mensagem, error) {
-	tx, err := a.db.Begin()
+// lerConversa e novidades amarram a transação ao ctx: numa chamada cancelada o Commit recusa e o lido não é gravado.
+func (a *app) lerConversa(ctx context.Context, uid int64, conversa, apelido string, tudo bool) ([]mensagem, error) {
+	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -226,8 +237,8 @@ func (a *app) lerConversa(uid int64, conversa, apelido string, tudo bool) ([]men
 	return ms, tx.Commit()
 }
 
-func (a *app) novidades(uid int64, conversas []string, apelido string) (map[string][]mensagem, error) {
-	tx, err := a.db.Begin()
+func (a *app) novidades(ctx context.Context, uid int64, conversas []string, apelido string) (map[string][]mensagem, error) {
+	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

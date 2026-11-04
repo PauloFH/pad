@@ -38,21 +38,21 @@ func TestConversaLido(t *testing.T) {
 	if err := a.criarConversa(1, "login", pai); !errors.Is(err, errConversaExiste) {
 		t.Fatalf("repetida: %v", err)
 	}
-	ms, err := a.lerConversa(1, "login", "filho", false)
+	ms, err := a.lerConversa(t.Context(), 1, "login", "filho", false)
 	quer(t, ms, err, "faz o login") // primeira leitura traz tudo
-	ms, err = a.lerConversa(1, "login", "filho", false)
+	ms, err = a.lerConversa(t.Context(), 1, "login", "filho", false)
 	quer(t, ms, err)
 	if _, err := a.enviarMensagem(1, "login", msg("filho", "filho · codex · note", "dúvida")); err != nil {
 		t.Fatal(err)
 	}
-	ms, err = a.lerConversa(1, "login", "filho", false)
+	ms, err = a.lerConversa(t.Context(), 1, "login", "filho", false)
 	quer(t, ms, err) // a própria não volta
-	nv, err := a.novidades(1, nil, "pai")
+	nv, err := a.novidades(t.Context(), 1, nil, "pai")
 	if err != nil || len(nv) != 1 {
 		t.Fatalf("novidades %v %v", nv, err)
 	}
 	quer(t, nv["login"], nil, "dúvida")
-	nv, err = a.novidades(1, nil, "pai")
+	nv, err = a.novidades(t.Context(), 1, nil, "pai")
 	if err != nil || len(nv) != 0 {
 		t.Fatalf("segunda vez: %v %v", nv, err)
 	}
@@ -60,12 +60,12 @@ func TestConversaLido(t *testing.T) {
 	if _, err := a.enviarMensagem(1, "login", h); err != nil {
 		t.Fatal(err)
 	}
-	nv, err = a.novidades(1, []string{"login"}, "pai")
+	nv, err = a.novidades(t.Context(), 1, []string{"login"}, "pai")
 	quer(t, nv["login"], err, "eu")
 	if !nv["login"][0].Humano {
 		t.Error("Humano perdido")
 	}
-	ms, err = a.lerConversa(1, "login", "filho", true)
+	ms, err = a.lerConversa(t.Context(), 1, "login", "filho", true)
 	quer(t, ms, err, "faz o login", "dúvida", "eu")
 
 	// apelido novo que já falou: só o que veio depois da última fala dele
@@ -76,7 +76,7 @@ func TestConversaLido(t *testing.T) {
 	if _, err := a.enviarMensagem(1, "login", h); err != nil {
 		t.Fatal(err)
 	}
-	nv, err = a.novidades(1, nil, "outro")
+	nv, err = a.novidades(t.Context(), 1, nil, "outro")
 	quer(t, nv["login"], err, "depois")
 
 	if _, err := a.enviarMensagem(1, "login", msg("pai", "pai", strings.Repeat("x", 64<<10+1))); !errors.Is(err, errMsgGrande) {
@@ -88,10 +88,10 @@ func TestConversaLido(t *testing.T) {
 	if _, err := a.enviarMensagem(1, "nao-existe", msg("pai", "pai", "x")); !errors.Is(err, errSemConversa) {
 		t.Errorf("sem conversa: %v", err)
 	}
-	if _, err := a.lerConversa(1, "nao-existe", "pai", false); !errors.Is(err, errSemConversa) {
+	if _, err := a.lerConversa(t.Context(), 1, "nao-existe", "pai", false); !errors.Is(err, errSemConversa) {
 		t.Errorf("ler sem conversa: %v", err)
 	}
-	if _, err := a.novidades(1, []string{"nao-existe"}, "pai"); !errors.Is(err, errSemConversa) {
+	if _, err := a.novidades(t.Context(), 1, []string{"nao-existe"}, "pai"); !errors.Is(err, errSemConversa) {
 		t.Errorf("novidades sem conversa: %v", err)
 	}
 	if err := a.criarConversa(1, "Com Espaço", pai); err == nil || !strings.Contains(err.Error(), "nome inválido") {
@@ -100,7 +100,7 @@ func TestConversaLido(t *testing.T) {
 	if err := a.criarConversa(1, "vazia", msg("pai", "pai", "  ")); !errors.Is(err, errMsgVazia) {
 		t.Errorf("criar vazia: %v", err)
 	}
-	if _, err := a.lerConversa(1, "vazia", "pai", false); !errors.Is(err, errSemConversa) {
+	if _, err := a.lerConversa(t.Context(), 1, "vazia", "pai", false); !errors.Is(err, errSemConversa) {
 		t.Errorf("criar vazia não deve deixar a conversa: %v", err)
 	}
 }
@@ -119,7 +119,7 @@ func TestConversasPorUsuarioEMensagensSoLe(t *testing.T) {
 		t.Fatal(err)
 	}
 	// mensagens não marca como lido: a primeira leitura do agente ainda traz tudo
-	ms, err = a.lerConversa(1, "c", "filho", false)
+	ms, err = a.lerConversa(t.Context(), 1, "c", "filho", false)
 	quer(t, ms, err, "a")
 	if ms, err = a.mensagens(1, "c", ms[0].ID); err != nil || len(ms) != 0 {
 		t.Fatalf("depois do id: %v %v", ms, err)
@@ -148,7 +148,7 @@ func TestListarEApagarConversas(t *testing.T) {
 		t.Errorf("UltimaEm %v", cs[0].UltimaEm)
 	}
 	// lerConversa zera o contador só dessa conversa e só para esse apelido
-	if _, err := a.lerConversa(1, "velha", "pai", false); err != nil {
+	if _, err := a.lerConversa(t.Context(), 1, "velha", "pai", false); err != nil {
 		t.Fatal(err)
 	}
 	cs, _ = a.listarConversas(1, "pai")

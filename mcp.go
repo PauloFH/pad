@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
@@ -23,7 +24,8 @@ var esperaMax = 50 * time.Second
 const (
 	ativoJanela = 2 * time.Minute
 	maxSessoes  = 20 // por máquina
-	maxCorpoMCP = 1 << 20
+	// o escrever_documento leva até maxDoc, e o JSON escapa um caractere em até 6 bytes (\u0001)
+	maxCorpoMCP = 6*maxDoc + 64<<10
 )
 
 var versoesMCP = []string{"2025-11-25", "2025-06-18", "2025-03-26"}
@@ -48,6 +50,7 @@ type sessao struct {
 	esperando              int
 	conversas              map[string]time.Time
 	leituras               map[string]leitura
+	chamadas               map[string]*context.CancelFunc // tools/call em curso, pelo id do JSON-RPC
 }
 
 func (s *sessao) rotulo() string { return s.apelido + " · " + s.tipo + " · " + s.maquina }
@@ -212,6 +215,30 @@ func (m *mcpState) somarEspera(s *sessao, d int) {
 	s.esperando += d
 }
 
+// emCurso registra a tools/call para o notifications/cancelled achá-la; a função devolvida tira o registro.
+func (m *mcpState) emCurso(s *sessao, id string, cancel context.CancelFunc) func() {
+	c := &cancel
+	m.mu.Lock()
+	s.chamadas[id] = c
+	m.mu.Unlock()
+	return func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if s.chamadas[id] == c { // outra chamada em curso com o mesmo id fica registrada
+			delete(s.chamadas, id)
+		}
+	}
+}
+
+func (m *mcpState) cancelar(s *sessao, id string) {
+	m.mu.Lock()
+	c := s.chamadas[id]
+	m.mu.Unlock()
+	if c != nil {
+		(*c)()
+	}
+}
+
 // batizar dá o apelido à sessão; uma sessão inativa com o mesmo apelido perde o dela.
 func (m *mcpState) batizar(s *sessao, apelido string, now time.Time) (string, error) {
 	m.mu.Lock()
@@ -313,12 +340,8 @@ func (a *app) mcpRPC(w http.ResponseWriter, r *http.Request) {
 		responder(w, req.ID, nil, &rpcErro{-32600, "pedido inválido"})
 		return
 	}
-	if len(req.ID) == 0 { // notificação: nada a responder
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
 	now := time.Now()
-	if req.Method == "initialize" {
+	if req.Method == "initialize" && len(req.ID) > 0 {
 		a.mcpInicio(w, req.ID, req.Params, maq, u, now)
 		return
 	}
@@ -327,13 +350,30 @@ func (a *app) mcpRPC(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "sessão não encontrada", http.StatusNotFound) // o cliente refaz o initialize
 		return
 	}
+	if len(req.ID) == 0 { // notificação: nada a responder
+		if req.Method == "notifications/cancelled" {
+			var p struct {
+				RequestID json.RawMessage `json:"requestId"`
+			}
+			if json.Unmarshal(req.Params, &p) == nil {
+				a.mcp.cancelar(s, string(p.RequestID))
+			}
+		}
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 	switch req.Method {
 	case "ping":
 		responder(w, req.ID, struct{}{}, nil)
 	case "tools/list":
 		responder(w, req.ID, map[string]any{"tools": listaFerramentas()}, nil)
 	case "tools/call":
-		res, e := a.mcpChamar(r, s, req.Params)
+		// o cliente que desiste (Esc) manda notifications/cancelled e larga a resposta sem fechar o HTTP
+		ctx, cancel := context.WithCancel(r.Context())
+		fim := a.mcp.emCurso(s, string(req.ID), cancel)
+		res, e := a.mcpChamar(r.WithContext(ctx), s, req.Params)
+		fim()
+		cancel()
 		responder(w, req.ID, res, e)
 	case "resources/list":
 		res, e := a.mcpRecursos(s)
@@ -365,7 +405,7 @@ func (a *app) mcpInicio(w http.ResponseWriter, id, params json.RawMessage, m maq
 	}
 	s := &sessao{id: rand.Text(), uid: u.ID, login: u.Name, maquinaID: m.ID, maquina: m.Nome,
 		tipo: tipoDoCliente(p.ClientInfo.Name), ultima: now,
-		conversas: map[string]time.Time{}, leituras: map[string]leitura{}}
+		conversas: map[string]time.Time{}, leituras: map[string]leitura{}, chamadas: map[string]*context.CancelFunc{}}
 	a.mcp.novaSessao(s)
 	w.Header().Set("Mcp-Session-Id", s.id)
 	responder(w, id, map[string]any{
@@ -598,7 +638,7 @@ func (c *chamada) ler(raw json.RawMessage) (string, error) {
 	if err := lerArgs(raw, &p); err != nil {
 		return "", err
 	}
-	ms, err := c.a.lerConversa(c.s.uid, p.Conversa, c.apelido, p.Tudo)
+	ms, err := c.a.lerConversa(c.r.Context(), c.s.uid, p.Conversa, c.apelido, p.Tudo)
 	if err != nil {
 		return "", err
 	}
@@ -643,7 +683,10 @@ func (c *chamada) esperar(raw json.RawMessage) (string, error) {
 			}
 			return "", falha("sessão encerrada")
 		}
-		novas, err := c.a.novidades(c.s.uid, p.Conversas, c.apelido)
+		novas, err := c.a.novidades(c.r.Context(), c.s.uid, p.Conversas, c.apelido)
+		if c.r.Context().Err() != nil { // cancelada: ninguém lê a resposta, e o lido não foi gravado
+			return "nada ainda", nil
+		}
 		if err != nil {
 			return "", err
 		}

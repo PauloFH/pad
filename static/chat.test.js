@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { partes, quando } = require('./chat.js');
+const { partes, quando, vencida } = require('./chat.js');
 
 test('partes: texto, código e links', () => {
   assert.deepEqual(partes('oi\n```go\nx := 1\n```\nfim'),
@@ -25,6 +25,25 @@ test('partes: o que não é caminho de documento fica texto', () => {
   for (const s of ['e/ou', 'a/b/c', 'só /ana', 'javascript:alert(1)', 'x.dev/ab/cd']) {
     assert.deepEqual(partes(s), [{t:'texto', v:s}], s)
   }
+})
+test('partes: caminho colado a outro caminho, URL ou palavra fica texto; depois de espaço ou parêntese vira link', () => {
+  for (const s of ['../ana/doc', 'c:/ana/doc', 'x-/ana/doc', 'a_/ana/doc', '//ana/doc']) {
+    assert.deepEqual(partes(s), [{t:'texto', v:s}], s)
+  }
+  assert.deepEqual(partes('(/ana/doc) e x/ana/b /bia/c'),
+    [{t:'texto', v:'('}, {t:'link', v:'/ana/doc', href:'/ana/doc'}, {t:'texto', v:') e x/ana/b '}, {t:'link', v:'/bia/c', href:'/bia/c'}])
+})
+test('partes: o código sem lookbehind, que o Safari antes do 16.4 não entende', () => {
+  assert.ok(!/\(\?<[!=]/.test(require('node:fs').readFileSync(__dirname + '/chat.js', 'utf8')))
+})
+test('vencida: login no lugar do JSON, ou 401, é sessão vencida', () => {
+  const r = (status, tipo, redirected = false) => ({ status, ok: status < 300, redirected, headers: { get: () => tipo } })
+  assert.equal(vencida(r(200, 'application/json')), false)
+  assert.equal(vencida(r(200, 'text/html; charset=utf-8', true)), true)
+  assert.equal(vencida(r(200, 'text/html; charset=utf-8')), true)
+  assert.equal(vencida(r(401, 'text/plain; charset=utf-8')), true)
+  assert.equal(vencida(r(500, 'text/plain; charset=utf-8')), false)
+  assert.equal(vencida(r(200, null)), true)
 })
 test('partes: vazio não gera trechos', () => {
   assert.deepEqual(partes(''), [])

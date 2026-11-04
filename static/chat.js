@@ -4,12 +4,15 @@
   // trecho de código; a linha da linguagem fica de fora
   const CERCA = /```[^\n]*\n([\s\S]*?)```/g;
   // @pad /x/y, http(s)://..., ou /usuario/doc (a regra do validUser, depois um ou mais /trecho)
-  const LINK = /@pad (\/[\w.-]+(?:\/[\w.-]+)*)|https?:\/\/[^\s<>"]+|(?<![\w/.:-])\/[a-z0-9][a-z0-9_-]{1,39}(?:\/[\w.-]+)+/g;
+  const LINK = /@pad (\/[\w.-]+(?:\/[\w.-]+)*)|https?:\/\/[^\s<>"]+|\/[a-z0-9][a-z0-9_-]{1,39}(?:\/[\w.-]+)+/g;
+  // o /usuario/doc colado nisto é pedaço de outra coisa (x.dev/a/b, ../a/b); sem lookbehind, que o Safari < 16.4 não lê
+  const COLADO = /[\w/.:-]/;
   const PONTA = /[.,;:!?)\]]+$/;
 
   function links(s, fora) {
     let i = 0;
     for (const m of s.matchAll(LINK)) {
+      if (m[0][0] === '/' && COLADO.test(s[m.index - 1] || '')) continue;
       let v = m[0].replace(PONTA, '');
       if (m.index > i) fora.push({ t: 'texto', v: s.slice(i, m.index) });
       fora.push({ t: 'link', v, href: m[1] ? m[1].replace(PONTA, '') : v });
@@ -36,8 +39,20 @@
     return `${dois(d.getDate())}/${dois(d.getMonth() + 1)} ${dois(d.getHours())}:${dois(d.getMinutes())}`;
   }
 
-  if (typeof module !== 'undefined') module.exports = { partes, quando };
+  // sessão do navegador vencida: o fetch seguiu o redirecionamento para o login (HTML no lugar do JSON) ou levou 401
+  function vencida(r) {
+    return r.status === 401 || r.redirected || (r.ok && !(r.headers.get('Content-Type') || '').includes('json'));
+  }
+
+  if (typeof module !== 'undefined') module.exports = { partes, quando, vencida };
   if (typeof document === 'undefined') return;
+
+  function avisarVencida(el) {
+    const a = document.createElement('a');
+    a.href = '/_login?next=' + encodeURIComponent(location.pathname);
+    a.textContent = 'entre de novo';
+    el.replaceChildren('sessão expirada: ', a);
+  }
 
   function painel() {
     const tabela = document.getElementById('agentes');
@@ -63,10 +78,13 @@
     async function atualizar() {
       try {
         const r = await fetch(tabela.dataset.base + '/conectados', { headers: { Accept: 'application/json' } });
-        if (r.ok) desenhar(await r.json());
-      } catch {} // sem rede ou sessão vencida: mantém o que está na tela e tenta de novo
+        if (vencida(r)) {
+          clearInterval(relogio);
+          avisarVencida(resumo);
+        } else if (r.ok) desenhar(await r.json());
+      } catch {} // sem rede: mantém o que está na tela e tenta de novo
     }
-    setInterval(() => { if (!document.hidden) atualizar(); }, 5000);
+    const relogio = setInterval(() => { if (!document.hidden) atualizar(); }, 5000);
   }
 
   function balao(m) {
@@ -135,6 +153,10 @@
           const r = await fetch(`${base}/msgs?depois=${ultimo}${primeira ? '' : '&esperar=1'}`, { headers: { Accept: 'application/json' } });
           if (r.status === 404) {
             ativos.textContent = 'esta conversa não existe mais';
+            return;
+          }
+          if (vencida(r)) {
+            avisarVencida(erro);
             return;
           }
           if (!r.ok) throw new Error(String(r.status));

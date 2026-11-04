@@ -93,6 +93,14 @@ func get(t *testing.T, c *http.Client, u string) string {
 	return string(b)
 }
 
+// Um documento perto do teto de 2 MB passa pelo corpo do MCP e volta como resultado de ferramenta, não como 413.
+func TestMCPEscreverGrande(t *testing.T) {
+	_, _, ag, _ := docApp(t)
+	if texto, erro := ag.tool("escrever_documento", map[string]any{"caminho": "/ana/grande", "texto": strings.Repeat("a", 1536<<10), "versao": ""}); erro || !strings.HasPrefix(texto, "gravado") {
+		t.Fatalf("escrever 1,5 MiB: %.200q (isError %v)", texto, erro)
+	}
+}
+
 func TestLerEscreverDocumento(t *testing.T) {
 	a, srv, ag, login := docApp(t)
 	url := srv.URL
