@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -154,6 +155,21 @@ func (d *liveDoc) submit(p *peer, rev, seq int, op Op, a, h int, now time.Time) 
 	if p.cid != "" && seq <= d.seqs[p.cid] {
 		return nil, errDuplicate
 	}
+	op, err := d.aplicar(p, rev, op, &a, &h)
+	if err != nil {
+		return nil, err
+	}
+	if p.cid != "" {
+		d.seqs[p.cid] = seq
+	}
+	d.place(p, a, h, now)
+	return op, nil
+}
+
+// aplicar é o miolo do submit, também usado pelo agente (from nil): transforma op
+// pelas operações posteriores a rev, confere travas e tamanho e aplica. sel são as
+// posições da aba, que andam junto pelas operações do log.
+func (d *liveDoc) aplicar(from *peer, rev int, op Op, sel ...*int) (Op, error) {
 	later, err := d.since(rev)
 	if err != nil {
 		return nil, err
@@ -164,11 +180,17 @@ func (d *liveDoc) submit(p *peer, rev, seq int, op Op, a, h int, now time.Time) 
 			return nil, errInvalid
 		}
 		// a/h valem depois da op do cliente: andam pela operação do log já transformada por ela
-		a, h = TransformIndex(a, l2, true), TransformIndex(h, l2, true)
+		for _, i := range sel {
+			*i = TransformIndex(*i, l2, true)
+		}
 	}
 	for q := range d.peers {
-		if q != p && q.lock && TouchesRange(op, min(q.a, q.h), max(q.a, q.h)) {
-			return nil, msgErr{errLocked, "trecho travado por " + d.nameFor(p, q)}
+		if q != from && q.lock && TouchesRange(op, min(q.a, q.h), max(q.a, q.h)) {
+			nome := cmp.Or(q.login, q.visitor) // o agente (from nil) é a própria conta: vê o login, como um editor
+			if from != nil {
+				nome = d.nameFor(from, q)
+			}
+			return nil, msgErr{errLocked, "trecho travado por " + nome}
 		}
 	}
 	text, err := op.Apply(d.text)
@@ -188,10 +210,7 @@ func (d *liveDoc) submit(p *peer, rev, seq int, op Op, a, h int, now time.Time) 
 		d.log = d.log[len(d.log)-logMax:]
 	}
 	d.dirty = true
-	if p.cid != "" {
-		d.seqs[p.cid] = seq
-	}
-	// p também anda, para o place comparar a seleção antiga e a nova no mesmo texto
+	// from também anda, para o place comparar a seleção antiga e a nova no mesmo texto
 	for q := range d.peers {
 		if q.lock {
 			// bordas da trava não engolem insert vizinho: o início anda, o fim fica
@@ -204,7 +223,9 @@ func (d *liveDoc) submit(p *peer, rev, seq int, op Op, a, h int, now time.Time) 
 			q.a, q.h = TransformIndex(q.a, op, true), TransformIndex(q.h, op, true)
 		}
 	}
-	d.place(p, a, h, now)
+	if op == nil {
+		op = Op{} // a transformada some quando os dois apagam o mesmo trecho: [] no JSON, não null
+	}
 	return op, nil
 }
 

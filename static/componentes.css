@@ -95,3 +95,43 @@ a.cartao:hover{background:var(--hov)}
 
 /* some da tela, fica para o leitor de tela */
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* painel MCP (/_mcp): tabelas que rolam de lado no celular, chave nova e comandos para colar */
+.tabela{flex-shrink:0;min-height:min-content;overflow-x:auto;border-radius:10px;box-shadow:0 0 0 1px var(--line)}
+.tabela table{width:100%;border-collapse:collapse;font-size:13px}
+.tabela th,.tabela td{padding:7px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
+.tabela tr:last-child td{border-bottom:0}
+.tabela th{color:var(--mut);font-weight:400;font-size:11px}
+.tabela td form{margin:0}
+.tabela .mono,.mcp .mono{font-family:var(--mono);font-size:12.5px}
+.mcp .nova{display:grid;gap:8px;padding:14px;border-radius:12px;background:var(--field);box-shadow:0 0 0 1px var(--acc)}
+.mcp .nova h2{margin:0;color:var(--fg);font-size:14px;font-weight:600}
+.mcp .nova p{margin:0}
+.mcp .linha{display:flex;flex-wrap:wrap;gap:8px}
+.mcp .linha .campo{flex:1 1 14rem}
+.mcp .cmd-h{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--mut);font-size:12px}
+.mcp pre.cmd{margin:0;padding:10px 12px;overflow-x:auto;border-radius:9px;background:var(--bg);box-shadow:inset 0 1px 3px #0005,0 0 0 1px var(--line);font:12px/1.5 var(--mono)}
+.mcp .nova-conversa{display:flex;flex-wrap:wrap;gap:8px}
+.mcp .nova-conversa .campo{flex:1 1 12rem}
+.mcp .cartao .meta{overflow-wrap:anywhere}
+
+/* chat de uma conversa (/_mcp/c/{nome}): lista que rola, balões (pessoa à direita, agente à esquerda) e a caixa no rodapé */
+.topo .crumb>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat{flex:1;display:flex;flex-direction:column;min-height:0;width:100%;max-width:54rem;margin:0 auto;padding:0 16px}
+/* o apagar fica fora da barra de cima: lá o nome, o botão e o avatar não cabem em 360 px */
+.chat .info{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 0}
+.chat .info form{margin:0}
+.chat .ativos{flex:1 1 12rem;min-width:0;margin:0;color:var(--mut);font-size:12px;overflow-wrap:anywhere}
+.msgs{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0;margin:0;padding:4px 0 12px;overflow-y:auto;list-style:none}
+.balao{align-self:flex-start;min-width:0;max-width:min(85%,40rem);padding:8px 12px;border-radius:12px 12px 12px 4px;background:var(--field);color:var(--fg);box-shadow:0 0 0 1px var(--line)}
+.balao.eu{align-self:flex-end;border-radius:12px 12px 4px 12px;background:color-mix(in srgb,var(--acc) 16%,var(--field));box-shadow:0 0 0 1px color-mix(in srgb,var(--acc) 45%,var(--line))}
+.balao .cab{display:flex;flex-wrap:wrap;gap:4px 10px;margin-bottom:2px;color:var(--mut);font-size:11px}
+.balao .quem{font-family:var(--mono);overflow-wrap:anywhere}
+.balao .texto{white-space:pre-wrap;overflow-wrap:anywhere}
+.balao .texto a{color:color-mix(in srgb,var(--acc) 70%,var(--fg))}
+.balao .texto pre{margin:4px 0;padding:8px 10px;overflow-x:auto;border-radius:8px;background:var(--bg);box-shadow:inset 0 1px 3px #0005,0 0 0 1px var(--line);font:12px/1.5 var(--mono)}
+.chat .enviar{flex:none;display:flex;align-items:flex-end;gap:8px;padding:8px 0}
+.chat .enviar textarea{flex:1;width:auto;min-width:0;max-height:40vh;padding:8px 11px;resize:vertical}
+.chat #erro{flex:none;margin:0;padding-bottom:6px;font-size:13px;min-height:0}
+.chat #erro:empty{display:none}
+@media (max-width:767px){.chat{padding:0 10px}.balao{max-width:92%}}

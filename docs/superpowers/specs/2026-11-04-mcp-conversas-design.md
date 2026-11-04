@@ -22,7 +22,7 @@ O modelo mental é o `SendMessage` dos subagentes do Claude Code: um agente mand
 
 ### 1. Área MCP, separada dos documentos
 
-Uma área própria, em `/_mcp`, fora dos documentos normais. As conversas não são documentos: não aparecem na coluna de documentos nem abrem no editor de texto. A área tem três partes:
+Uma área própria **de cada usuário**, em `/<usuário>/_mcp` (por exemplo `/paulo/_mcp`), fora dos documentos normais (decisão do Paulo, durante a implementação). Cada usuário só abre a própria área. Na área de outro usuário, a resposta é o mesmo "não encontrado" dos documentos. O `/_mcp` sozinho redireciona para a área de quem está logado. As conversas não são documentos: não aparecem na coluna de documentos nem abrem no editor de texto. A área tem três partes:
 
 - **Conversas:** lista com nome, última mensagem (autor e hora) e quem está nela agora. Botão para criar conversa.
 - **Máquinas:** cadastro e revogação (seção 4).
@@ -32,7 +32,7 @@ Link para a área na barra/menu onde já ficam **convidar** e **sair**, com o no
 
 ### 2. Cada conversa é um chat
 
-Página em `/_mcp/c/<nome>`. O nome segue as regras de nome de documento (`validName`), sem barras. *Escolha minha.*
+Página em `/<usuário>/_mcp/c/<nome>`. O nome segue as regras de nome de documento (`validName`), sem barras. *Escolha minha.*
 
 - **Mensagens em balões,** com autor e hora. As do Paulo ficam de um lado e as dos agentes do outro. O texto é mostrado como texto puro, preservando quebras de linha e espaços, em fonte monoespaçada nos trechos entre crases triplas. Não há renderizador de Markdown. *Escolha minha.*
 - **Caixa de envio no rodapé.** Enter envia e Shift+Enter quebra a linha. A mensagem do Paulo é uma mensagem como qualquer outra: os agentes recebem pelo `ler`/`esperar`.
@@ -44,7 +44,7 @@ Página em `/_mcp/c/<nome>`. O nome segue as regras de nome de documento (`valid
 
 ### 3. Servidor MCP dentro do pad
 
-- O próprio pad responde o MCP no transporte **Streamable HTTP**, em `https://pad.pauloholanda.com.br/_mcp` (o mesmo caminho da área no navegador: o `POST` com `Authorization: Bearer` é o MCP, e o `GET` do navegador é a página). Se isso complicar, o MCP pode ir para outro caminho, como `/_mcp/rpc`. Isso fica com quem constrói. Nada para instalar nas máquinas: cada uma registra o endereço e a chave uma vez no Claude Code (`claude mcp add --transport http ...` com o header `Authorization: Bearer <chave>`) e no Codex (servidor HTTP com bearer token na config).
+- O próprio pad responde o MCP no transporte **Streamable HTTP**, em `https://pad.pauloholanda.com.br/<usuário>/_mcp`. É o mesmo caminho da área no navegador: o `POST` com `Authorization: Bearer` é o MCP, e o `GET` do navegador é a página. Uma chave só vale no endereço do próprio dono. Uma chave do paulo usada em `/ana/_mcp` é recusada como chave inválida. Nada para instalar nas máquinas: cada uma registra o endereço e a chave uma vez no Claude Code (`claude mcp add --transport http ...` com o header `Authorization: Bearer <chave>`) e no Codex (servidor HTTP com bearer token na config).
 - **Autenticação:** cada máquina cadastrada tem uma chave, e a chave vale como a conta inteira do dono (decisão do Paulo). Ela dá acesso aos documentos que o Paulo acessa (os dele e os compartilhados com ele, pela mesma regra do `access`), e às conversas dele.
 - **Quem é o agente: um apelido** (decisão do Paulo). Ao começar, cada agente se apresenta com a ferramenta `apresentar(apelido)`. O pai usa `pai`, e cada filho usa o nome da conversa dele (`login`). As instruções do servidor mandam fazer isso antes de tudo. Nas mensagens e telas, o agente aparece como `login · claude · notebook`: apelido, tipo e máquina. A máquina vem da chave. O tipo vem do `clientInfo.name` do `initialize`: Claude Code vira `claude`, Codex vira `codex`, e qualquer outro cliente aparece com o nome que mandou.
   - O apelido é a identidade dentro da conta. O "lido" e a regra de "outro autor" do `esperar` usam o apelido, e não a máquina nem o tipo. Por isso dois Claude no mesmo notebook (pai e filho) se ouvem normalmente.
@@ -120,7 +120,7 @@ Decisão do Paulo: os dois jeitos de `@pad`, e o agente lê e escreve.
 
 ## Restrições
 
-- Go, binário único, SQLite, como o pad já é. Rotas novas entram em `routes()` no `main.go`. `/_mcp` não colide com usuário porque `validUser` não aceita `_` no começo.
+- Go, binário único, SQLite, como o pad já é. Rotas novas entram em `routes()` no `main.go`. `/<usuário>/_mcp` fica reservado: um documento de nome `_mcp` logo abaixo do usuário não abre pelo navegador.
 - Respeitar a ordem de locks do `hub.go` (`a.writeMu` → `hub.mu` → `liveDoc.mu`).
 - A tela da área MCP segue o visual Oficina e os temas das outras telas (`templates.html`, `static/moldura.css`).
 - Dependência nova só se compensar. A SDK oficial de Go do MCP (`github.com/modelcontextprotocol/go-sdk`) é candidata. Implementar à mão só o necessário (`initialize`, `tools/*`, `resources/list`, `resources/read`, `ping`) também vale. **Fica com quem constrói**, desde que funcione com o Claude Code e o Codex atuais.

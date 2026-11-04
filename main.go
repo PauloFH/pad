@@ -44,7 +44,8 @@ var tmplFS embed.FS
 var staticFS embed.FS
 
 var (
-	tmpl = template.Must(template.New("").Funcs(template.FuncMap{"ramo": ramo, "corta": corta}).ParseFS(tmplFS, "templates.html"))
+	tmpl = template.Must(template.New("").Funcs(template.FuncMap{"ramo": ramo, "corta": corta, "hora": hora,
+		"quando": func(t time.Time) string { return quando(t, time.Now()) }}).ParseFS(tmplFS, "templates.html"))
 	// o nome vira caminho de arquivo: sem "..", "/" inicial, "//" ou ponto
 	validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9_-]+)*$`)
 	// o usuário é o primeiro trecho do endereço (/paulo/notas): só minúsculas, para Paulo e paulo não coexistirem
@@ -89,6 +90,32 @@ CREATE TABLE IF NOT EXISTS group_shares (
 	group_id INTEGER NOT NULL REFERENCES groups ON DELETE CASCADE,
 	PRIMARY KEY (doc, group_id));
 CREATE TABLE IF NOT EXISTS secrets (k TEXT PRIMARY KEY, v BLOB NOT NULL);
+-- hash e não a chave: quem lê o banco não consegue se passar pela máquina
+CREATE TABLE IF NOT EXISTS mcp_maquinas (
+	id INTEGER PRIMARY KEY,
+	user_id INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
+	nome TEXT NOT NULL,
+	hash BLOB NOT NULL UNIQUE,
+	criada INTEGER NOT NULL,
+	vista INTEGER NOT NULL DEFAULT 0,
+	UNIQUE (user_id, nome));
+CREATE TABLE IF NOT EXISTS mcp_conversas (
+	id INTEGER PRIMARY KEY,
+	user_id INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
+	nome TEXT NOT NULL,
+	criada INTEGER NOT NULL,
+	UNIQUE (user_id, nome));
+CREATE TABLE IF NOT EXISTS mcp_mensagens (
+	id INTEGER PRIMARY KEY,
+	conversa_id INTEGER NOT NULL REFERENCES mcp_conversas ON DELETE CASCADE,
+	autor TEXT NOT NULL, rotulo TEXT NOT NULL, humano INTEGER NOT NULL,
+	em INTEGER NOT NULL, texto TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS mcp_mensagens_conversa ON mcp_mensagens (conversa_id, id);
+-- o "lido" é por apelido do agente, não por pessoa: dois agentes da mesma pessoa leem separado
+CREATE TABLE IF NOT EXISTS mcp_lido (
+	conversa_id INTEGER NOT NULL REFERENCES mcp_conversas ON DELETE CASCADE,
+	apelido TEXT NOT NULL, ate INTEGER NOT NULL,
+	PRIMARY KEY (conversa_id, apelido));
 `
 
 type app struct {
@@ -99,6 +126,7 @@ type app struct {
 	// assina os tokens de visitante do /publico
 	visitorKey []byte
 	hub        *hub // documentos abertos na edição ao vivo
+	mcp        *mcpState
 }
 
 type user struct {
@@ -121,6 +149,7 @@ func main() {
 		return
 	}
 	srv := &http.Server{Addr: env("PAD_ADDR", ":8080"), Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
+	srv.RegisterOnShutdown(a.mcp.encerrar) // senão o Shutdown espera os esperar de até 50 s
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
 	go func() {
@@ -178,7 +207,7 @@ func openApp(dataDir string) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &app{db: db, docsDir: docsDir, visitorKey: key}
+	a := &app{db: db, docsDir: docsDir, visitorKey: key, mcp: newMcpState()}
 	a.hub = &hub{a: a, docs: map[string]*liveDoc{}, perIP: map[string]int{}, perDoc: map[string]int{}}
 	return a, nil
 }
@@ -236,9 +265,20 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_share/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_unshare/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_delete/{name...}", a.auth(a.del))
+	mux.HandleFunc("GET /_mcp", a.auth(func(w http.ResponseWriter, r *http.Request, u user) {
+		http.Redirect(w, r, "/"+u.Name+"/_mcp", http.StatusSeeOther)
+	}))
+	mcp := a.mcpRoutes()
 	return http.NewCrossOriginProtection().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+		// /{usuario}/_mcp... fica num mux à parte: o padrão se sobrepõe a /_static/, /_ws/, /_join/ e /_public/ sem ser mais
+		// específico que nenhum, e o ServeMux entra em pânico ao registrar os dois no mesmo mux.
+		if u, resto, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/"); ok && validUser.MatchString(u) &&
+			(resto == "_mcp" || strings.HasPrefix(resto, "_mcp/")) {
+			mcp.ServeHTTP(w, r)
+			return
+		}
 		mux.ServeHTTP(w, r)
 	}))
 }

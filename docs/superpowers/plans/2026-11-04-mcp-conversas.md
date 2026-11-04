@@ -496,7 +496,7 @@ Expected: FAIL
 Run: `go test ./... && node --test static/*.test.js`
 Expected: PASS
 
-Depois, `PAD_DATA=./data go run .` e abrir `http://localhost:8080/_mcp` logado: cadastrar uma máquina e ver a chave e os comandos. Conferir em 360 px de largura e em dois temas (Papel e Grafite).
+Depois, `PAD_DATA=./data go run .` e abrir `http://localhost:8080/<usuário>/_mcp` logado: cadastrar uma máquina e ver a chave e os comandos. Conferir em 360 px de largura e em dois temas (Papel e Grafite).
 
 - [ ] **Step 5: Commit**
 
@@ -586,6 +586,62 @@ Depois, com `go run .`, abrir a mesma conversa em duas abas e mandar mensagens d
 ```bash
 git add mcpweb.go mcpweb_test.go templates.html static/chat.js static/chat.test.js static/componentes.css main_test.go
 git commit -m "feat: chat das conversas MCP no navegador"
+```
+
+---
+
+### Task 6b: Endereço por usuário (`/<usuário>/_mcp`)
+
+Pedido do Paulo durante a execução: o endereço da área MCP e o do servidor MCP passam a ser de cada usuário. Spec atualizado (seções 1, 2 e 3).
+
+**Files:**
+- Modify: `main.go` (rotas), `mcp.go` (autenticação pelo usuário do caminho), `mcpweb.go`, `templates.html` (links e forms), `static/chat.js` (URLs do fetch), testes `mcp_test.go`, `mcpweb_test.go`, `mcpdoc_test.go`
+
+**Interfaces:**
+- Consumes: tudo das Tasks 3–6
+- Produces: as rotas abaixo; `/_mcp` (GET) só redireciona
+
+| antes | depois |
+|---|---|
+| `POST /_mcp`, `DELETE /_mcp` (MCP) | `POST /{usuario}/_mcp`, `DELETE /{usuario}/_mcp` |
+| `GET /_mcp` (painel) | `GET /{usuario}/_mcp`; `GET /_mcp` → 303 para `/<login>/_mcp` (sem login: vai para o login) |
+| `POST /_mcp/maquinas`, `.../{id}/revogar`, `GET /_mcp/conectados` | `/{usuario}/_mcp/maquinas`, `/{usuario}/_mcp/maquinas/{id}/revogar`, `/{usuario}/_mcp/conectados` |
+| `/_mcp/c`, `/_mcp/c/{nome}`, `.../msgs`, `.../apagar` | `/{usuario}/_mcp/c`, `/{usuario}/_mcp/c/{nome}`, `.../msgs`, `.../apagar` |
+
+Regras:
+- **Navegador:** `{usuario}` tem que ser igual a `u.Name` de quem está logado. Senão, a resposta é 404 com o template `msg`, como nos documentos sem acesso (nas rotas JSON, 404 simples).
+- **MCP:** a chave do Bearer tem que ser de uma máquina do mesmo usuário do caminho. Chave de outro usuário: 401 com `WWW-Authenticate: Bearer`, igual a chave inválida. O `GET /{usuario}/_mcp` com `Authorization` continua dando 405 com `Allow: POST, DELETE`.
+- **Comandos do painel e link no menu `conta`:** usam `<base>/<login>/_mcp` e `/<login>/_mcp`.
+- **Conflito de padrões do `ServeMux`:** `GET /{user}/_mcp` se sobrepõe a `/_static/`, `/_ws/{name...}` e `/_join/{token}`, e `POST /{user}/_mcp` se sobrepõe a `/_public/{name...}`, `/_share/...`, `/_unshare/...`, `/_delete/...` e `/_join/{token}`. Nenhum padrão é mais específico que o outro, e o Go entra em pânico ao registrar. Montar a área num `ServeMux` próprio, com padrões `/{usuario}/_mcp...`. O `routes()` desvia para ele quando o segundo trecho do caminho é exatamente `_mcp` e o primeiro passa em `validUser`. O resto segue no mux atual.
+
+- [ ] **Step 1: Ajustar os testes para os caminhos novos e escrever os que faltam**
+
+```go
+func TestEnderecoPorUsuario(t *testing.T)
+	// ana logada: GET /_mcp → 303 Location /ana/_mcp; GET /ana/_mcp → 200; GET /bia/_mcp → 404
+	// bia: POST /ana/_mcp/maquinas → 404; GET /ana/_mcp/c/<conversa da ana> → 404; GET /ana/_mcp/conectados → 404
+	// chave da ana: initialize em /ana/_mcp → 200; em /bia/_mcp → 401
+	// GET /ana/_mcp com Authorization → 405
+	// painel da ana mostra "<base>/ana/_mcp" nos comandos; menu da conta tem href="/ana/_mcp"
+	// /ana/notas e /_static/pad.css continuam funcionando (sem conflito de rota)
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+Run: `.superpowers/sdd/2026-11-04-mcp-conversas/gotest test -run 'TestEnderecoPorUsuario|TestMCP|TestPainelMCP|TestChatMCP' .`
+Expected: FAIL
+
+- [ ] **Step 3: Implementar**
+
+- [ ] **Step 4: Rodar tudo**
+
+Run: `gotest test ./... && node --test static/*.test.js`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git commit -am "feat: área e servidor MCP no endereço de cada usuário"
 ```
 
 ---
