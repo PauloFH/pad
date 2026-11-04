@@ -1,0 +1,48 @@
+{
+  "order": 2,
+  "url": "https://pad.pauloholanda.com.br",
+  "image": "capa.png",
+  "stack": ["Go", "WebSocket", "OT", "SQLite", "Docker"],
+  "i18n": {
+    "pt": {
+      "name": "pad",
+      "summary": "Bloco de notas colaborativo em tempo real, com login, espaços por usuário e área pública.",
+      "highlights": [
+        "Cursores e seleções ao vivo, com trechos selecionados travados para os demais.",
+        "O Ctrl+Z desfaz só as suas mudanças.",
+        "Compartilhamento por usuário ou grupo e oito temas."
+      ],
+      "imageAlt": "Ilustração de uma nota compartilhada, com o cursor e a seleção de cada pessoa em uma cor diferente"
+    },
+    "en": {
+      "name": "pad",
+      "summary": "Real-time collaborative notepad, with login, per-user spaces and a public area.",
+      "highlights": [
+        "Live cursors and selections, with selected passages locked for everyone else.",
+        "Ctrl+Z undoes only your own changes.",
+        "Sharing by user or group, and eight themes."
+      ],
+      "imageAlt": "Illustration of a shared note, with each person's cursor and selection in a different color"
+    },
+    "es": {
+      "name": "pad",
+      "summary": "Bloc de notas colaborativo en tiempo real, con inicio de sesión, espacios por usuario y un área pública.",
+      "highlights": [
+        "Cursores y selecciones en vivo, con los fragmentos seleccionados bloqueados para los demás.",
+        "Ctrl+Z deshace solo tus propios cambios.",
+        "Compartir por usuario o grupo, y ocho temas."
+      ],
+      "imageAlt": "Ilustración de una nota compartida, con el cursor y la selección de cada persona en un color distinto"
+    },
+    "ja": {
+      "name": "pad",
+      "summary": "リアルタイムで共同編集できるメモ帳です。ログイン、ユーザーごとのスペース、公開エリアを備えています。",
+      "highlights": [
+        "カーソルと選択範囲をリアルタイムに表示し、選択中の箇所は他の人が編集できないようロックされます。",
+        "Ctrl+Z で元に戻せるのは自分の変更だけです。",
+        "ユーザーまたはグループ単位での共有と、8 種類のテーマに対応しています。"
+      ],
+      "imageAlt": "共有ノートのイラスト。参加者ごとにカーソルと選択範囲が異なる色で表示されている"
+    }
+  }
+}
