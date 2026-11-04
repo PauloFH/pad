@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/rand/v2"
 	"net/http"
 	"net/http/cookiejar"
@@ -738,6 +739,74 @@ func TestEvictPulaAberto(t *testing.T) {
 	}
 }
 
+// operação com componente fora do limite é recusada, e o documento e o servidor seguem de pé.
+func TestWSOpForaDoLimite(t *testing.T) {
+	_, srv, _ := wsApp(t)
+	anon := &http.Client{}
+	tc := dialWS(t, srv, anon, "publico/limite", "c1", "")
+	if err := tc.write(map[string]any{"t": "op", "seq": 1, "rev": 0, "op": []int{math.MaxInt, math.MaxInt, 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if m, err := tc.until(isType("reject")); err != nil || m.Reason != errInvalid.Error() {
+		t.Fatalf("reject %+v, %v", m, err)
+	}
+	if err := tc.edit(Op{{Insert: "ok"}}, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tc.until(isType("ack")); err != nil {
+		t.Fatal(err)
+	}
+	if got := dialWS(t, srv, anon, "publico/limite", "c2", ""); got.init.Text != "ok" {
+		t.Fatalf("outra aba leu %q", got.init.Text)
+	}
+}
+
+// a fila da aba tem teto em bytes: quem não lê sai do documento, sem acumular cópias dele.
+func TestEnqueueTetoDeBytes(t *testing.T) {
+	d := newLiveDoc("publico/x", "")
+	p := &peer{send: make(chan []byte, 256), teto: 100}
+	d.mu.Lock() // o timer de presença que a saída arma também usa d.mu
+	defer d.mu.Unlock()
+	d.peers[p] = true
+	d.enqueue(p, make([]byte, 500)) // fila vazia: passa mesmo acima do teto
+	if !d.peers[p] || p.filaBytes.Load() != 500 {
+		t.Fatalf("primeira mensagem: na fila %d, no documento %v", p.filaBytes.Load(), d.peers[p])
+	}
+	d.enqueue(p, []byte("x"))
+	if d.peers[p] {
+		t.Fatal("aba acima do teto continuou no documento")
+	}
+}
+
+func TestChaveIP(t *testing.T) {
+	for in, want := range map[string]string{
+		"10.0.0.1":             "10.0.0.1",
+		"2001:db8:1:2:3:4:5:6": "2001:db8:1:2::/64",
+		"2001:db8:1:2:ffff::1": "2001:db8:1:2::/64",
+		"::ffff:10.0.0.1":      "::ffff:10.0.0.1",
+		"lixo":                 "lixo",
+	} {
+		if got := chaveIP(in); got != want {
+			t.Errorf("chaveIP(%q) = %q, queria %q", in, got, want)
+		}
+	}
+}
+
+// quem só lê tem limite pequeno de mensagem: um texto grande derruba a conexão em vez de ser decodificado.
+func TestWSLeitorLimiteDeMensagem(t *testing.T) {
+	_, srv, login := wsApp(t)
+	ana := login("ana")
+	post(t, ana, srv.URL+"/ana/aberto", "text/plain", "oi")
+	post(t, ana, srv.URL+"/_public/ana/aberto", "application/x-www-form-urlencoded", "public=1")
+	tc := dialWS(t, srv, &http.Client{}, "ana/aberto", "c1", "")
+	if err := tc.write(map[string]any{"t": "sel", "x": strings.Repeat("x", 8<<10)}); err != nil {
+		t.Fatal(err)
+	}
+	if ce := closedWith(t, tc.c); ce.Code != websocket.StatusMessageTooBig {
+		t.Fatalf("fechou com %v", ce)
+	}
+}
+
 func TestWSLimitePorIP(t *testing.T) {
 	a, srv, _ := wsApp(t)
 	dial := func(name, ip string) (*websocket.Conn, int) {
@@ -787,6 +856,37 @@ func TestWSLimitePorIP(t *testing.T) {
 		if _, st := dial("publico/cheio", fmt.Sprintf("10.1.0.%d", i)); st != want {
 			t.Fatalf("aba %d do documento: %d, queria %d", i+1, st, want)
 		}
+	}
+}
+
+// leitores anônimos enchem as vagas de leitura de um documento público, e o dono ainda entra.
+func TestWSLeitoresNaoTiramVagaDoDono(t *testing.T) {
+	old := maxPeersPerDoc
+	maxPeersPerDoc = 2
+	t.Cleanup(func() { maxPeersPerDoc = old })
+	_, srv, login := wsApp(t)
+	ana := login("ana")
+	post(t, ana, srv.URL+"/ana/aberto", "text/plain", "oi")
+	post(t, ana, srv.URL+"/_public/ana/aberto", "application/x-www-form-urlencoded", "public=1")
+	dial := func(hc *http.Client, ip string) int {
+		h := http.Header{"X-Real-Ip": {ip}}
+		c, res, err := websocket.Dial(context.Background(), wsURL(srv, "ana/aberto", "c=x"), &websocket.DialOptions{HTTPClient: hc, HTTPHeader: h})
+		if err != nil {
+			if res == nil {
+				t.Fatal(err)
+			}
+			return res.StatusCode
+		}
+		t.Cleanup(func() { c.CloseNow() })
+		return res.StatusCode
+	}
+	for i, want := range []int{101, 101, 429} {
+		if st := dial(&http.Client{}, fmt.Sprintf("10.2.0.%d", i)); st != want {
+			t.Fatalf("leitor %d: %d, queria %d", i+1, st, want)
+		}
+	}
+	if st := dial(ana, "10.2.0.9"); st != 101 {
+		t.Fatalf("o dono ficou de fora: %d", st)
 	}
 }
 

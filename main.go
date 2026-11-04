@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -123,10 +124,18 @@ type app struct {
 	docsDir string
 	// serializa salvar/apagar: sem isso, um autosave em curso recria o arquivo de um doc recém-apagado
 	writeMu sync.Mutex
+	// totais de /publico, medidos na primeira gravação; sob writeMu
+	pubMedido bool
+	pubItens  int
+	pubBytes  int64
 	// assina os tokens de visitante do /publico
-	visitorKey []byte
-	hub        *hub // documentos abertos na edição ao vivo
-	mcp        *mcpState
+	visitorKey                            []byte
+	hub                                   *hub // documentos abertos na edição ao vivo
+	mcp                                   *mcpState
+	limWS                                 *limite       // conexões novas por IP
+	limPublico                            *limite       // POST em /publico por IP
+	limLoginIP, limLoginNome, limLoginPar *limite       // senhas erradas por IP, por conta e por IP nessa conta
+	vagasBcrypt                           chan struct{} // bcrypt custa caro de propósito: pedidos demais juntos não podem tomar a CPU
 }
 
 type user struct {
@@ -207,7 +216,10 @@ func openApp(dataDir string) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &app{db: db, docsDir: docsDir, visitorKey: key, mcp: newMcpState()}
+	a := &app{db: db, docsDir: docsDir, visitorKey: key, mcp: newMcpState(),
+		limWS: novoLimite(60, time.Minute), limPublico: novoLimite(120, time.Minute),
+		limLoginIP: novoLimite(10, 5*time.Minute), limLoginNome: novoLimite(20, 15*time.Minute), limLoginPar: novoLimite(1, 15*time.Minute),
+		vagasBcrypt: make(chan struct{}, max(1, runtime.NumCPU()/2))}
 	a.hub = &hub{a: a, docs: map[string]*liveDoc{}, perIP: map[string]int{}, perDoc: map[string]int{}}
 	return a, nil
 }
@@ -345,7 +357,29 @@ func (a *app) loginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) login(w http.ResponseWriter, r *http.Request) {
+	ip, agora := clientIP(r), time.Now()
+	demais := func(next string) {
+		render(w, http.StatusTooManyRequests, "login", loginData{next, "tentativas demais, espere alguns minutos"})
+	}
+	// antes de ler o formulário, que sem limite pode ter dezenas de MB e não custa nada a quem envia
+	if a.limLoginIP.cheio(ip, agora) {
+		demais("")
+		return
+	}
+	http.NewResponseController(w).SetReadDeadline(time.Now().Add(10 * time.Second))
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	name, pass, next := normUser(r.FormValue("name")), r.FormValue("pass"), r.FormValue("next")
+	// nome fora do formato não existe nem vira chave: o mapa não guarda texto arbitrário de quem tenta
+	contaNome := validUser.MatchString(name)
+	par := ip + "|" + name
+	// a conta cheia só barra quem já errou nela: senão qualquer um deixaria o dono de fora errando a senha dele de propósito
+	bloqueado := func(t time.Time) bool {
+		return a.limLoginIP.cheio(ip, t) || contaNome && a.limLoginNome.cheio(name, t) && a.limLoginPar.cheio(par, t)
+	}
+	if bloqueado(agora) {
+		demais(next)
+		return
+	}
 	var id int64
 	hash := dummyHash
 	err := a.db.QueryRow(`SELECT id, hash FROM users WHERE name = ?`, name).Scan(&id, &hash)
@@ -353,7 +387,28 @@ func (a *app) login(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	if bcrypt.CompareHashAndPassword(hash, []byte(pass)) != nil || err != nil {
+	select {
+	case a.vagasBcrypt <- struct{}{}:
+	case <-r.Context().Done():
+		return
+	case <-time.After(10 * time.Second):
+		render(w, http.StatusServiceUnavailable, "login", loginData{next, "servidor ocupado, tente de novo"})
+		return
+	}
+	// de novo com a vaga: quem esperou na fila entrou antes de os erros dos outros serem contados
+	if bloqueado(time.Now()) {
+		<-a.vagasBcrypt
+		demais(next)
+		return
+	}
+	errSenha := bcrypt.CompareHashAndPassword(hash, []byte(pass))
+	<-a.vagasBcrypt
+	if errSenha != nil || err != nil {
+		a.limLoginIP.somar(ip, agora)
+		if contaNome {
+			a.limLoginNome.somar(name, agora)
+			a.limLoginPar.somar(par, agora)
+		}
 		render(w, http.StatusUnauthorized, "login", loginData{next, "usuário ou senha incorretos"})
 		return
 	}
@@ -754,7 +809,7 @@ func corta(s string) [2]string {
 
 type docPage struct {
 	Name, Label, Body, Me string
-	Admin                 bool
+	Admin, Moderar        bool // Moderar: admin vendo documento de /publico
 	Exists, Owner, Public bool
 	NotFound              bool
 	Users, Groups         []string
@@ -788,7 +843,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 			serverError(w, err)
 			return
 		}
-		mostrar("doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Admin: u.Admin, Exists: body != ""})
+		mostrar("doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Admin: u.Admin, Moderar: u.Admin, Exists: body != ""})
 		return
 	}
 	exists, allowed, owner, public, err := a.access(name, u.ID)
@@ -844,9 +899,35 @@ func (a *app) save(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxDoc))
+	// freia e confere a sessão antes de ler o corpo: sem isso qualquer um faz o servidor guardar 2 MB por pedido
+	limiteCorpo, grande := int64(maxDoc), "documento grande demais"
+	if isPublico(name) {
+		if !a.limPublico.permite(clientIP(r), time.Now()) {
+			http.Error(w, "gravações demais, tente de novo mais tarde", http.StatusTooManyRequests)
+			return
+		}
+		limiteCorpo, grande = maxPublicoDoc, "documento da área pública passa de 256 KB"
+	} else {
+		_, logged, err := a.currentUser(w, r)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		if !logged {
+			http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
+			return
+		}
+	}
+	// aqui e não no servidor: um prazo global cortaria as esperas longas do MCP
+	http.NewResponseController(w).SetReadDeadline(time.Now().Add(30 * time.Second))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limiteCorpo))
 	if err != nil {
-		http.Error(w, "documento grande demais", http.StatusRequestEntityTooLarge)
+		var demais *http.MaxBytesError
+		if errors.As(err, &demais) {
+			http.Error(w, grande, http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "o documento demorou demais para chegar", http.StatusRequestTimeout)
+		}
 		return
 	}
 	a.writeMu.Lock()
@@ -855,6 +936,7 @@ func (a *app) save(w http.ResponseWriter, r *http.Request) {
 		a.savePublico(w, name, body)
 		return
 	}
+	// de novo: a sessão pode ter caído enquanto o corpo chegava
 	u, logged, err := a.currentUser(w, r)
 	if err != nil {
 		serverError(w, err)
@@ -953,6 +1035,10 @@ func (a *app) del(w http.ResponseWriter, r *http.Request, u user) {
 	}
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
+	if isPublico(name) {
+		a.apagarPublico(w, r, name, u)
+		return
+	}
 	if !a.mustOwn(w, name, u) {
 		return
 	}
@@ -971,8 +1057,11 @@ func (a *app) del(w http.ResponseWriter, r *http.Request, u user) {
 
 const publico = "publico"
 
-// teto de documentos + pastas em /publico; var para o teste poder baixar
-var maxPublicoItems = 50000
+// tetos de /publico, em itens (documentos + pastas) e em bytes; var para o teste poder baixar
+var (
+	maxPublicoItems       = 50000
+	maxPublicoBytes int64 = 1 << 30
+)
 
 func isPublico(name string) bool { return name == publico || strings.HasPrefix(name, publico+"/") }
 
@@ -980,18 +1069,10 @@ func isPublico(name string) bool { return name == publico || strings.HasPrefix(n
 func validUserName(s string) bool { return validUser.MatchString(s) && s != publico }
 
 func (a *app) savePublico(w http.ResponseWriter, name string, body []byte) {
-	if len(body) > maxPublicoDoc {
-		http.Error(w, "documento da área pública passa de 256 KB", http.StatusRequestEntityTooLarge)
-		return
-	}
 	if a.liveConflict(w, name) {
 		return
 	}
-	if err := a.roomPublico(name); err != nil {
-		serverError(w, err)
-		return
-	}
-	if err := a.writeDoc(name, body); err != nil {
+	if err := a.gravarPublico(name, body); err != nil {
 		serverError(w, err)
 		return
 	}
@@ -999,45 +1080,114 @@ func (a *app) savePublico(w http.ResponseWriter, name string, body []byte) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// roomPublico (com writeMu) abre espaço antes de criar documento novo na área
-// cheia, apagando os editados há mais tempo.
-func (a *app) roomPublico(name string) error {
-	if _, err := os.Stat(a.docPath(name)); errors.Is(err, os.ErrNotExist) {
-		for countEntries(filepath.Join(a.docsDir, publico)) >= maxPublicoItems {
-			if err := a.evictOldest(); err != nil {
-				return err
-			}
+// gravarPublico (com writeMu) abre espaço, grava e mantém os totais em dia: percorrer a pasta a cada documento novo
+// deixaria todo mundo esperando o writeMu.
+func (a *app) gravarPublico(name string, body []byte) error {
+	if !a.pubMedido {
+		a.pubItens, a.pubBytes = countEntries(filepath.Join(a.docsDir, publico))
+		a.pubMedido = true
+	}
+	if err := a.roomPublico(name, int64(len(body))); err != nil {
+		return err
+	}
+	path := a.docPath(name)
+	antes, existia := tamanhoDe(path)
+	pastas := pastasFaltando(filepath.Dir(path), filepath.Join(a.docsDir, publico))
+	if err := a.writeDoc(name, body); err != nil {
+		a.pubMedido = false // as pastas podem ter ficado: a próxima gravação mede de novo
+		return err
+	}
+	if name == publico { // o arquivo fica ao lado da pasta, fora dos totais
+		return nil
+	}
+	if !existia {
+		a.pubItens += 1 + pastas
+	}
+	a.pubBytes += int64(len(body)) - antes
+	return nil
+}
+
+func tamanhoDe(path string) (int64, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, false
+	}
+	return info.Size(), true
+}
+
+// pastasFaltando conta as pastas que o MkdirAll vai criar entre root (que não conta) e dir.
+func pastasFaltando(dir, root string) (n int) {
+	for ; strings.HasPrefix(dir, root+string(filepath.Separator)); dir = filepath.Dir(dir) {
+		if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+			return n
 		}
+		n++
+	}
+	return n
+}
+
+// roomPublico (com writeMu) abre espaço antes de gravar size bytes em name: passando de um
+// teto, apaga de uma vez os editados há mais tempo, até 1% abaixo dele, para a próxima gravação
+// não percorrer a pasta de novo. Abertos na edição ao vivo e o próprio name ficam.
+func (a *app) roomPublico(name string, size int64) error {
+	path := a.docPath(name)
+	antes, existia := tamanhoDe(path)
+	if name == publico {
+		antes, existia = 0, true // fora dos totais: não abre espaço por ele
+		size = 0
+	}
+	estoura := func() bool {
+		return !existia && a.pubItens >= maxPublicoItems || a.pubBytes-antes+size > maxPublicoBytes
+	}
+	if !estoura() {
+		return nil
+	}
+	type candidato struct {
+		path string
+		em   time.Time
+		size int64
+	}
+	var cs []candidato
+	root := filepath.Join(a.docsDir, publico)
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || p == path {
+			return nil
+		}
+		if info, err := d.Info(); err == nil && !a.hub.connected(docOf(a.docsDir, p)) {
+			cs = append(cs, candidato{p, info.ModTime(), info.Size()})
+		}
+		return nil
+	})
+	slices.SortFunc(cs, func(x, y candidato) int { return x.em.Compare(y.em) })
+	alvoItens, alvoBytes := maxPublicoItems-maxPublicoItems/100, maxPublicoBytes-maxPublicoBytes/100
+	for _, c := range cs {
+		if !estoura() && a.pubItens < alvoItens && a.pubBytes-antes+size <= alvoBytes {
+			break
+		}
+		if err := a.removerPublico(c.path, c.size); err != nil {
+			return err
+		}
+	}
+	if estoura() {
+		return errors.New("área pública cheia sem nenhum documento para apagar")
 	}
 	return nil
 }
 
-// evictOldest (com writeMu) apaga o documento público editado há mais tempo,
-// fora os abertos na edição ao vivo, e as pastas que ficarem vazias.
-func (a *app) evictOldest() error {
-	root := filepath.Join(a.docsDir, publico)
-	var oldest string
-	var oldestAt time.Time
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		if info, err := d.Info(); err == nil && (oldest == "" || info.ModTime().Before(oldestAt)) && !a.hub.connected(docOf(a.docsDir, p)) {
-			oldest, oldestAt = p, info.ModTime()
-		}
-		return nil
-	})
-	if oldest == "" {
-		return errors.New("área pública cheia sem nenhum documento para apagar")
-	}
-	if err := os.Remove(oldest); err != nil {
+// removerPublico (com writeMu) apaga o arquivo e as pastas que ficarem vazias, e tira dos totais.
+func (a *app) removerPublico(path string, size int64) error {
+	if err := os.Remove(path); err != nil {
 		return err
 	}
-	a.hub.forget(docOf(a.docsDir, oldest))
-	for dir := filepath.Dir(oldest); dir != root; dir = filepath.Dir(dir) {
+	a.pubItens--
+	a.pubBytes -= size
+	a.hub.forget(docOf(a.docsDir, path))
+	root := filepath.Join(a.docsDir, publico)
+	for dir := filepath.Dir(path); strings.HasPrefix(dir, root+string(filepath.Separator)); dir = filepath.Dir(dir) {
 		if os.Remove(dir) != nil {
 			break // pasta ainda tem conteúdo
 		}
+		a.pubItens--
 	}
 	return nil
 }
@@ -1048,15 +1198,18 @@ func docOf(docsDir, path string) string {
 	return filepath.ToSlash(strings.TrimSuffix(rel, ".txt"))
 }
 
-// shortcut: percorre a pasta a cada documento público novo; se a área crescer muito, guardar o total no SQLite
-func countEntries(dir string) (n int) {
-	filepath.WalkDir(dir, func(p string, _ fs.DirEntry, err error) error {
+// countEntries devolve os itens abaixo de dir e os bytes dos arquivos.
+func countEntries(dir string) (n int, bytes int64) {
+	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err == nil && p != dir {
 			n++
+			if info, err := d.Info(); err == nil && !d.IsDir() {
+				bytes += info.Size()
+			}
 		}
 		return nil
 	})
-	return n
+	return n, bytes
 }
 
 func (a *app) setPublic(w http.ResponseWriter, r *http.Request, u user) {
@@ -1073,6 +1226,35 @@ func (a *app) setPublic(w http.ResponseWriter, r *http.Request, u user) {
 	}
 	a.hub.recheck(name)
 	http.Redirect(w, r, "/"+name, http.StatusSeeOther)
+}
+
+// apagarPublico (com writeMu) é a moderação de /publico: a área não tem dono, então quem apaga é o admin.
+func (a *app) apagarPublico(w http.ResponseWriter, r *http.Request, name string, u user) {
+	if !u.Admin {
+		fail(w, http.StatusForbidden, "só administradores apagam documentos da área pública")
+		return
+	}
+	a.hub.kill(name, "documento apagado")
+	path := a.docPath(name)
+	size, existe := tamanhoDe(path)
+	switch {
+	case !existe:
+	case name == publico:
+		if err := os.Remove(path); err != nil {
+			serverError(w, err)
+			return
+		}
+	default:
+		if !a.pubMedido {
+			a.pubItens, a.pubBytes = countEntries(filepath.Join(a.docsDir, publico))
+			a.pubMedido = true
+		}
+		if err := a.removerPublico(path, size); err != nil {
+			serverError(w, err)
+			return
+		}
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (a *app) mustOwn(w http.ResponseWriter, name string, u user) bool {

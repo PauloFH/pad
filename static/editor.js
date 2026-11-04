@@ -219,6 +219,8 @@
         fim.hidden = false;
         return;
       }
+      // 1009: a mensagem passou do limite. Reenviar a mesma op cairia de novo, para sempre; o próximo init a descarta
+      if (e.code === 1009) resetNext = 'texto grande demais para este documento';
       say('reconectando…');
       setTimeout(connect, delay);
       delay = Math.min(delay * 2, 10000);

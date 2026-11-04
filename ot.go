@@ -12,6 +12,9 @@ import (
 // posições e comprimentos são em unidades UTF-16, as mesmas do
 // textarea.selectionStart no navegador.
 
+// maxComp é o maior retain ou delete aceito: bem acima de qualquer documento, longe de estourar as somas de comprimento.
+const maxComp = 1 << 31
+
 // Comp é um componente da operação: exatamente um campo preenchido.
 type Comp struct {
 	Retain, Delete int
@@ -61,6 +64,8 @@ func (c *Comp) UnmarshalJSON(b []byte) error {
 		return errors.New("componente deve ser inteiro ou string")
 	}
 	switch {
+	case n > maxComp || n < -maxComp:
+		return errors.New("componente fora do limite")
 	case n > 0:
 		*c = Comp{Retain: n}
 	case n < 0:
@@ -115,6 +120,39 @@ func loneSurrogate(raw []byte) bool {
 	return false
 }
 
+// maxCompsOp é folga para qualquer edição real: o editor manda poucos componentes por op.
+const maxCompsOp = 10000
+
+// UnmarshalJSON para de crescer em maxCompsOp: decodificar tudo para só depois recusar já
+// teria gastado a memória (um componente na mensagem custa 2 bytes, e na memória, 32).
+func (o *Op) UnmarshalJSON(b []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if tok == nil {
+		*o = nil
+		return nil
+	}
+	if tok != json.Delim('[') {
+		return errors.New("operação deve ser uma lista")
+	}
+	out := Op{}
+	for dec.More() {
+		if len(out) == maxCompsOp {
+			return errors.New("operação com componentes demais")
+		}
+		var c Comp
+		if err := dec.Decode(&c); err != nil {
+			return err
+		}
+		out = append(out, c)
+	}
+	*o = out
+	return nil
+}
+
 // BaseLen é o comprimento do documento sobre o qual a operação vale.
 func (o Op) BaseLen() (n int) {
 	for _, c := range o {
@@ -134,15 +172,24 @@ func (o Op) TargetLen() (n int) {
 // Apply aplica a operação. Recusa tamanho errado e fronteira de componente
 // entre as duas metades de um par substituto: o texto sairia corrompido.
 func (o Op) Apply(doc []uint16) ([]uint16, error) {
-	if o.BaseLen() != len(doc) {
-		return nil, fmt.Errorf("operação para %d unidades, documento tem %d", o.BaseLen(), len(doc))
+	// componente a componente, sem somar antes: a soma de valores enormes daria a volta e passaria por um tamanho certo
+	base := 0
+	for _, c := range o {
+		if c.Retain < 0 || c.Delete < 0 {
+			return nil, errors.New("componente negativo")
+		}
+		if c.Retain > len(doc)-base || c.Delete > len(doc)-base-c.Retain {
+			return nil, fmt.Errorf("operação passa do documento de %d unidades", len(doc))
+		}
+		base += c.Retain + c.Delete
+	}
+	if base != len(doc) {
+		return nil, fmt.Errorf("operação para %d unidades, documento tem %d", base, len(doc))
 	}
 	out := make([]uint16, 0, o.TargetLen())
 	pos := 0
 	for _, c := range o {
 		switch {
-		case c.Retain < 0 || c.Delete < 0:
-			return nil, errors.New("componente negativo")
 		case c.isInsert():
 			out = append(out, utf16Of(c.Insert)...)
 			continue

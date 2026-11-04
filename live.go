@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -53,6 +54,8 @@ type peer struct {
 	lock, idle                     bool
 	selSince, active               time.Time
 	send                           chan []byte
+	filaBytes                      atomic.Int64 // bytes em send: 256 mensagens podem ser 256 documentos inteiros
+	teto                           int64        // de filaBytes; passando disso a aba é tratada como lenta
 	// usados pelo ws.go: quem conectou (para reconferir o acesso) e o pedido de fechamento
 	u      user
 	logged bool
@@ -63,18 +66,19 @@ type peer struct {
 // Os métodos não travam d.mu: quem chama segura o lock, para juntar a
 // mudança e o envio às abas numa ordem só.
 type liveDoc struct {
-	mu      sync.Mutex
-	name    string
-	publico bool
-	max     int
-	text    []uint16
-	rev     int
-	log     []Op // log[i] levou o documento à revisão rev-len(log)+i+1
-	peers   map[*peer]bool
-	colors  map[string]string // key -> cor
-	aliases map[string]string // key -> apelido opaco ("k1"...) mostrado às abas
-	seqs    map[string]int    // cid -> última seq aplicada; sobrevive à saída da aba
-	dirty   bool
+	mu       sync.Mutex
+	name     string
+	publico  bool
+	max      int
+	text     []uint16
+	rev      int
+	log      []Op // log[i] levou o documento à revisão rev-len(log)+i+1
+	logCusto int  // memória aproximada do log, com teto em aplicar
+	peers    map[*peer]bool
+	colors   map[string]string // key -> cor
+	aliases  map[string]string // key -> apelido opaco ("k1"...) mostrado às abas
+	seqs     map[string]int    // cid -> última seq aplicada; sobrevive à saída da aba
+	dirty    bool
 	// usados pelo hub (hub.go): refs e dropT sob hub.mu; flushT e peersT sob mu
 	refs                  int
 	dropT, flushT, peersT *time.Timer
@@ -206,9 +210,7 @@ func (d *liveDoc) aplicar(from *peer, rev int, op Op, sel ...*int) (Op, error) {
 	}
 	d.text = text
 	d.rev++
-	if d.log = append(d.log, op); len(d.log) > logMax {
-		d.log = d.log[len(d.log)-logMax:]
-	}
+	d.guardarNoLog(op)
 	d.dirty = true
 	// from também anda, para o place comparar a seleção antiga e a nova no mesmo texto
 	for q := range d.peers {
@@ -227,6 +229,26 @@ func (d *liveDoc) aplicar(from *peer, rev int, op Op, sel ...*int) (Op, error) {
 		op = Op{} // a transformada some quando os dois apagam o mesmo trecho: [] no JSON, não null
 	}
 	return op, nil
+}
+
+// guardarNoLog limita o log por quantidade e por memória (o dobro do documento); a
+// última op sempre fica. Quem ficar para trás recebe um init novo, como no logMax.
+func (d *liveDoc) guardarNoLog(op Op) {
+	d.log, d.logCusto = append(d.log, op), d.logCusto+custoOp(op)
+	for len(d.log) > 1 && (len(d.log) > logMax || d.logCusto > 2*d.max) {
+		d.logCusto -= custoOp(d.log[0])
+		d.log[0] = nil // senão o array por baixo da fatia segura o texto
+		d.log = d.log[1:]
+	}
+}
+
+// custoOp é o tamanho do Comp na memória mais o texto inserido.
+func custoOp(op Op) int {
+	n := len(op) * 32 // tamanho de um Comp em 64 bits
+	for _, c := range op {
+		n += len(c.Insert)
+	}
+	return n
 }
 
 func (d *liveDoc) setSel(p *peer, rev, a, h int, now time.Time) error {

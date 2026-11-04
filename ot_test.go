@@ -2,9 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"math"
 	"math/rand"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -171,5 +174,44 @@ func TestTouchesRange(t *testing.T) {
 		if got := TouchesRange(c.op, 5, 10); got != c.want {
 			t.Errorf("%s: %v", c.name, got)
 		}
+	}
+}
+
+// um componente fora de qualquer tamanho de documento não pode virar operação nem derrubar o Apply.
+func TestOpComponenteForaDoLimite(t *testing.T) {
+	for _, n := range []int{maxComp + 1, -maxComp - 1, math.MaxInt, math.MinInt} {
+		var c Comp
+		if err := c.UnmarshalJSON([]byte(strconv.Itoa(n))); err == nil {
+			t.Errorf("aceitou o componente %d: %+v", n, c)
+		}
+	}
+	for _, o := range []Op{
+		{{Retain: math.MaxInt}, {Retain: math.MaxInt}, {Retain: 2}},
+		{{Retain: math.MaxInt}, {Delete: math.MaxInt}, {Retain: 2}},
+		{{Delete: math.MaxInt}, {Delete: math.MaxInt}, {Delete: 2}},
+	} {
+		if _, err := o.Apply(nil); err == nil {
+			t.Errorf("Apply(%+v) sem erro", o)
+		}
+	}
+}
+
+func TestOpComponentesDemais(t *testing.T) {
+	limite := "[" + strings.TrimSuffix(strings.Repeat("1,", maxCompsOp), ",") + "]"
+	var o Op
+	if err := json.Unmarshal([]byte(limite), &o); err != nil || len(o) != maxCompsOp {
+		t.Fatalf("no limite: %d, %v", len(o), err)
+	}
+	if err := json.Unmarshal([]byte("[1,"+limite[1:]), &o); err == nil {
+		t.Fatal("aceitou componentes demais")
+	}
+	for _, bad := range []string{`{}`, `1`, `"x"`} {
+		if err := json.Unmarshal([]byte(bad), &o); err == nil {
+			t.Errorf("aceitou %s", bad)
+		}
+	}
+	o = Op{{Retain: 1}}
+	if err := json.Unmarshal([]byte(`null`), &o); err != nil || o != nil {
+		t.Errorf("null: %v, %v", o, err)
 	}
 }
