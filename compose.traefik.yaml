@@ -1,5 +1,5 @@
 # deploy na vpsarm, atrás do Traefik da stack pathoplay:
-#   docker compose -f compose.yaml -f compose.traefik.yaml up -d --build
+#   sh deploy.sh   (é o que o CI roda; faz o backup antes de subir)
 services:
   pad:
     ports: !reset []

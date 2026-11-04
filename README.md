@@ -68,7 +68,7 @@ pad.seudominio.com {
 
 O proxy precisa definir o `X-Real-Ip` com o IP real do cliente, sobrescrevendo o que vier de fora: os limites por IP (login, conexões e gravações em `/publico`) confiam nesse cabeçalho. O Traefik já faz isso por padrão, desde que o entrypoint não confie em cabeçalhos de qualquer origem (`forwardedHeaders.insecure`).
 
-Limites contra abuso: 10 senhas erradas por IP em 5 minutos e 20 por conta em 15 minutos (a conta cheia só barra os IPs que já erraram nela, para ninguém deixar o dono de fora), 60 conexões novas por minuto e 20 simultâneas por IP, e 120 gravações por minuto em `/publico`. O `compose.yaml` limita o contêiner a 1 GB de memória; ajuste `mem_limit` ao tamanho da sua VPS.
+Limites contra abuso: 10 senhas erradas por IP em 5 minutos e 20 por conta em 15 minutos (a conta cheia só barra os IPs que já erraram 3 vezes nela, para ninguém deixar o dono de fora), 60 conexões novas por minuto e 20 simultâneas por IP, e 120 gravações por minuto em `/publico`. O `compose.yaml` limita o contêiner a 1 GB de memória; ajuste `mem_limit` ao tamanho da sua VPS.
 
 ## Administrar
 
@@ -87,12 +87,23 @@ docker compose exec pad /pad <comando>
 
 ## Backup
 
-Na vpsarm os dados ficam em `/srv/pad` (fora dos volumes do Docker, para nenhuma limpeza alcançá-los). Pare o serviço antes, para o SQLite não ser copiado no meio de uma escrita:
+Na vpsarm os dados ficam em `/srv/pad` (fora dos volumes do Docker, para nenhuma limpeza alcançá-los). Cada deploy (`deploy.sh`) para o serviço, grava `~/pad-backups/pad-<data>.tgz` sem a área `/publico` e guarda os 7 últimos; a saída fica em `~/pad-deploy.log`. Se o backup falhar ou vier sem o banco, a versão atual volta ao ar e o deploy para. Os arquivos têm os documentos privados e os hashes de senha: guarde uma cópia fora da VPS, com o mesmo cuidado.
+
+Para um backup fora do deploy, pare o serviço antes, para o SQLite não ser copiado no meio de uma escrita:
 
 ```sh
 docker compose -f compose.yaml -f compose.traefik.yaml stop
 sudo tar czf pad-backup.tgz -C /srv/pad .
 docker compose -f compose.yaml -f compose.traefik.yaml start
+```
+
+Para restaurar, com o serviço parado, extraia numa pasta vazia: extrair por cima deixaria documentos criados depois do backup e um `pad.db-wal` que não combina com o banco. O backup não traz o `/publico`; devolva a pasta antiga se quiser mantê-lo.
+
+```sh
+sudo mv /srv/pad /srv/pad.antes
+sudo mkdir /srv/pad
+sudo tar xzf ~/pad-backups/pad-<data>.tgz -C /srv/pad
+sudo mv /srv/pad.antes/docs/publico /srv/pad/docs/ # opcional
 ```
 
 ## Desenvolver

@@ -218,7 +218,7 @@ func openApp(dataDir string) (*app, error) {
 	}
 	a := &app{db: db, docsDir: docsDir, visitorKey: key, mcp: newMcpState(),
 		limWS: novoLimite(60, time.Minute), limPublico: novoLimite(120, time.Minute),
-		limLoginIP: novoLimite(10, 5*time.Minute), limLoginNome: novoLimite(20, 15*time.Minute), limLoginPar: novoLimite(1, 15*time.Minute),
+		limLoginIP: novoLimite(10, 5*time.Minute), limLoginNome: novoLimite(20, 15*time.Minute), limLoginPar: novoLimite(3, 15*time.Minute),
 		vagasBcrypt: make(chan struct{}, max(1, runtime.NumCPU()/2))}
 	a.hub = &hub{a: a, docs: map[string]*liveDoc{}, perIP: map[string]int{}, perDoc: map[string]int{}}
 	return a, nil
@@ -283,7 +283,11 @@ func (a *app) routes() http.Handler {
 	mcp := a.mcpRoutes()
 	return http.NewCrossOriginProtection().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+		// shortcut: sem script-src porque as páginas têm scripts e onsubmit inline; tirá-los antes de restringir
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'")
+		if isHTTPS(r) {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		// /{usuario}/_mcp... fica num mux à parte: o padrão se sobrepõe a /_static/, /_ws/, /_join/ e /_public/ sem ser mais
 		// específico que nenhum, e o ServeMux entra em pânico ao registrar os dois no mesmo mux.
 		if u, resto, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/"); ok && validUser.MatchString(u) &&
@@ -356,19 +360,19 @@ func (a *app) loginPage(w http.ResponseWriter, r *http.Request) {
 	render(w, http.StatusOK, "login", loginData{Next: r.URL.Query().Get("next")})
 }
 
+// prazoLogin limita o corpo lento no login; var para o teste baixar
+var prazoLogin = 30 * time.Second
+
 func (a *app) login(w http.ResponseWriter, r *http.Request) {
 	ip, agora := clientIP(r), time.Now()
-	demais := func(next string) {
-		render(w, http.StatusTooManyRequests, "login", loginData{next, "tentativas demais, espere alguns minutos"})
-	}
-	// antes de ler o formulário, que sem limite pode ter dezenas de MB e não custa nada a quem envia
-	if a.limLoginIP.cheio(ip, agora) {
-		demais("")
-		return
-	}
-	http.NewResponseController(w).SetReadDeadline(time.Now().Add(10 * time.Second))
+	// tamanho e prazo antes de ler: sem isso o formulário pode ter dezenas de MB e não custa nada a quem envia
+	// o prazo cobre também a fila do bcrypt (até 10 s): vencido antes, ele cancelaria o r.Context() de quem só espera a vaga
+	http.NewResponseController(w).SetReadDeadline(time.Now().Add(prazoLogin))
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	name, pass, next := normUser(r.FormValue("name")), r.FormValue("pass"), r.FormValue("next")
+	demais := func() {
+		render(w, http.StatusTooManyRequests, "login", loginData{next, "tentativas demais, espere alguns minutos"})
+	}
 	// nome fora do formato não existe nem vira chave: o mapa não guarda texto arbitrário de quem tenta
 	contaNome := validUser.MatchString(name)
 	par := ip + "|" + name
@@ -377,7 +381,7 @@ func (a *app) login(w http.ResponseWriter, r *http.Request) {
 		return a.limLoginIP.cheio(ip, t) || contaNome && a.limLoginNome.cheio(name, t) && a.limLoginPar.cheio(par, t)
 	}
 	if bloqueado(agora) {
-		demais(next)
+		demais()
 		return
 	}
 	var id int64
@@ -398,7 +402,7 @@ func (a *app) login(w http.ResponseWriter, r *http.Request) {
 	// de novo com a vaga: quem esperou na fila entrou antes de os erros dos outros serem contados
 	if bloqueado(time.Now()) {
 		<-a.vagasBcrypt
-		demais(next)
+		demais()
 		return
 	}
 	errSenha := bcrypt.CompareHashAndPassword(hash, []byte(pass))
