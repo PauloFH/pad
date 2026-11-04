@@ -76,7 +76,7 @@ func TestPainelMCP(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("cadastrar: %d", code)
 	}
-	for _, s := range []string{"pad_", "claude mcp add", "bearer_token_env_var", "Guarde agora", "http://127.0.0.1:", "/ana/_mcp"} {
+	for _, s := range []string{"pad_", "claude mcp add", "bearer_token_env_var", "default_tools_approval_mode = &#34;approve&#34;", "Guarde agora", "http://127.0.0.1:", "/ana/_mcp"} {
 		if !strings.Contains(body, s) {
 			t.Errorf("chave nova sem %q", s)
 		}

@@ -14,7 +14,7 @@ Edição ao vivo: várias pessoas podem abrir o mesmo documento ao mesmo tempo. 
 
 O pad também é um servidor MCP: agentes Claude Code e Codex conversam entre si por conversas (um agente "pai" cria uma por task, os "filhos" respondem) e leem e editam os seus documentos. Você acompanha e participa pelo navegador.
 
-Abra **mcp** (`/<usuário>/_mcp`), dê um nome à máquina (por exemplo `notebook`) e copie a chave `pad_...`, que só aparece uma vez. Na máquina, rode uma destas linhas:
+Abra **mcp** (`/<usuário>/_mcp`), dê um nome à máquina (por exemplo `notebook`) e copie a chave `pad_...`, que só aparece uma vez. Na máquina, use uma destas configurações:
 
 ```sh
 # Claude Code
@@ -26,10 +26,11 @@ claude mcp add --scope user --transport http pad https://pad.seudominio.com/<usu
 [mcp_servers.pad]
 url = "https://pad.seudominio.com/<usuário>/_mcp"
 bearer_token_env_var = "PAD_MCP_CHAVE"
+default_tools_approval_mode = "approve"
 # e no shell: export PAD_MCP_CHAVE=<chave>
 ```
 
-O painel mostra esses comandos já preenchidos, uma única vez, junto com a chave. Para cortar o acesso de uma máquina, use **Revogar** na mesma página. O Codex pede aprovação a cada ferramenta; para dispensar, acrescente `default_tools_approval_mode = "approve"` ao bloco.
+O painel mostra esses comandos já preenchidos, uma única vez, junto com a chave. Para cortar o acesso de uma máquina, use **Revogar** na mesma página. A linha `default_tools_approval_mode = "approve"` deixa o agente usar as ferramentas do pad sem pedir aprovação; sem ela, o Codex pergunta a cada chamada. O `export PAD_MCP_CHAVE=<chave>` é obrigatório, no shell em que o `codex` roda: sem ele o Codex não envia a chave.
 
 - O pai chama `apresentar` como `pai` e `criar_conversa` com a task na primeira mensagem.
 - O filho se apresenta com o nome da conversa, lê a task com `ler` e manda dúvidas e resultados com `enviar`.

@@ -157,7 +157,7 @@ func comandos(r *http.Request, usuario, nome, chave string) *novaChave {
 		Nome:   nome,
 		Chave:  chave,
 		Claude: `claude mcp add --scope user --transport http pad ` + base + ` --header "Authorization: Bearer ` + chave + `"`,
-		Codex: "# ~/.codex/config.toml\n[mcp_servers.pad]\nurl = \"" + base + "\"\nbearer_token_env_var = \"PAD_MCP_CHAVE\"\n" +
+		Codex: "# ~/.codex/config.toml\n[mcp_servers.pad]\nurl = \"" + base + "\"\nbearer_token_env_var = \"PAD_MCP_CHAVE\"\ndefault_tools_approval_mode = \"approve\"\n" +
 			"# e no shell: export PAD_MCP_CHAVE=" + chave,
 	}
 }
