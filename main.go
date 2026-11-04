@@ -148,6 +148,7 @@ func main() {
 		return
 	}
 	srv := &http.Server{Addr: env("PAD_ADDR", ":8080"), Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
+	srv.RegisterOnShutdown(a.mcp.encerrar) // senão o Shutdown espera os esperar de até 50 s
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
 	go func() {
@@ -263,6 +264,8 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_share/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_unshare/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_delete/{name...}", a.auth(a.del))
+	mux.HandleFunc("POST /_mcp", a.mcpRPC)
+	mux.HandleFunc("DELETE /_mcp", a.mcpFim)
 	return http.NewCrossOriginProtection().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")

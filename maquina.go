@@ -31,7 +31,7 @@ func curto(s string) (string, bool) {
 func (a *app) criarMaquina(uid int64, nome string) (string, error) {
 	nome, ok := curto(nome)
 	if !ok {
-		return "", errors.New("nome inválido (use minúsculas, números, - e _)")
+		return "", errNomeInvalido
 	}
 	chave := "pad_" + rand.Text()
 	hash := sha256.Sum256([]byte(chave))
@@ -79,8 +79,14 @@ func (a *app) listarMaquinas(uid int64) ([]maquina, error) {
 }
 
 func (a *app) revogarMaquina(uid, id int64) error {
-	_, err := a.db.Exec(`DELETE FROM mcp_maquinas WHERE id = ? AND user_id = ?`, id, uid)
-	return err
+	res, err := a.db.Exec(`DELETE FROM mcp_maquinas WHERE id = ? AND user_id = ?`, id, uid)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		a.mcp.derrubar(id) // os agentes da máquina caem na hora, inclusive um esperar em curso
+	}
+	return nil
 }
 
 // marcarVista grava no máximo uma vez por minuto, para não escrever a cada chamada.

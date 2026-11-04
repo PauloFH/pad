@@ -35,10 +35,15 @@ var (
 // mcpState é o que o MCP mantém em memória entre chamadas.
 type mcpState struct {
 	mu       sync.Mutex
-	novidade chan struct{} // fecha quando chega mensagem nova
+	novidade chan struct{}      // fecha quando chega mensagem nova
+	sessoes  map[string]*sessao // por id
+	fim      chan struct{}      // fecha no desligamento do servidor, para nenhum esperar segurá-lo
+	fimOnce  sync.Once
 }
 
-func newMcpState() *mcpState { return &mcpState{novidade: make(chan struct{})} }
+func newMcpState() *mcpState {
+	return &mcpState{novidade: make(chan struct{}), sessoes: map[string]*sessao{}, fim: make(chan struct{})}
+}
 
 // sinal deve ser pego antes de consultar o banco: assim uma mensagem que chega
 // entre a consulta e a espera ainda acorda quem espera.
