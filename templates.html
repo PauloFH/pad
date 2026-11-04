@@ -345,6 +345,7 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 <header class="topo">{{template "moldura-topo" .}}{{template "caminho" .Label}}{{if .Public}}<span class="selo">público</span>{{end}}<span class="sp"></span>
 {{template "peers"}}
 {{template "compartilhar" .}}
+{{if .Moderar}}<form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} da área pública?')"><button class="btn perigo">Apagar</button></form>{{end}}
 {{template "conta" .}}
 </header>
 <div class="meio">{{template "coluna" .}}<div class="centro">{{template "abas" .}}

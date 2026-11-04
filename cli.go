@@ -15,7 +15,7 @@ import (
 const usage = `uso:
   pad                      inicia o servidor
   pad useradd NOME         cria usuário (senha pelo stdin)
-  pad passwd NOME          troca a senha (senha pelo stdin) e encerra as sessões
+  pad passwd NOME          troca a senha (senha pelo stdin), encerra as sessões e revoga as chaves de máquina
   pad userdel NOME         apaga usuário (falha se ele ainda for dono de documentos)
   pad admin NOME           torna o usuário administrador (pode gerar convites em /_convite)
   pad groupadd GRUPO       cria grupo
@@ -45,8 +45,16 @@ func runCLI(db *sql.DB, args []string, stdin io.Reader) error {
 		if err := exec1(db, `UPDATE users SET hash = ? WHERE name = ?`, hash, a[0]); err != nil {
 			return err
 		}
-		_, err = db.Exec(`DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE name = ?)`, a[0])
-		return err
+		// troca de senha é a resposta a uma conta invadida: quem entrou pode ter criado uma chave de máquina
+		for _, q := range []string{
+			`DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE name = ?)`,
+			`DELETE FROM mcp_maquinas WHERE user_id = (SELECT id FROM users WHERE name = ?)`,
+		} {
+			if _, err := db.Exec(q, a[0]); err != nil {
+				return err
+			}
+		}
+		return nil
 	case "userdel":
 		return exec1(db, `DELETE FROM users WHERE name = ?`, a[0])
 	case "admin":

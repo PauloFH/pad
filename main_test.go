@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -10,6 +11,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -160,7 +163,7 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	check(status(anon, "POST", "/publico/1/2/3/4/5", "fundo"), 204, "5 níveis de pasta")
 	check(status(anon, "POST", "/publico/1/2/3/4/5/6", "fundo"), 404, "6 níveis de pasta")
 	check(status(ana, "POST", "/ana/1/2/3/4/5/6", "fundo"), 404, "6 níveis no espaço do usuário")
-	if n := countEntries(filepath.Join(dir, "docs", "publico")); n != 6 { // recado.txt + pastas 1..4 + 4/5.txt
+	if n, _ := countEntries(filepath.Join(dir, "docs", "publico")); n != 6 { // recado.txt + pastas 1..4 + 4/5.txt
 		t.Errorf("itens em /publico = %d, queria 6", n)
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "docs", "publico", "recado.txt")); string(b) != "oi do caio" {
@@ -177,7 +180,7 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "docs", "publico", "1")); !os.IsNotExist(err) {
 		t.Error("o mais antigo (1/2/3/4/5) e suas pastas vazias deviam ter sido apagados")
 	}
-	if n := countEntries(filepath.Join(dir, "docs", "publico")); n != 2 { // recado.txt + novo.txt
+	if n, _ := countEntries(filepath.Join(dir, "docs", "publico")); n != 2 { // recado.txt + novo.txt
 		t.Errorf("itens em /publico depois da limpeza = %d, queria 2", n)
 	}
 	check(status(anon, "POST", "/_delete/publico/recado", ""), 401, "anônimo apaga em /publico")
@@ -435,5 +438,224 @@ func TestAbaSemAcessoSai(t *testing.T) {
 	}
 	if !regexp.MustCompile(`PadShell\.abas\.fechar\("ana",\s*"bia\\?/fora"\)`).Match(b) {
 		t.Errorf("404 não fecha a aba:\n%s", b)
+	}
+}
+
+// os totais guardados batem com a pasta depois de criar, sobrescrever e apagar; e o teto de bytes abre espaço.
+func TestPublicoTotais(t *testing.T) {
+	a, err := openApp(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(a.docsDir, publico)
+	confere := func(quando string) {
+		t.Helper()
+		if n, b := countEntries(root); n != a.pubItens || b != a.pubBytes {
+			t.Errorf("%s: pasta %d itens %d bytes, totais %d e %d", quando, n, b, a.pubItens, a.pubBytes)
+		}
+	}
+	grava := func(name, body string, at time.Time) {
+		t.Helper()
+		if err := a.gravarPublico(name, []byte(body)); err != nil {
+			t.Fatal(name, err)
+		}
+		os.Chtimes(a.docPath(name), at, at)
+	}
+	agora := time.Now()
+	grava("publico/a/b/c", strings.Repeat("x", 100), agora.Add(-3*time.Hour))
+	confere("criou com pastas")
+	grava("publico/a/b/c", strings.Repeat("x", 40), agora.Add(-3*time.Hour))
+	confere("sobrescreveu")
+	grava("publico/d", strings.Repeat("x", 50), agora.Add(-2*time.Hour))
+	grava("publico/e", strings.Repeat("x", 50), agora.Add(-time.Hour))
+	confere("criou mais")
+
+	old := maxPublicoBytes
+	maxPublicoBytes = 150
+	t.Cleanup(func() { maxPublicoBytes = old })
+	grava("publico/f", strings.Repeat("x", 50), agora) // 190 bytes: sai o mais antigo, a/b/c, e as pastas dele
+	confere("teto de bytes")
+	if _, err := os.Stat(filepath.Join(root, "a")); !os.IsNotExist(err) {
+		t.Error("o mais antigo e as pastas vazias deviam ter saído")
+	}
+	if _, err := os.Stat(filepath.Join(root, "f.txt")); err != nil {
+		t.Error(err)
+	}
+	maxPublicoBytes = 10
+	if err := a.gravarPublico("publico/g", []byte(strings.Repeat("x", 11))); err == nil {
+		t.Error("documento maior que o teto foi gravado")
+	}
+	confere("recusou")
+}
+
+// o login para de testar a senha depois de erros demais, por IP e por conta, mesmo com a senha certa.
+func TestLoginLimite(t *testing.T) {
+	a, srv, _ := wsApp(t)
+	tenta := func(name, pass, ip string) int {
+		t.Helper()
+		req, _ := http.NewRequest("POST", srv.URL+"/_login", strings.NewReader(url.Values{"name": {name}, "pass": {pass}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Real-Ip", ip)
+		c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		res, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	for range a.limLoginIP.max {
+		if st := tenta("ana", "errada-123", "10.3.0.1"); st != 401 {
+			t.Fatalf("senha errada: %d", st)
+		}
+	}
+	if st := tenta("bia", "senha-forte", "10.3.0.1"); st != 429 {
+		t.Fatalf("IP no limite: %d, queria 429", st)
+	}
+	if st := tenta("bia", "senha-forte", "10.3.0.2"); st != 303 {
+		t.Fatalf("outro IP com a senha certa: %d", st)
+	}
+	// de muitos IPs, a conta enche e barra quem já errou nela
+	for i := range a.limLoginNome.max - a.limLoginIP.max {
+		if st := tenta("ana", "errada-123", fmt.Sprintf("10.4.0.%d", i)); st != 401 {
+			t.Fatalf("tentativa %d: %d", i, st)
+		}
+	}
+	if st := tenta("ana", "senha-forte", "10.4.0.0"); st != 429 {
+		t.Fatalf("IP que errou com a conta cheia: %d, queria 429", st)
+	}
+	// o dono, em outro IP, continua entrando: errar a senha dos outros não deixa ninguém de fora
+	if st := tenta("ana", "senha-forte", "10.5.0.1"); st != 303 {
+		t.Fatalf("dono com a conta cheia: %d, queria 303", st)
+	}
+	// IP novo tem uma tentativa só com a conta cheia
+	if st := tenta("ana", "errada-123", "10.5.0.2"); st != 401 {
+		t.Fatalf("primeira de um IP novo: %d", st)
+	}
+	if st := tenta("ana", "senha-forte", "10.5.0.2"); st != 429 {
+		t.Fatalf("segunda de um IP novo: %d, queria 429", st)
+	}
+	// nome que não pode existir não vira chave
+	tenta(strings.Repeat("x", 500), "errada-123", "10.6.0.1")
+	if len(a.limLoginNome.cont) != 1 {
+		t.Fatalf("chaves de nome: %d", len(a.limLoginNome.cont))
+	}
+}
+
+// erros em paralelo não passam muito do limite: a conferência se repete depois da fila do bcrypt.
+func TestLoginConcorrenteRespeitaLimite(t *testing.T) {
+	a, srv, _ := wsApp(t)
+	const pedidos = 60
+	var erradas atomic.Int64
+	var wg sync.WaitGroup
+	for range pedidos {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest("POST", srv.URL+"/_login", strings.NewReader("name=ana&pass=errada-123"))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("X-Real-Ip", "10.7.0.1")
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			res.Body.Close()
+			if res.StatusCode == 401 {
+				erradas.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if got, teto := erradas.Load(), int64(a.limLoginIP.max+cap(a.vagasBcrypt)); got > teto {
+		t.Fatalf("%d senhas testadas, teto %d", got, teto)
+	}
+}
+
+func TestLoginCorpoGrande(t *testing.T) {
+	_, srv, _ := wsApp(t)
+	res, err := http.Post(srv.URL+"/_login", "application/x-www-form-urlencoded", strings.NewReader("name=ana&pass="+strings.Repeat("x", 1<<20)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 401 {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+}
+
+func TestPublicoLimitePorIP(t *testing.T) {
+	a, srv, _ := wsApp(t)
+	a.limPublico = novoLimite(2, time.Minute)
+	for i, want := range []int{204, 204, 429} {
+		if st, _ := postStatus(t, &http.Client{}, srv.URL+"/publico/ritmo", "x"); st != want {
+			t.Fatalf("POST %d: %d, queria %d", i+1, st, want)
+		}
+	}
+}
+
+// trocar a senha corta também as chaves de máquina.
+func TestPasswdRevogaMaquinas(t *testing.T) {
+	a, _, _ := wsApp(t)
+	var uid int64
+	if err := a.db.QueryRow(`SELECT id FROM users WHERE name = 'ana'`).Scan(&uid); err != nil {
+		t.Fatal(err)
+	}
+	chave, err := a.criarMaquina(uid, "notebook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var biaID int64
+	if err := a.db.QueryRow(`SELECT id FROM users WHERE name = 'bia'`).Scan(&biaID); err != nil {
+		t.Fatal(err)
+	}
+	chaveBia, err := a.criarMaquina(biaID, "notebook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(a.db, []string{"passwd", "ana"}, strings.NewReader("outra-senha\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok, err := a.maquinaDaChave(chave); ok || err != nil {
+		t.Fatalf("chave da ana continua valendo: %v, %v", ok, err)
+	}
+	if _, _, ok, err := a.maquinaDaChave(chaveBia); !ok || err != nil {
+		t.Fatalf("chave da bia caiu: %v, %v", ok, err)
+	}
+}
+
+// /publico não tem dono: só admin apaga, a aba aberta cai e os totais acompanham.
+func TestAdminApagaPublico(t *testing.T) {
+	a, srv, login := wsApp(t)
+	if err := runCLI(a.db, []string{"admin", "ana"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	ana, bia, anon := login("ana"), login("bia"), &http.Client{}
+	post(t, anon, srv.URL+"/publico/pasta/ruim", "text/plain", "conteúdo ruim")
+	if !strings.Contains(pagina(t, ana, srv.URL+"/publico/pasta/ruim"), `action="/_delete/publico/pasta/ruim"`) {
+		t.Error("admin não vê o botão de apagar")
+	}
+	if strings.Contains(pagina(t, bia, srv.URL+"/publico/pasta/ruim"), "/_delete/") {
+		t.Error("quem não é admin vê o botão de apagar")
+	}
+	for _, c := range []*http.Client{bia, anon} {
+		if st, _ := postStatus(t, c, srv.URL+"/_delete/publico/pasta/ruim", ""); st != 403 && st != 401 {
+			t.Fatalf("apagou sem ser admin: %d", st)
+		}
+	}
+	aba := dialWS(t, srv, anon, "publico/pasta/ruim", "c1", "")
+	if st, _ := postStatus(t, ana, srv.URL+"/_delete/publico/pasta/ruim", ""); st != 200 {
+		t.Fatalf("admin apaga: %d", st)
+	}
+	if ce := closedWith(t, aba.c); ce.Code != 4000 {
+		t.Fatalf("aba fechou com %v", ce)
+	}
+	if _, err := os.Stat(filepath.Join(a.docsDir, publico, "pasta")); !os.IsNotExist(err) {
+		t.Error("arquivo e pasta deviam ter saído")
+	}
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
+	if n, b := countEntries(filepath.Join(a.docsDir, publico)); n != a.pubItens || b != a.pubBytes {
+		t.Errorf("pasta %d e %d, totais %d e %d", n, b, a.pubItens, a.pubBytes)
 	}
 }

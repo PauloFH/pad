@@ -2,10 +2,13 @@ services:
   pad:
     build: .
     restart: unless-stopped
+    # o teto fica aqui: um abuso derruba só o pad, não o resto da VPS
+    mem_limit: 1g
     # só localhost: o proxy da VPS (Caddy/Nginx/Traefik) faz o HTTPS na frente
     ports: ["127.0.0.1:8080:8080"]
     environment:
       TZ: America/Sao_Paulo
+      GOMEMLIMIT: 900MiB # abaixo do mem_limit: o coletor do Go não conhece o teto do contêiner
     volumes: [pad-data:/data]
 
 volumes:

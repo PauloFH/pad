@@ -1,6 +1,6 @@
 # pad
 
-Bloco de notas estilo dontpad, com login. Cada usuário tem seu espaço: `/paulo/notas`, `/paulo/pessoal/cpf` (até 5 níveis de subpasta, cada uma é um documento à parte, com acesso próprio). Fora dele, a área `/publico/...` é aberta: sem dono e sem login, qualquer um lê e escreve (até 256 KB por documento e 50 mil itens entre documentos e pastas; quando enche, os editados há mais tempo são apagados para abrir espaço). Quem cria vira dono e pode compartilhar com usuários ou grupos (quem recebe pode ler e editar). O dono também pode tornar um documento público: aí o endereço abre sem login, só para leitura. Salva sozinho enquanto você digita.
+Bloco de notas estilo dontpad, com login. Cada usuário tem seu espaço: `/paulo/notas`, `/paulo/pessoal/cpf` (até 5 níveis de subpasta, cada uma é um documento à parte, com acesso próprio). Fora dele, a área `/publico/...` é aberta: sem dono e sem login, qualquer um lê e escreve (até 256 KB por documento, 50 mil itens entre documentos e pastas e 1 GB no total; quando enche, os editados há mais tempo são apagados para abrir espaço; um administrador também apaga qualquer documento da área pela própria página). Quem cria vira dono e pode compartilhar com usuários ou grupos (quem recebe pode ler e editar). O dono também pode tornar um documento público: aí o endereço abre sem login, só para leitura. Salva sozinho enquanto você digita.
 
 Quem abre `/` sem sessão vê a apresentação do pad; com sessão, a lista de documentos.
 
@@ -14,7 +14,7 @@ Edição ao vivo: várias pessoas podem abrir o mesmo documento ao mesmo tempo. 
 
 ## Agentes (MCP)
 
-O pad também é um servidor MCP: agentes Claude Code e Codex conversam entre si por conversas (um agente "pai" cria uma por task, os "filhos" respondem) e leem e editam os seus documentos. Você acompanha e participa pelo navegador.
+O pad também é um servidor MCP: agentes Claude Code e Codex conversam entre si por conversas (um agente "pai" cria uma por task, os "filhos" respondem) e leem e editam os seus documentos, fora da área `/publico`. Você acompanha e participa pelo navegador.
 
 Abra **mcp** (`/<usuário>/_mcp`), dê um nome à máquina (por exemplo `notebook`) e copie a chave `pad_...`, que só aparece uma vez. Na máquina, use uma destas configurações:
 
@@ -32,7 +32,11 @@ default_tools_approval_mode = "approve"
 # e no shell: export PAD_MCP_CHAVE=<chave>
 ```
 
-O painel mostra esses comandos já preenchidos, uma única vez, junto com a chave. Para cortar o acesso de uma máquina, use **Revogar** na mesma página. A linha `default_tools_approval_mode = "approve"` deixa o agente usar as ferramentas do pad sem pedir aprovação; sem ela, o Codex pergunta a cada chamada. O `export PAD_MCP_CHAVE=<chave>` é obrigatório, no shell em que o `codex` roda: sem ele o Codex não envia a chave.
+O painel mostra esses comandos já preenchidos, uma única vez, junto com a chave. Para cortar o acesso de uma máquina, use **Revogar** na mesma página; `pad passwd` revoga todas as chaves da conta. A linha `default_tools_approval_mode = "approve"` deixa o agente usar as ferramentas do pad sem pedir aprovação; sem ela, o Codex pergunta a cada chamada.
+
+O `export PAD_MCP_CHAVE=<chave>` é obrigatório, no shell em que o `codex` roda: sem ele o Codex não envia a chave.
+
+**Injeção de prompt:** os agentes não acessam `/publico`, nem para ler nem para escrever, porque qualquer anônimo escreve ali. Ainda assim, documentos de outras pessoas, e os seus quando compartilhados, chegam ao agente como texto. O pad marca esse texto como dado, mas quem decide o que fazer com ele é o agente, então não mande um agente com aprovação automática ler documentos em que você não confia.
 
 - O pai chama `apresentar` como `pai` e `criar_conversa` com a task na primeira mensagem.
 - O filho se apresenta com o nome da conversa, lê a task com `ler` e manda dúvidas e resultados com `enviar`.
@@ -56,9 +60,15 @@ O serviço escuta só em `127.0.0.1:8080`. Ponha o proxy da VPS na frente para t
 
 ```
 pad.seudominio.com {
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Real-Ip {remote_host}
+    }
 }
 ```
+
+O proxy precisa definir o `X-Real-Ip` com o IP real do cliente, sobrescrevendo o que vier de fora: os limites por IP (login, conexões e gravações em `/publico`) confiam nesse cabeçalho. O Traefik já faz isso por padrão, desde que o entrypoint não confie em cabeçalhos de qualquer origem (`forwardedHeaders.insecure`).
+
+Limites contra abuso: 10 senhas erradas por IP em 5 minutos e 20 por conta em 15 minutos (a conta cheia só barra os IPs que já erraram nela, para ninguém deixar o dono de fora), 60 conexões novas por minuto e 20 simultâneas por IP, e 120 gravações por minuto em `/publico`. O `compose.yaml` limita o contêiner a 1 GB de memória; ajuste `mem_limit` ao tamanho da sua VPS.
 
 ## Administrar
 
@@ -68,7 +78,7 @@ docker compose exec pad /pad <comando>
 
 | comando | o que faz |
 |---|---|
-| `useradd NOME` / `passwd NOME` | cria usuário / troca a senha (e derruba as sessões dele) |
+| `useradd NOME` / `passwd NOME` | cria usuário / troca a senha (e derruba as sessões e as chaves de máquina dele) |
 | `userdel NOME` | apaga usuário; falha se ele ainda for dono de documentos |
 | `admin NOME` | torna o usuário administrador (gera convites) |
 | `groupadd GRUPO` / `groupdel GRUPO` | cria / apaga grupo |

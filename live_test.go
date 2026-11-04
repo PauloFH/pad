@@ -95,6 +95,27 @@ func TestSubmitStale(t *testing.T) {
 	}
 }
 
+// o log não passa de 2x o documento em memória, por maior que seja cada op; quem ficou para trás recebe init.
+func TestLogTetoDeMemoria(t *testing.T) {
+	d := newLiveDoc("publico/x", "")
+	grande := strings.Repeat("x", d.max)
+	for i := range 20 {
+		op := Op{{Delete: len(d.text)}, {Insert: grande}}
+		if i == 0 {
+			op = Op{{Insert: grande}}
+		}
+		if _, err := d.aplicar(nil, d.rev, op); err != nil {
+			t.Fatal(i, err)
+		}
+	}
+	if len(d.log) > 3 || d.logCusto > 2*d.max+int(custoOp(d.log[len(d.log)-1])) {
+		t.Fatalf("log com %d ops e custo %d", len(d.log), d.logCusto)
+	}
+	if _, err := d.aplicar(nil, 0, Op{{Retain: d.max}, {Insert: "y"}}); !errors.Is(err, errStale) {
+		t.Fatalf("revisão fora do log: %v", err)
+	}
+}
+
 func TestSubmitDuplicado(t *testing.T) {
 	d := newLiveDoc("ana/x", "abc")
 	a := novoPeer(d, "1", "u:1", "ana", "Capivara", true)

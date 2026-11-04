@@ -35,7 +35,7 @@ type hub struct {
 	mu      sync.Mutex
 	docs    map[string]*liveDoc
 	perIP   map[string]int // conexões por IP, no servidor todo
-	perDoc  map[string]int // conexões por documento
+	perDoc  map[string]int // conexões por documento: leitores em "nome", editores em "e:nome"
 	closing bool           // SIGTERM: nenhuma aba entra mais
 }
 
@@ -191,26 +191,50 @@ func (h *hub) recheck(name string) {
 	}
 }
 
-// admit reserva a vaga da conexão antes do upgrade; quem recebe true chama release.
-func (h *hub) admit(ip, name string) bool {
+// admit reserva a vaga do IP antes de qualquer consulta; quem recebe true chama release.
+func (h *hub) admit(ip string) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.perIP[ip] >= maxConnsPerIP || h.perDoc[name] >= maxPeersPerDoc {
+	if h.perIP[ip] >= maxConnsPerIP {
 		return false
 	}
 	h.perIP[ip]++
-	h.perDoc[name]++
 	return true
 }
 
-func (h *hub) release(ip, name string) {
+func (h *hub) release(ip string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.perIP[ip]--; h.perIP[ip] == 0 {
 		delete(h.perIP, ip)
 	}
-	if h.perDoc[name]--; h.perDoc[name] == 0 {
-		delete(h.perDoc, name)
+}
+
+// vagaDoc é a chave da vaga no documento. Leitores e editores contam à parte: sem
+// isso, leitores anônimos de um documento público tirariam a vaga do próprio dono.
+func vagaDoc(name string, canEdit bool) string {
+	if canEdit {
+		return "e:" + name // ":" não aparece em nome de documento
+	}
+	return name
+}
+
+// admitDoc reserva a vaga no documento, já sabendo se a aba edita; quem recebe true chama releaseDoc.
+func (h *hub) admitDoc(vaga string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.perDoc[vaga] >= maxPeersPerDoc {
+		return false
+	}
+	h.perDoc[vaga]++
+	return true
+}
+
+func (h *hub) releaseDoc(vaga string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.perDoc[vaga]--; h.perDoc[vaga] == 0 {
+		delete(h.perDoc, vaga)
 	}
 }
 
@@ -269,10 +293,7 @@ func (h *hub) flush(d *liveDoc) error {
 
 func (h *hub) persist(name, body string) error {
 	if isPublico(name) {
-		if err := h.a.roomPublico(name); err != nil {
-			return err
-		}
-		return h.a.writeDoc(name, []byte(body))
+		return h.a.gravarPublico(name, []byte(body))
 	}
 	res, err := h.a.db.Exec(`UPDATE docs SET updated = ? WHERE name = ?`, time.Now().Unix(), name)
 	if err != nil {
@@ -358,14 +379,20 @@ func (d *liveDoc) enqueue(p *peer, b []byte) {
 	if !d.peers[p] {
 		return
 	}
-	select {
-	case p.send <- b:
-	default:
-		// aba que não dá conta de ler: sai do documento e o escritor derruba a conexão
-		d.remove(p)
-		close(p.send)
-		d.peersSoon()
+	// a fila vazia aceita qualquer mensagem: um init grande não pode derrubar quem acabou de entrar
+	cabe := p.teto == 0 || p.filaBytes.Load() == 0 || p.filaBytes.Load()+int64(len(b)) <= p.teto
+	if cabe {
+		select {
+		case p.send <- b:
+			p.filaBytes.Add(int64(len(b)))
+			return
+		default:
+		}
 	}
+	// aba que não dá conta de ler: sai do documento e o escritor derruba a conexão
+	d.remove(p)
+	close(p.send)
+	d.peersSoon()
 }
 
 // kick (com d.mu) tira a aba do documento, para nenhuma op dela valer mais,

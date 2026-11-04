@@ -177,6 +177,19 @@ test('reject, reconexão e fechamento 4000', () => {
   assert.strictEqual(p.fim.firstChild.textContent, 'acesso removido ');
 });
 
+test('fechamento 1009: o texto grande é descartado e não volta a ser enviado', () => {
+  const p = boot();
+  p.recv({ t: 'init', rev: 1, text: 'olá', me: 'p1', canEdit: true, seq: 0 });
+  p.type('olá, texto grande');
+  assert.strictEqual(p.ops().length, 1);
+  p.drop(1009, 'read limited');
+  p.tick();
+  p.recv({ t: 'init', rev: 1, text: 'olá', me: 'p1', canEdit: true, seq: 0 });
+  assert.strictEqual(p.ops().length, 0, 'não reenvia a op');
+  assert.strictEqual(p.t.value, 'olá');
+  assert.strictEqual(p.st.textContent, 'texto grande demais para este documento');
+});
+
 test('insert alheio na borda não entra na seleção (trava) própria', () => {
   const p = boot();
   p.recv({ t: 'init', rev: 1, text: 'abcdefghijklmno', me: 'p1', canEdit: true, seq: 0 });
