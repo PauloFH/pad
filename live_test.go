@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -496,5 +497,20 @@ func TestPaletaContraste(t *testing.T) {
 	}
 	if len(seen) != 12 {
 		t.Errorf("%d cores distintas, quero 12", len(seen))
+	}
+}
+
+// Os dois apagam o mesmo trecho: a op transformada fica vazia, e sai [] para as abas, não null.
+func TestLiveAplicarOpVazia(t *testing.T) {
+	d := newLiveDoc("ana/x", "ab")
+	if _, err := d.aplicar(nil, 0, Op{{Delete: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	op, err := d.aplicar(nil, 0, Op{{Delete: 2}})
+	if err != nil || op == nil || d.rev != 2 {
+		t.Fatalf("op %#v, rev %d, %v", op, d.rev, err)
+	}
+	if b, _ := json.Marshal(op); string(b) != "[]" {
+		t.Fatalf("JSON %s", b)
 	}
 }

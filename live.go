@@ -223,6 +223,9 @@ func (d *liveDoc) aplicar(from *peer, rev int, op Op, sel ...*int) (Op, error) {
 			q.a, q.h = TransformIndex(q.a, op, true), TransformIndex(q.h, op, true)
 		}
 	}
+	if op == nil {
+		op = Op{} // a transformada some quando os dois apagam o mesmo trecho: [] no JSON, não null
+	}
 	return op, nil
 }
 

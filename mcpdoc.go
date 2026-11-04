@@ -129,38 +129,40 @@ func (a *app) lerDocumento(s *sessao, caminho string) (texto, versao string, err
 	return stringOf(l.texto), l.versao, nil
 }
 
-func (a *app) escreverDocumento(s *sessao, caminho, texto, versao string) (string, error) {
+// escreverDocumento devolve a leitura nova e se outros editaram junto (o texto final não é o enviado).
+func (a *app) escreverDocumento(s *sessao, caminho, texto, versao string) (nova leitura, juntou bool, err error) {
 	nome, ok := caminhoDoc(caminho)
 	if !ok {
-		return "", falha("caminho de documento inválido")
+		return nova, false, falha("caminho de documento inválido")
 	}
 	criar := false
 	if !isPublico(nome) {
 		exists, allowed, _, _, err := a.access(nome, s.uid)
 		if err != nil {
-			return "", err
+			return nova, false, err
 		}
 		// como o save: só se cria dentro do próprio usuário
 		criar = !exists && versao == "" && strings.HasPrefix(nome, s.login+"/")
 		if !allowed && !criar {
-			return "", errSemAcesso
+			return nova, false, errSemAcesso
 		}
 	}
 	var base leitura // versão vazia: parte do texto vazio
 	if versao != "" {
 		l, ok := a.mcp.leitura(s, nome)
 		if !ok || l.versao != versao {
-			return "", errMudou
+			return nova, false, errMudou
 		}
 		base = l
 	}
 	// o textarea normaliza as quebras; sem isso os comprimentos divergem nas abas
 	texto = strings.ReplaceAll(strings.ReplaceAll(texto, "\r\n", "\n"), "\r", "\n")
-	op := diffOp(base.texto, utf16Of(texto))
+	novo := utf16Of(texto)
+	op := diffOp(base.texto, novo)
 
 	d, err := a.hub.open(nome)
 	if err != nil {
-		return "", err
+		return nova, false, err
 	}
 	defer a.hub.leave(d, nil)
 	if criar {
@@ -175,7 +177,7 @@ func (a *app) escreverDocumento(s *sessao, caminho, texto, versao string) (strin
 		}
 		a.writeMu.Unlock()
 		if err != nil {
-			return "", err
+			return nova, false, err
 		}
 	}
 
@@ -199,14 +201,15 @@ func (a *app) escreverDocumento(s *sessao, caminho, texto, versao string) (strin
 			a.hub.armFlush(d)
 		}
 	}
-	nova := leitura{doc: d, rev: d.rev, texto: d.text}
+	nova = leitura{doc: d, rev: d.rev, texto: d.text}
 	d.mu.Unlock()
 	if err != nil {
-		return "", err
+		return leitura{}, false, err
 	}
 	nova.versao = versaoDe(nova.rev, nova.texto)
-	a.mcp.guardarLeitura(s, nome, nova) // escreve de novo sem reler
-	return nova.versao, nil
+	// a base guardada é o texto que o agente conhece: se outros editaram junto, a resposta leva o texto atual
+	a.mcp.guardarLeitura(s, nome, nova)
+	return nova, !slices.Equal(nova.texto, novo), nil
 }
 
 func (m *mcpState) leitura(s *sessao, nome string) (leitura, bool) {
@@ -246,11 +249,15 @@ func (c *chamada) escreverDocumento(raw json.RawMessage) (string, error) {
 	if err := lerArgs(raw, &p); err != nil {
 		return "", err
 	}
-	versao, err := c.a.escreverDocumento(c.s, p.Caminho, p.Texto, p.Versao)
+	nova, juntou, err := c.a.escreverDocumento(c.s, p.Caminho, p.Texto, p.Versao)
 	if err != nil {
 		return "", err
 	}
-	return "gravado (versao: " + versao + ")", nil
+	out := "gravado (versao: " + nova.versao + ")"
+	if juntou {
+		out += "; outros editaram junto, o texto agora é:\n\n" + stringOf(nova.texto)
+	}
+	return out, nil
 }
 
 // --- resources: os documentos no @ do terminal ---

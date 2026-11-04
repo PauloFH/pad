@@ -446,7 +446,7 @@ var ferramentas = []ferramenta{
 	{"ler_documento", "Devolve o texto de um documento do pad e a versão lida, que o escrever_documento pede.",
 		map[string]any{"caminho": texto("/ana/notas, ana/notas, @pad /ana/notas ou o endereço completo")},
 		[]string{"caminho"}, (*chamada).lerDocumento},
-	{"escrever_documento", "Troca o texto do documento pelo texto novo, partindo da versão que você leu; o que outros digitaram depois da leitura fica. Para criar um documento, versao vazia.",
+	{"escrever_documento", "Troca o texto do documento pelo texto novo, partindo da versão que você leu; o que outros digitaram depois da leitura fica, e então a resposta traz o texto atual. Para criar um documento, versao vazia.",
 		map[string]any{"caminho": texto("caminho do documento"), "texto": texto("o texto inteiro, como deve ficar"),
 			"versao": texto("a versão do ler_documento ou do último escrever_documento; vazia para criar")},
 		[]string{"caminho", "texto", "versao"}, (*chamada).escreverDocumento},

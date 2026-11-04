@@ -103,12 +103,15 @@ func TestLerEscreverDocumento(t *testing.T) {
 		t.Fatalf("texto lido %q", texto)
 	}
 	v2 := ag.quer("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "um dois", "versao": v1}, false, "gravado (versao: ")
+	if strings.Contains(v2, "outros") || !strings.HasSuffix(v2, ")") {
+		t.Fatalf("sem ninguém junto a resposta é curta: %q", v2)
+	}
 	if !strings.Contains(get(t, ana, url+"/ana/notas"), "um dois") {
 		t.Fatal("o GET não mostra o texto gravado")
 	}
 	ag.quer("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "velha", "versao": v1}, true, "documento mudou desde a sua leitura, leia de novo")
 	// a escrita conta como leitura: escreve de novo sem reler
-	v3 := strings.TrimSuffix(strings.TrimPrefix(v2, "gravado (versao: "), ")")
+	v3 := versaoGravada(v2)
 	ag.quer("escrever_documento", map[string]any{"caminho": "ana/notas", "texto": "um dois\r\ntrês", "versao": v3}, false, "gravado")
 	if _, texto = versaoLida(t, ag, "ana/notas"); texto != "um dois\ntrês" {
 		t.Fatalf("depois da segunda escrita: %q", texto)
@@ -156,7 +159,8 @@ func TestEscreverJuntaComQuemDigita(t *testing.T) {
 	if _, err := tc.until(isType("ack")); err != nil {
 		t.Fatal(err)
 	}
-	ag.quer("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "linha1\nlinha2\nlinha3", "versao": v}, false, "gravado")
+	out := ag.quer("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "linha1\nlinha2\nlinha3", "versao": v}, false,
+		"; outros editaram junto, o texto agora é:\n\nXlinha1\nlinha2\nlinha3")
 	m, err := tc.until(isType("op"))
 	if err != nil || m.By != "" {
 		t.Fatalf("op: %+v, %v", m, err)
@@ -164,8 +168,69 @@ func TestEscreverJuntaComQuemDigita(t *testing.T) {
 	if got := stringOf(tc.text); got != "Xlinha1\nlinha2\nlinha3" {
 		t.Fatalf("a aba ficou com %q", got)
 	}
-	if _, texto := versaoLida(t, ag, "/ana/notas"); texto != "Xlinha1\nlinha2\nlinha3" {
+	// o agente parte do texto que a resposta trouxe: a segunda escrita não apaga o X da ana
+	out = ag.quer("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "Xlinha1\nlinha2\nlinha3\nlinha4", "versao": versaoGravada(out)}, false, "gravado")
+	if strings.Contains(out, "outros") {
+		t.Fatalf("ninguém editou junto desta vez: %q", out)
+	}
+	if _, err := tc.until(isType("op")); err != nil || stringOf(tc.text) != "Xlinha1\nlinha2\nlinha3\nlinha4" {
+		t.Fatalf("a aba ficou com %q, %v", stringOf(tc.text), err)
+	}
+	// escrita que não muda nada, com outro digitando junto, também devolve o texto atual
+	if err := tc.edit(Op{{Insert: "Y"}, {Retain: 28}}, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tc.until(isType("ack")); err != nil {
+		t.Fatal(err)
+	}
+	out = ag.quer("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "Xlinha1\nlinha2\nlinha3\nlinha4", "versao": versaoGravada(out)}, false,
+		"outros editaram junto, o texto agora é:\n\nYXlinha1\nlinha2\nlinha3\nlinha4")
+	if _, texto := versaoLida(t, ag, "/ana/notas"); texto != "YXlinha1\nlinha2\nlinha3\nlinha4" {
 		t.Fatalf("o agente lê %q", texto)
+	}
+}
+
+// versaoGravada tira a versão da resposta do escrever_documento.
+func versaoGravada(out string) string {
+	v, _, _ := strings.Cut(strings.TrimPrefix(out, "gravado (versao: "), ")")
+	return v
+}
+
+// Apagado depois da leitura: o agente não recria o documento por baixo do del.
+func TestEscreverDocumentoApagado(t *testing.T) {
+	a, srv, ag, login := docApp(t)
+	ana := login("ana")
+	post(t, ana, srv.URL+"/ana/notas", "text/plain", "um")
+	v, _ := versaoLida(t, ag, "/ana/notas")
+	post(t, ana, srv.URL+"/_delete/ana/notas", "application/x-www-form-urlencoded", "")
+	// o registro sumiu, então o acesso já barra antes de abrir o documento
+	ag.quer("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "dois", "versao": v}, true, "documento não encontrado ou sem acesso")
+	var n int
+	if a.db.QueryRow(`SELECT COUNT(*) FROM docs WHERE name = 'ana/notas'`).Scan(&n); n != 0 {
+		t.Fatal("o registro voltou")
+	}
+	if b, _ := a.readDoc("ana/notas"); b != "" {
+		t.Fatalf("o arquivo voltou: %q", b)
+	}
+
+	// o del que cai entre o open e o d.mu do escrever: segura o d.mu até o escrever
+	// estar parado nele (refs 1) e marca o descarte como o discard faz
+	post(t, ana, srv.URL+"/ana/notas", "text/plain", "um")
+	v, _ = versaoLida(t, ag, "/ana/notas")
+	a.hub.mu.Lock()
+	d := a.hub.docs["ana/notas"]
+	a.hub.mu.Unlock()
+	d.mu.Lock()
+	ch := ag.emFundo("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "dois", "versao": v})
+	// só neste teste hub.mu depois de d.mu: o open não pega d.mu, então não trava
+	eventually(t, "o escrever não abriu o documento", func() bool { return a.hub.connected("ana/notas") })
+	d.gone = closeReq{4000, "documento apagado"}
+	d.mu.Unlock()
+	if r := receber(t, ch); !r.erro || r.texto != "documento apagado; leia de novo" {
+		t.Fatalf("escrever num documento descartado: %+v", r)
+	}
+	if b, _ := a.readDoc("ana/notas"); b != "um" {
+		t.Fatalf("no disco: %q", b)
 	}
 }
 
