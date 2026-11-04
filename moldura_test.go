@@ -47,7 +47,7 @@ func pagina(t *testing.T, c *http.Client, u string) string {
 func TestRaizVisitanteVeApresentacao(t *testing.T) {
 	_, srv, login := wsApp(t)
 	page := pagina(t, &http.Client{}, srv.URL+"/")
-	for _, s := range []string{"Um bloco de notas em cada endereço", `href="/publico"`, `href="/_login"`, "/_static/landing.js"} {
+	for _, s := range []string{"Um bloco de notas em cada endereço", `href="/publico"`, `href="/_login"`, "/_static/landing.js", `rel="icon"`} {
 		if !strings.Contains(page, s) {
 			t.Errorf("apresentação sem %q", s)
 		}
