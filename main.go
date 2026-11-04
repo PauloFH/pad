@@ -98,6 +98,23 @@ CREATE TABLE IF NOT EXISTS mcp_maquinas (
 	criada INTEGER NOT NULL,
 	vista INTEGER NOT NULL DEFAULT 0,
 	UNIQUE (user_id, nome));
+CREATE TABLE IF NOT EXISTS mcp_conversas (
+	id INTEGER PRIMARY KEY,
+	user_id INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
+	nome TEXT NOT NULL,
+	criada INTEGER NOT NULL,
+	UNIQUE (user_id, nome));
+CREATE TABLE IF NOT EXISTS mcp_mensagens (
+	id INTEGER PRIMARY KEY,
+	conversa_id INTEGER NOT NULL REFERENCES mcp_conversas ON DELETE CASCADE,
+	autor TEXT NOT NULL, rotulo TEXT NOT NULL, humano INTEGER NOT NULL,
+	em INTEGER NOT NULL, texto TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS mcp_mensagens_conversa ON mcp_mensagens (conversa_id, id);
+-- o "lido" é por apelido do agente, não por pessoa: dois agentes da mesma pessoa leem separado
+CREATE TABLE IF NOT EXISTS mcp_lido (
+	conversa_id INTEGER NOT NULL REFERENCES mcp_conversas ON DELETE CASCADE,
+	apelido TEXT NOT NULL, ate INTEGER NOT NULL,
+	PRIMARY KEY (conversa_id, apelido));
 `
 
 type app struct {
@@ -108,6 +125,7 @@ type app struct {
 	// assina os tokens de visitante do /publico
 	visitorKey []byte
 	hub        *hub // documentos abertos na edição ao vivo
+	mcp        *mcpState
 }
 
 type user struct {
@@ -187,7 +205,7 @@ func openApp(dataDir string) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &app{db: db, docsDir: docsDir, visitorKey: key}
+	a := &app{db: db, docsDir: docsDir, visitorKey: key, mcp: newMcpState()}
 	a.hub = &hub{a: a, docs: map[string]*liveDoc{}, perIP: map[string]int{}, perDoc: map[string]int{}}
 	return a, nil
 }
