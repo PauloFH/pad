@@ -304,7 +304,7 @@ func TestMCPErrosRPC(t *testing.T) {
 		}
 		nomes = append(nomes, f.Name)
 	}
-	if strings.Join(nomes, ",") != "apresentar,conversas,criar_conversa,enviar,ler,esperar" {
+	if strings.Join(nomes, ",") != "apresentar,conversas,criar_conversa,enviar,ler,esperar,ler_documento,escrever_documento" {
 		t.Fatalf("ferramentas: %v", nomes)
 	}
 }

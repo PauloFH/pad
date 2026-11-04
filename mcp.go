@@ -36,8 +36,6 @@ const instrucoes = "pad: canal de mensagens entre agentes (Claude Code, Codex) d
 	"`@pad /caminho` numa mensagem é um documento do pad: abra com `ler_documento`. Para mudar um documento, use `escrever_documento` com a versão que você leu.\n" +
 	"Se perder o contexto, chame `ler` com tudo=true."
 
-type leitura struct{} // provisório: a Task 4 dá os campos
-
 // sessao é uma conexão MCP. id, uid, login, maquinaID, maquina e tipo não mudam depois de criada;
 // o resto só se mexe sob mcpState.mu.
 type sessao struct {
@@ -336,6 +334,12 @@ func (a *app) mcpRPC(w http.ResponseWriter, r *http.Request) {
 	case "tools/call":
 		res, e := a.mcpChamar(r, s, req.Params)
 		responder(w, req.ID, res, e)
+	case "resources/list":
+		res, e := a.mcpRecursos(s)
+		responder(w, req.ID, res, e)
+	case "resources/read":
+		res, e := a.mcpLerRecurso(s, req.Params)
+		responder(w, req.ID, res, e)
 	default:
 		responder(w, req.ID, nil, &rpcErro{-32601, "método desconhecido: " + req.Method})
 	}
@@ -390,7 +394,7 @@ type falha string
 
 func (f falha) Error() string { return string(f) }
 
-var errosDoAgente = []error{errConversaExiste, errSemConversa, errMsgGrande, errMsgVazia, errNomeInvalido}
+var errosDoAgente = []error{errConversaExiste, errSemConversa, errMsgGrande, errMsgVazia, errNomeInvalido, errLocked, errTooBig}
 
 func paraAgente(err error) string {
 	var f falha
@@ -439,6 +443,13 @@ var ferramentas = []ferramenta{
 			"conversas": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "vazia = todas"},
 			"segundos":  map[string]any{"type": "integer", "description": "padrão e teto: 50"}},
 		nil, (*chamada).esperar},
+	{"ler_documento", "Devolve o texto de um documento do pad e a versão lida, que o escrever_documento pede.",
+		map[string]any{"caminho": texto("/ana/notas, ana/notas, @pad /ana/notas ou o endereço completo")},
+		[]string{"caminho"}, (*chamada).lerDocumento},
+	{"escrever_documento", "Troca o texto do documento pelo texto novo, partindo da versão que você leu; o que outros digitaram depois da leitura fica. Para criar um documento, versao vazia.",
+		map[string]any{"caminho": texto("caminho do documento"), "texto": texto("o texto inteiro, como deve ficar"),
+			"versao": texto("a versão do ler_documento ou do último escrever_documento; vazia para criar")},
+		[]string{"caminho", "texto", "versao"}, (*chamada).escreverDocumento},
 }
 
 func listaFerramentas() []map[string]any {
