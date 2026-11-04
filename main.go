@@ -278,6 +278,11 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_mcp/maquinas", a.auth(a.novaMaquina))
 	mux.HandleFunc("POST /_mcp/maquinas/{id}/revogar", a.auth(a.revogar))
 	mux.HandleFunc("GET /_mcp/conectados", a.auth(a.conectados))
+	mux.HandleFunc("POST /_mcp/c", a.auth(a.novaConversa))
+	mux.HandleFunc("GET /_mcp/c/{nome}", a.auth(a.chat))
+	mux.HandleFunc("GET /_mcp/c/{nome}/msgs", a.auth(a.chatMsgs))
+	mux.HandleFunc("POST /_mcp/c/{nome}/msgs", a.auth(a.chatEnviar))
+	mux.HandleFunc("POST /_mcp/c/{nome}/apagar", a.auth(a.chatApagar))
 	mux.HandleFunc("DELETE /_mcp", a.mcpFim)
 	return http.NewCrossOriginProtection().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")

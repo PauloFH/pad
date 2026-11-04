@@ -146,6 +146,7 @@ document.querySelectorAll('.copiar').forEach(function (b) {
   }
 })
 </script></section>{{end}}
+{{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <h2>Conversas</h2>
 {{if .Conversas}}<ul class="cartoes">{{range .Conversas}}<li><a class="cartao" href="/_mcp/c/{{.Nome}}" title="{{.Nome}}"><span class="nome">{{.Nome}}{{if .NaoLidas}} · {{.NaoLidas}} nova{{if gt .NaoLidas 1}}s{{end}}{{end}}</span><span class="meta">{{.UltimoRotulo}} · {{quando .UltimaEm}}</span>{{with index $.Agentes .Nome}}<span class="meta">{{range $i, $r := .}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}</a></li>{{end}}</ul>
 {{else}}<p class="mut">Nenhuma conversa ainda.</p>{{end}}
@@ -155,7 +156,6 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 <button class="btn pri">Criar conversa</button>
 </form>
 <h2>Máquinas</h2>
-{{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 {{if .Maquinas}}<div class="tabela"><table><thead><tr><th>nome</th><th>cadastrada</th><th>vista por último</th><th></th></tr></thead><tbody>
 {{range .Maquinas}}<tr><td class="mono">{{.Nome}}</td><td>{{quando .Criada}}</td><td>{{if .Vista.Unix}}{{quando .Vista}}{{else}}nunca{{end}}</td>
 <td><form method="post" action="/_mcp/maquinas/{{.ID}}/revogar"><button class="btn perigo" aria-label="Revogar {{.Nome}}">Revogar</button></form></td></tr>{{end}}
@@ -169,6 +169,22 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 <div class="tabela"><table id="agentes"><thead><tr><th>apelido</th><th>máquina</th><th>tipo</th><th>conversas</th><th>última atividade</th></tr></thead><tbody>
 {{range .Conectados}}<tr><td class="mono">{{.Apelido}}</td><td>{{.Maquina}}</td><td>{{.Tipo}}</td><td>{{range $i, $c := .Conversas}}{{if $i}}, {{end}}{{$c}}{{end}}</td><td>{{hora .Ultima}}</td></tr>{{end}}
 </tbody></table></div>
+</main></div></div>
+{{template "status" false}}
+<script src="/_static/chat.js"></script>
+</body></html>{{end}}
+
+{{/* chat de uma conversa; as mensagens chegam pelo chat.js (msgs), sem HTML de mensagem no servidor */}}
+{{define "mcp-conversa"}}{{template "head" .Nome}}<body class="ed">
+<header class="topo"><script src="/_static/shell.js"></script><a class="btn" href="/_mcp">← mcp</a><span class="crumb" title="{{.Nome}}"><span>{{.Nome}}</span></span><span class="sp"></span>
+<form id="apagar" method="post" action="/_mcp/c/{{.Nome}}/apagar"><button class="btn perigo">apagar conversa</button></form>{{template "conta" .}}</header>
+<div class="meio"><div class="centro"><main id="chat" class="chat" data-nome="{{.Nome}}">
+<p id="ativos" class="ativos" aria-live="polite">carregando…</p>
+<ol id="msgs" class="msgs" role="log" aria-label="mensagens de {{.Nome}}" tabindex="0"></ol>
+<form id="enviar" class="enviar"><label class="vh" for="texto">mensagem</label>
+<textarea id="texto" class="campo" rows="2" placeholder="Mensagem (Enter envia, Shift+Enter quebra a linha)" autocomplete="off"></textarea>
+<button class="btn pri">Enviar</button></form>
+<p id="erro" class="err" role="status"></p>
 </main></div></div>
 {{template "status" false}}
 <script src="/_static/chat.js"></script>

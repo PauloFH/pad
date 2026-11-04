@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"slices"
 	"strconv"
@@ -84,6 +85,7 @@ func (a *app) painel(w http.ResponseWriter, r *http.Request, u user) {
 
 func (a *app) novaMaquina(w http.ResponseWriter, r *http.Request, u user) {
 	chave, err := a.criarMaquina(u.ID, r.FormValue("nome"))
+	w.Header().Set("Cache-Control", "no-store") // a página mostra a chave, que não aparece de novo
 	status := http.StatusOK
 	if errors.Is(err, errNomeInvalido) || errors.Is(err, errMaquinaExiste) {
 		status = http.StatusBadRequest
@@ -153,4 +155,156 @@ func (a *app) conectados(w http.ResponseWriter, r *http.Request, u user) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(out)
+}
+
+// novaConversa cria a conversa com a primeira mensagem da pessoa; erro volta no painel.
+func (a *app) novaConversa(w http.ResponseWriter, r *http.Request, u user) {
+	nome, _ := curto(r.FormValue("nome"))
+	err := a.criarConversa(u.ID, nome, humana(u, r.FormValue("mensagem")))
+	if err == nil {
+		http.Redirect(w, r, "/_mcp/c/"+nome, http.StatusSeeOther)
+		return
+	}
+	if !errors.Is(err, errNomeInvalido) && !errors.Is(err, errConversaExiste) && !errors.Is(err, errMsgVazia) && !errors.Is(err, errMsgGrande) {
+		serverError(w, err)
+		return
+	}
+	p, perr := a.painelMCP(u)
+	if perr != nil {
+		serverError(w, perr)
+		return
+	}
+	p.Err = err.Error()
+	render(w, http.StatusBadRequest, "mcp", p)
+}
+
+func humana(u user, texto string) mensagem {
+	return mensagem{Autor: u.Name, Rotulo: u.Name, Humano: true, Texto: texto}
+}
+
+// conversaDaRota acha a conversa de {nome}; nome inválido e conversa de outra conta dão o mesmo 404.
+func (a *app) conversaDaRota(w http.ResponseWriter, r *http.Request, u user) (string, bool) {
+	nome, ok := curto(r.PathValue("nome"))
+	if ok {
+		_, err := conversaID(a.db, u.ID, nome)
+		if err == nil {
+			return nome, true
+		}
+		if !errors.Is(err, errSemConversa) {
+			serverError(w, err)
+			return "", false
+		}
+	}
+	fail(w, http.StatusNotFound, "conversa não encontrada")
+	return "", false
+}
+
+func (a *app) chat(w http.ResponseWriter, r *http.Request, u user) {
+	nome, ok := a.conversaDaRota(w, r, u)
+	if !ok {
+		return
+	}
+	render(w, http.StatusOK, "mcp-conversa", struct {
+		Me, Nome string
+		Admin    bool
+	}{u.Name, nome, u.Admin})
+}
+
+// esperaWeb é var para os testes baixarem; fica abaixo dos 60 s que proxies costumam cortar.
+var esperaWeb = 25 * time.Second
+
+type msgJSON struct {
+	ID     int64  `json:"id"`
+	Rotulo string `json:"rotulo"`
+	Humano bool   `json:"humano"`
+	Em     int64  `json:"em"`
+	Texto  string `json:"texto"`
+}
+
+// chatMsgs devolve as mensagens depois de ?depois=; com ?esperar=1 e nada novo, segura até chegar algo.
+func (a *app) chatMsgs(w http.ResponseWriter, r *http.Request, u user) {
+	nome, ok := a.conversaDaRota(w, r, u)
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	depois, _ := strconv.ParseInt(q.Get("depois"), 10, 64)
+	m := a.mcp
+	sinal := m.sinal() // antes da consulta: mensagem que chega no meio ainda acorda a espera
+	ms, err := a.mensagens(u.ID, nome, depois)
+	if err == nil && len(ms) == 0 && q.Get("esperar") == "1" {
+		timer := time.NewTimer(esperaWeb)
+		defer timer.Stop()
+		select {
+		case <-sinal:
+		case <-timer.C:
+		case <-r.Context().Done():
+		case <-m.fim:
+		}
+		ms, err = a.mensagens(u.ID, nome, depois)
+	}
+	if errors.Is(err, errSemConversa) { // apagada durante a espera
+		fail(w, http.StatusNotFound, "conversa não encontrada")
+		return
+	}
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	out := struct {
+		Mensagens []msgJSON `json:"mensagens"`
+		Agentes   []string  `json:"agentes"`
+	}{[]msgJSON{}, []string{}}
+	for _, x := range ms {
+		out.Mensagens = append(out.Mensagens, msgJSON{x.ID, x.Rotulo, x.Humano, x.Em.Unix(), x.Texto})
+	}
+	out.Agentes = append(out.Agentes, m.agentesNa(u.ID, nome, time.Now())...)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(out)
+}
+
+// chatEnviar grava a mensagem da pessoa. O corpo aceita o dobro do limite porque o JSON escapa quebras de linha e aspas.
+func (a *app) chatEnviar(w http.ResponseWriter, r *http.Request, u user) {
+	nome, ok := a.conversaDaRota(w, r, u)
+	if !ok {
+		return
+	}
+	var p struct{ Texto string }
+	r.Body = http.MaxBytesReader(w, r.Body, 2*maxMensagem+1024)
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		var grande *http.MaxBytesError
+		if errors.As(err, &grande) {
+			http.Error(w, errMsgGrande.Error(), http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "corpo inválido", http.StatusBadRequest)
+		}
+		return
+	}
+	_, err := a.enviarMensagem(u.ID, nome, humana(u, p.Texto))
+	switch {
+	case errors.Is(err, errMsgGrande):
+		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+	case errors.Is(err, errMsgVazia):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, errSemConversa): // apagada entre a abertura da página e o envio
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case err != nil:
+		log.Print(err)
+		http.Error(w, "erro interno", http.StatusInternalServerError)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (a *app) chatApagar(w http.ResponseWriter, r *http.Request, u user) {
+	nome, ok := a.conversaDaRota(w, r, u)
+	if !ok {
+		return
+	}
+	if err := a.apagarConversa(u.ID, nome); err != nil && !errors.Is(err, errSemConversa) {
+		serverError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/_mcp", http.StatusSeeOther)
 }
