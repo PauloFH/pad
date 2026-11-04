@@ -59,6 +59,9 @@ func (s *sessao) ativa(now time.Time) bool {
 }
 
 func tipoDoCliente(nome string) string {
+	if strings.TrimSpace(nome) == "" {
+		return "agente"
+	}
 	l := strings.ToLower(nome)
 	switch {
 	case strings.Contains(l, "claude"):
@@ -129,24 +132,37 @@ func (m *mcpState) derrubar(maquinaID int64) {
 
 func (m *mcpState) encerrar() { m.fimOnce.Do(func() { close(m.fim) }) }
 
-// novaSessao guarda a sessão; passando de maxSessoes na máquina, cai a parada há mais tempo.
+// novaSessao guarda a sessão; passando de maxSessoes na máquina, cai a parada há mais tempo,
+// poupando quem está num esperar enquanto houver outra para cair.
 func (m *mcpState) novaSessao(s *sessao) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.sessoes[s.id] = s
 	var velha *sessao
 	n := 0
 	for _, o := range m.sessoes {
-		if o.maquinaID == s.maquinaID {
-			n++
-			if velha == nil || o.ultima.Before(velha.ultima) {
-				velha = o
-			}
+		if o.maquinaID != s.maquinaID {
+			continue
+		}
+		n++
+		if o != s && (velha == nil || caiAntes(o, velha)) {
+			velha = o
 		}
 	}
-	if n > maxSessoes {
+	caiu := n > maxSessoes
+	if caiu {
 		delete(m.sessoes, velha.id)
 	}
+	m.mu.Unlock()
+	if caiu {
+		m.avisar() // o esperar da que caiu volta na hora
+	}
+}
+
+func caiAntes(o, v *sessao) bool {
+	if (o.esperando == 0) != (v.esperando == 0) {
+		return o.esperando == 0
+	}
+	return o.ultima.Before(v.ultima)
 }
 
 // achar devolve a sessão só se ela for da máquina da chave, e marca a atividade.
@@ -206,7 +222,9 @@ func (m *mcpState) batizar(s *sessao, apelido string, now time.Time) (string, er
 		if o == s || o.uid != s.uid || o.apelido != apelido {
 			continue
 		}
-		if o.ativa(now) {
+		// o mesmo cliente na mesma máquina é o agente que reconectou; quem espera ainda está lá
+		reconexao := o.maquinaID == s.maquinaID && o.tipo == s.tipo && o.esperando == 0
+		if o.ativa(now) && !reconexao {
 			return "", falha("apelido em uso por " + o.tipo + " · " + o.maquina)
 		}
 		o.apelido = ""
@@ -604,7 +622,14 @@ func (c *chamada) esperar(raw json.RawMessage) (string, error) {
 	for {
 		sinal := m.sinal()
 		if !m.viva(c.s) {
-			return "", falha("máquina revogada")
+			err := c.a.db.QueryRow(`SELECT 1 FROM mcp_maquinas WHERE id = ?`, c.s.maquinaID).Scan(new(int))
+			if errors.Is(err, sql.ErrNoRows) {
+				return "", falha("máquina revogada")
+			}
+			if err != nil {
+				return "", err
+			}
+			return "", falha("sessão encerrada")
 		}
 		novas, err := c.a.novidades(c.s.uid, p.Conversas, c.apelido)
 		if err != nil {

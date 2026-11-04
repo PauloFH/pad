@@ -321,12 +321,26 @@ func TestMCPApresentar(t *testing.T) {
 
 	c2 := mcpCli(t, srv, chave, "codex-mcp-client")
 	c2.quer("apresentar", map[string]any{"apelido": "pai"}, true, "apelido em uso por claude · desktop")
+	outraMaquina := mcpCli(t, srv, chaveDe(t, a, 1, "note"), "claude-code")
+	outraMaquina.quer("apresentar", map[string]any{"apelido": "pai"}, true, "apelido em uso por claude · desktop")
 	// outra conta pode usar o mesmo apelido
 	mcpCli(t, srv, chaveDe(t, a, 2, "desktop"), "claude-code").quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é pai")
 
-	c1.sessaoEm(a, func(s *sessao) { s.ultima = time.Now().Add(-ativoJanela - time.Second) })
+	// mesmo cliente na mesma máquina é reconexão: a sessão nova fica com o apelido, mesmo com a velha ativa
+	c3 := mcpCli(t, srv, chave, "claude-code")
+	c3.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é pai · claude · desktop")
+	c1.quer("conversas", nil, true, "apresente-se")
+	c2.quer("apresentar", map[string]any{"apelido": "pai"}, true, "apelido em uso por claude · desktop")
+
+	// quem está num esperar não perde o apelido nem para o mesmo cliente
+	c3.sessaoEm(a, func(s *sessao) { s.esperando = 1 })
+	c4 := mcpCli(t, srv, chave, "claude-code")
+	c4.quer("apresentar", map[string]any{"apelido": "pai"}, true, "apelido em uso por claude · desktop")
+	c3.sessaoEm(a, func(s *sessao) { s.esperando = 0 })
+
+	c3.sessaoEm(a, func(s *sessao) { s.ultima = time.Now().Add(-ativoJanela - time.Second) })
 	c2.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é pai · codex · desktop")
-	c1.quer("conversas", nil, true, "apresentar") // a sessão inativa perdeu o apelido
+	c3.quer("conversas", nil, true, "apresentar") // a sessão inativa perdeu o apelido
 }
 
 func TestMCPConversaPaiFilho(t *testing.T) {
@@ -416,15 +430,75 @@ func TestMCPEncerrarAcordaEspera(t *testing.T) {
 func TestMCPLimiteSessoes(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
 	chave := chaveDe(t, a, 1, "desktop")
-	var cs []*mcpCliente
-	for range 21 {
+	cs := []*mcpCliente{mcpCli(t, srv, chave, "claude-code")}
+	cs[0].quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é")
+	espera := cs[0].emFundo("esperar", map[string]any{"segundos": 50})
+	cs[0].esperandoJa(a)
+	for range maxSessoes {
 		cs = append(cs, mcpCli(t, srv, chave, "claude-code"))
 	}
-	if _, st := cs[0].call("ping", nil); st != 404 {
-		t.Fatalf("a sessão mais antiga devia ter caído: %d", st)
+	// cs[0] é a mais antiga, mas está num esperar: cai a mais antiga das paradas
+	if _, st := cs[1].call("ping", nil); st != 404 {
+		t.Fatalf("cs[1] devia ter caído: %d", st)
 	}
-	if _, st := cs[1].call("ping", nil); st != 200 {
-		t.Fatalf("a segunda continua: %d", st)
+	if _, st := cs[2].call("ping", nil); st != 200 {
+		t.Fatalf("cs[2] continua: %d", st)
+	}
+	select {
+	case r := <-espera:
+		t.Fatalf("o esperar de cs[0] não devia voltar: %+v", r)
+	default:
+	}
+	// com todas esperando, cai a mais antiga, e o esperar dela volta na hora
+	for _, c := range cs[2:] {
+		c.sessaoEm(a, func(s *sessao) { s.esperando++ })
+	}
+	mcpCli(t, srv, chave, "claude-code")
+	if r := receber(t, espera); !r.erro || r.texto != "sessão encerrada" {
+		t.Fatalf("esperar: %+v", r)
+	}
+	if _, st := cs[2].call("ping", nil); st != 200 {
+		t.Fatalf("cs[2] continua: %d", st)
+	}
+}
+
+func TestMCPEsperarNovidades(t *testing.T) {
+	a, srv := mcpApp(t, "ana")
+	pai := mcpCli(t, srv, chaveDe(t, a, 1, "desktop"), "claude-code")
+	filho := mcpCli(t, srv, chaveDe(t, a, 1, "note"), "codex")
+	pai.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é")
+	filho.quer("apresentar", map[string]any{"apelido": "filho"}, false, "você é")
+	for _, n := range []string{"b", "a"} {
+		pai.quer("criar_conversa", map[string]any{"nome": n, "mensagem": "task " + n}, false, "criada")
+		filho.quer("enviar", map[string]any{"conversa": n, "texto": "oi " + n}, false, "enviada")
+	}
+
+	// já há não lidas: volta na hora (o teto ainda é 50 s), agrupado por nome
+	t0 := time.Now()
+	texto := pai.quer("esperar", nil, false, "== a ==")
+	if d := time.Since(t0); d > 2*time.Second {
+		t.Fatalf("esperar com não lidas levou %v", d)
+	}
+	ia, ib := strings.Index(texto, "== a =="), strings.Index(texto, "== b ==")
+	if ib < ia || !strings.Contains(texto, "oi a") || !strings.Contains(texto, "oi b") || strings.Contains(texto, "task") {
+		t.Fatalf("esperar: %q", texto)
+	}
+
+	velho := esperaMax
+	esperaMax = 300 * time.Millisecond
+	t.Cleanup(func() { esperaMax = velho })
+
+	// com lista, a novidade de fora da lista fica para depois
+	filho.quer("enviar", map[string]any{"conversa": "a", "texto": "mais a"}, false, "enviada")
+	pai.quer("esperar", map[string]any{"conversas": []string{"b"}}, false, "nada ainda")
+	pai.quer("esperar", nil, false, "== a ==\n#")
+
+	// a própria mensagem não acorda quem espera
+	espera := pai.emFundo("esperar", nil)
+	pai.esperandoJa(a)
+	pai.quer("enviar", map[string]any{"conversa": "a", "texto": "minha"}, false, "enviada")
+	if r := receber(t, espera); r.erro || r.texto != "nada ainda" {
+		t.Fatalf("esperar acordou com a própria mensagem: %+v", r)
 	}
 }
 
@@ -433,6 +507,8 @@ func TestTipoDoCliente(t *testing.T) {
 		"claude-code":           "claude",
 		"Codex-MCP-Client":      "codex",
 		"cursor":                "cursor",
+		"":                      "agente",
+		"  ":                    "agente",
 		strings.Repeat("a", 30): strings.Repeat("a", 20),
 	} {
 		if got := tipoDoCliente(nome); got != tipo {
