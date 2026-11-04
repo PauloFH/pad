@@ -85,7 +85,7 @@ textarea,#mir,.gut{font:400 14px/1.7 var(--mono)} /* uma regra só: o espelho e 
 @media (prefers-reduced-motion:reduce){.coluna,.gaveta .coluna{transition:none}}
 
 /* entrada (B2): campo de criar e os recentes em blocos, no centro da moldura */
-.entrada{width:100%;font-family:var(--ui);max-width:54rem;margin:0;padding:22px 26px;overflow:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-content:start}
+.entrada{width:100%;font-family:var(--ui);max-width:54rem;margin:0;padding:22px 26px;overflow:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-content:start;grid-auto-rows:max-content}
 .entrada .criar{display:flex;gap:8px}
 .entrada .criar .campo{flex:1}
 .entrada h2{margin:6px 0 0;font-size:12px;font-weight:400;color:var(--mut)}

@@ -176,10 +176,10 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 
 {{/* chat de uma conversa; as mensagens chegam pelo chat.js (msgs), sem HTML de mensagem no servidor */}}
 {{define "mcp-conversa"}}{{template "head" .Nome}}<body class="ed">
-<header class="topo"><script src="/_static/shell.js"></script><a class="btn" href="/_mcp">← mcp</a><span class="crumb" title="{{.Nome}}"><span>{{.Nome}}</span></span><span class="sp"></span>
-<form id="apagar" method="post" action="/_mcp/c/{{.Nome}}/apagar"><button class="btn perigo">apagar conversa</button></form>{{template "conta" .}}</header>
+<header class="topo"><script src="/_static/shell.js"></script><a class="btn" href="/_mcp">← mcp</a><span class="crumb" title="{{.Nome}}"><span>{{.Nome}}</span></span><span class="sp"></span>{{template "conta" .}}</header>
 <div class="meio"><div class="centro"><main id="chat" class="chat" data-nome="{{.Nome}}">
-<p id="ativos" class="ativos" aria-live="polite">carregando…</p>
+<div class="info"><p id="ativos" class="ativos" aria-live="polite">carregando…</p>
+<form id="apagar" method="post" action="/_mcp/c/{{.Nome}}/apagar"><button class="btn perigo">apagar conversa</button></form></div>
 <ol id="msgs" class="msgs" role="log" aria-label="mensagens de {{.Nome}}" tabindex="0"></ol>
 <form id="enviar" class="enviar"><label class="vh" for="texto">mensagem</label>
 <textarea id="texto" class="campo" rows="2" placeholder="Mensagem (Enter envia, Shift+Enter quebra a linha)" autocomplete="off"></textarea>
