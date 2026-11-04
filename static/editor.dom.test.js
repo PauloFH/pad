@@ -161,7 +161,8 @@ test('reject, reconexão e fechamento 4000', () => {
   p.recv({ t: 'reject', reason: 'documento passa de 2 MB' });
   p.recv({ t: 'init', rev: 1, text: 'olá', me: 'p1', canEdit: true, seq: 0 });
   assert.strictEqual(p.t.value, 'olá');
-  assert.strictEqual(p.st.textContent, 'documento passa de 2 MB');
+  assert.strictEqual(p.trava.textContent, 'documento passa de 2 MB');
+  assert.strictEqual(p.trava.hidden, false);
   assert.strictEqual(window.pad.undo.peekUndo(), null);
   const first = p.ws().url;
   p.drop();
@@ -187,7 +188,12 @@ test('fechamento 1009: o texto grande é descartado e não volta a ser enviado',
   p.recv({ t: 'init', rev: 1, text: 'olá', me: 'p1', canEdit: true, seq: 0 });
   assert.strictEqual(p.ops().length, 0, 'não reenvia a op');
   assert.strictEqual(p.t.value, 'olá');
-  assert.strictEqual(p.st.textContent, 'texto grande demais para este documento');
+  assert.strictEqual(p.trava.textContent, 'texto grande demais para este documento: a colagem não foi salva');
+  // fica à vista, sem prazo para sumir, até a próxima edição
+  p.timers.splice(0).forEach((x) => x.f());
+  assert.strictEqual(p.trava.hidden, false);
+  p.type('olá!');
+  assert.strictEqual(p.trava.hidden, true);
 });
 
 test('insert alheio na borda não entra na seleção (trava) própria', () => {
@@ -215,7 +221,7 @@ test('rebase que falha: o init seguinte recomeça e avisa', () => {
   p.tick();
   p.recv({ t: 'init', rev: 2, text: 'Zolá', me: 'p1', canEdit: true, seq: 0 });
   assert.strictEqual(p.t.value, 'Zolá');
-  assert.strictEqual(p.st.textContent, 'não deu para reaplicar o que você digitou durante a queda');
+  assert.strictEqual(p.trava.textContent, 'não deu para reaplicar o que você digitou durante a queda');
 });
 
 // arrastar um trecho do próprio textarea: o navegador apaga a origem e insere no destino

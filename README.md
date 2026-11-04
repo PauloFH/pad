@@ -85,6 +85,10 @@ docker compose exec pad /pad <comando>
 | `join GRUPO NOME` / `leave GRUPO NOME` | põe / tira usuário do grupo |
 | `list` | usuários e seus grupos |
 
+## Deploy
+
+Push na `main` roda o CI e, com ele verde, o job `deploy` fica esperando aprovação no Environment `production` (**Actions** > a execução > **Review deployments**). O ruleset `proteger-main` impede force-push e apagar a `main`.
+
 ## Backup
 
 Na vpsarm os dados ficam em `/srv/pad` (fora dos volumes do Docker, para nenhuma limpeza alcançá-los). Cada deploy (`deploy.sh`) para o serviço, grava `~/pad-backups/pad-<data>.tgz` sem a área `/publico` e guarda os 7 últimos; a saída fica em `~/pad-deploy.log`. Se o backup falhar ou vier sem o banco, a versão atual volta ao ar e o deploy para. Os arquivos têm os documentos privados e os hashes de senha: guarde uma cópia fora da VPS, com o mesmo cuidado.
