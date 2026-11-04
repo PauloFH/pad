@@ -89,6 +89,15 @@ CREATE TABLE IF NOT EXISTS group_shares (
 	group_id INTEGER NOT NULL REFERENCES groups ON DELETE CASCADE,
 	PRIMARY KEY (doc, group_id));
 CREATE TABLE IF NOT EXISTS secrets (k TEXT PRIMARY KEY, v BLOB NOT NULL);
+-- hash e não a chave: quem lê o banco não consegue se passar pela máquina
+CREATE TABLE IF NOT EXISTS mcp_maquinas (
+	id INTEGER PRIMARY KEY,
+	user_id INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
+	nome TEXT NOT NULL,
+	hash BLOB NOT NULL UNIQUE,
+	criada INTEGER NOT NULL,
+	vista INTEGER NOT NULL DEFAULT 0,
+	UNIQUE (user_id, nome));
 `
 
 type app struct {
