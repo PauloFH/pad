@@ -2,6 +2,8 @@
 
 Bloco de notas estilo dontpad, com login. Cada usuário tem seu espaço: `/paulo/notas`, `/paulo/pessoal/cpf` (até 5 níveis de subpasta, cada uma é um documento à parte, com acesso próprio). Fora dele, a área `/publico/...` é aberta: sem dono e sem login, qualquer um lê e escreve (até 256 KB por documento e 50 mil itens entre documentos e pastas; quando enche, os editados há mais tempo são apagados para abrir espaço). Quem cria vira dono e pode compartilhar com usuários ou grupos (quem recebe pode ler e editar). O dono também pode tornar um documento público: aí o endereço abre sem login, só para leitura. Salva sozinho enquanto você digita.
 
+Quem abre `/` sem sessão vê a apresentação do pad; com sessão, a lista de documentos.
+
 Oito temas (Grafite, Madrugada, Café, Floresta, Papel, Céu, Areia e Alto contraste) ficam no seletor da barra de baixo; o padrão segue o claro/escuro do sistema e a escolha fica guardada no navegador.
 
 Edição ao vivo: várias pessoas podem abrir o mesmo documento ao mesmo tempo. Quem está na página aparece em bolhas, cada uma com a sua cor, e o cursor e a seleção dos outros aparecem no texto com essa cor. O trecho que alguém selecionou fica travado para os demais e é liberado quando essa pessoa fica 30 s parada. No menu das bolhas dá para seguir alguém e acompanhar o que ele vê. No `/publico` quem tem conta aparece com o nome da conta e quem entra sem login ganha um nome engraçado. O Ctrl+Z desfaz só as suas mudanças. Enquanto há alguém conectado, o `POST` antigo do documento é recusado com 409.

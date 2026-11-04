@@ -1,0 +1,75 @@
+/* Apresentação do pad: a página imita um documento na moldura Oficina. Só usa os tokens do tema, além das cores das pessoas. */
+
+html{scroll-behavior:smooth;scroll-padding-top:6rem}
+.landing{display:flex;flex-direction:column;min-height:100dvh;font-size:16px}
+.fixo{position:sticky;top:0;z-index:20}
+.landing .status{position:sticky;bottom:0;z-index:20}
+.landing .marca span{color:var(--acc)}
+.landing .aba a{padding:6px 12px}
+.bolhas{display:inline-flex;padding-left:6px}
+#demo{padding:2px 4px;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
+
+/* cores das pessoas: as mesmas da paleta do live.go */
+.p0{--c:#db2777}.p1{--c:#0891b2}.p2{--c:#ea580c}.p3{--c:#0d9488}
+.bolhas .dot{background:var(--c)}
+.sel{background:color-mix(in srgb,var(--c) 28%,transparent);border-radius:2px}
+/* em linha e sem largura: o cursor no meio de uma palavra não cria um ponto de quebra nem empurra o texto */
+.cur{position:relative}
+.cur::before{content:"";position:absolute;top:0;bottom:0;left:-1px;width:2px;background:var(--c)}
+.cur i{position:absolute;bottom:100%;left:0;padding:0 4px;border-radius:3px 3px 3px 0;background:var(--c);color:#fff;font:600 10px/1.35 var(--ui);letter-spacing:0;white-space:nowrap}
+/* o texto que ainda vai ser digitado ocupa o lugar dele: a página não pula durante a cena */
+.oculto{visibility:hidden}
+
+/* cada bloco é uma linha lógica: o número fica na primeira linha dele, como na calha do editor */
+/* clip: o rótulo de um cursor perto da borda não cria rolagem de lado e o sticky continua valendo */
+.doc{flex:1;counter-reset:linha;overflow-x:clip}
+/* a última seção alcança a linha das âncoras, senão a aba dela nunca acende */
+.doc>section:last-child{min-height:calc(100dvh - 6rem)}
+.l{--t:6px;--b:6px;counter-increment:linha;display:grid;grid-template-columns:3rem minmax(0,1fr)}
+.l::before{content:counter(linha);content:counter(linha) / "";padding:var(--t) .6rem 0 0;border-right:1px solid var(--line);color:var(--mut);font:12px/1.6 var(--mono);text-align:right;user-select:none}
+.l>*{min-width:0;max-width:74rem;margin:0;padding:var(--t) 1.75rem var(--b) 1.5rem}
+.l.abre{--t:3rem;--b:10px}
+section>.l:last-child{--b:3rem}
+#inicio .l.abre{--t:3.5rem}
+
+.landing h1{font-size:clamp(2.25rem,6vw,3.75rem);font-weight:700;line-height:1.06;letter-spacing:-.03em}
+.landing h2{font-size:clamp(1.6rem,3.4vw,2rem);font-weight:700;line-height:1.15;letter-spacing:-.02em}
+.doc p{max-width:42rem;margin:0;color:var(--mut)}
+.doc p.lead{font-size:clamp(1.05rem,2vw,1.25rem)}
+.doc code{font:.88em var(--mono);overflow-wrap:anywhere}
+.acoes{display:flex;flex-wrap:wrap;gap:8px}
+
+.duas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2rem;align-items:start}
+.so{display:grid;gap:.85rem;margin:0;padding:0;list-style:none;color:var(--mut)}
+.so b{display:block;color:var(--fg);font-weight:600}
+.pilha{display:grid;gap:10px;min-width:0}
+.mcp pre.cmd{min-width:0;font-size:12.5px}
+
+/* réplicas de telas do pad: só ilustram, nada nelas responde a clique */
+.replica,.replica *{pointer-events:none}
+.tela{padding:12px 14px;border-radius:10px;background:var(--bg);box-shadow:0 0 0 1px var(--line),0 14px 40px #0004;font:12.5px/1.9 var(--mono)}
+.landing .aviso{position:static;display:inline-block;margin-top:12px;transform:none}
+.landing .pop{position:static;display:grid;gap:10px;width:auto;max-width:none;font-size:14px}
+.pop>b{font-weight:600;overflow-wrap:anywhere}
+.pop .campo{display:block;flex:1;color:var(--mut)}
+.pop .chave{display:block;flex:none}
+.pop .comp-pub span:first-child{flex:1}
+
+.landing .msgs{overflow:visible;padding:0}
+.balao code{font:.88em var(--mono)}
+
+.temas{display:flex;flex-wrap:wrap;gap:8px}
+.temas .btn{font-weight:500}
+.temas .btn[aria-pressed="true"]{box-shadow:0 0 0 2px var(--acc)}
+
+/* no celular a gaveta da barra fica com o essencial; alvos de toque de 40px */
+@media (max-width:899px){.duas{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:767px){
+  .landing .publica,.landing .pessoas,.landing .estado{display:none}
+  .landing .aba a{padding:11px 12px}
+  #demo{min-height:40px}
+  .l{grid-template-columns:2rem minmax(0,1fr)}
+  .l::before{padding-right:.35rem;font-size:11px}
+  .l>*{padding-right:1rem;padding-left:.85rem}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}

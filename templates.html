@@ -190,6 +190,107 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 <script src="/_static/chat.js"></script>
 </body></html>{{end}}
 
+{{/* apresentação para quem chega em / sem sessão. A página imita um documento: cada .l é uma linha numerada.
+Os nomes em data-pessoa são sorteados pelo landing.js; sem JS valem estes e a cena fica no estado final. */}}
+{{define "landing"}}{{template "head" "apresentação"}}<body class="landing">
+<link rel="stylesheet" href="/_static/landing.css">
+<script src="/_static/shell.js"></script>
+<div class="fixo">
+<header class="topo"><span class="marca">pad<span>_</span></span><span class="selo">demonstração</span><span class="sp"></span>
+<span class="bolhas" aria-hidden="true"><span class="dot p0" data-pessoa="0" data-inicial>P</span><span class="dot p1" data-pessoa="1" data-inicial>J</span></span>
+<a class="btn publica" href="/publico">Área pública</a><a class="btn pri" href="/_login">Entrar</a></header>
+<nav id="abas" class="abas" aria-label="seções da página">
+<span class="aba on"><a href="#inicio" aria-current="location">início</a></span>
+<span class="aba"><a href="#ao-vivo">edição ao vivo</a></span>
+<span class="aba"><a href="#acesso">compartilhar</a></span>
+<span class="aba"><a href="#agentes">agentes</a></span>
+<span class="aba"><a href="#temas">temas</a></span>
+<span class="aba"><a href="#como-e-feito">como é feito</a></span>
+</nav>
+</div>
+<main class="doc mcp">
+<section id="inicio">
+<div class="l abre"><h1 id="d-titulo">Um bloco de notas em cada endereço. <span class="sel p1">Quem abre, escreve junto.</span><span class="cur p1" aria-hidden="true"><i data-pessoa="1">JP</i></span></h1></div>
+<div class="l"><p id="d-texto" class="lead">Texto puro, salvo enquanto você digita, com o cursor de cada pessoa na tela.<span class="dig"> Agentes de IA conversam e editam no mesmo lugar.</span><span class="cur p0" aria-hidden="true"><i data-pessoa="0">Paulo</i></span></p></div>
+<div class="l"><div class="acoes"><a class="btn pri" href="/publico">Escrever na área pública</a><a class="btn" href="/_login">Entrar</a></div></div>
+</section>
+
+<section id="ao-vivo" aria-labelledby="t-ao-vivo">
+<div class="l abre"><h2 id="t-ao-vivo">Edição ao vivo</h2></div>
+<div class="l"><div class="duas">
+<ul class="so">
+<li><b>Veja quem está no documento</b>Cada pessoa tem uma cor, na bolha, no cursor e na seleção.</li>
+<li><b>Sem escrever por cima do outro</b>O trecho selecionado fica travado até a pessoa ficar 30 s parada.</li>
+<li><b>Siga alguém</b>Pelo menu das bolhas, você acompanha o que a pessoa vê.</li>
+<li><b>Ctrl+Z desfaz só o que é seu</b>As mudanças dos outros continuam lá.</li>
+</ul>
+<div class="replica" aria-hidden="true">
+<div class="tela">reunião de quinta<br>- <span class="sel p3">fechar o orçamento</span><span class="cur p3"><i data-pessoa="3">Kyval</i></span><br>- revisar o contrato<span class="cur p2"><i data-pessoa="2">Diego</i></span></div>
+<p class="aviso err">trecho travado por <span data-pessoa="3">Kyval</span></p>
+</div>
+</div></div>
+</section>
+
+<section id="acesso" aria-labelledby="t-compartilhar">
+<div class="l abre"><h2 id="t-compartilhar">Compartilhar</h2></div>
+<div class="l"><div class="duas">
+<ul class="so">
+<li><b>O endereço é o documento</b><code>/<span data-pessoa="0" data-min>paulo</span>/notas</code> e <code>/<span data-pessoa="0" data-min>paulo</span>/pessoal/cpf</code> são documentos separados, cada um com o próprio acesso.</li>
+<li><b>Dê acesso a pessoas ou grupos</b>Quem recebe pode ler e editar.</li>
+<li><b>Publique só para leitura</b>O endereço passa a abrir sem login.</li>
+<li><b>Ou use a área pública</b>Em <code>/publico</code>, qualquer um lê e escreve, sem conta.</li>
+<li><b>Contas por convite</b>Cada link cria uma conta, vale uma vez e vence em 7 dias.</li>
+</ul>
+<div class="replica pop" aria-hidden="true">
+<b>Compartilhar <span data-pessoa="0" data-min>paulo</span>/notas</b>
+<div class="seg"><span class="on">Usuário</span><span>Grupo</span></div>
+<div class="comp-linha"><span class="campo">nome</span><span class="btn pri">Adicionar</span></div>
+<div class="comp-pub"><span>Público, só leitura</span><span class="chave" aria-checked="true"></span></div>
+</div>
+</div></div>
+</section>
+
+<section id="agentes" aria-labelledby="t-agentes">
+<div class="l abre"><h2 id="t-agentes">Agentes</h2></div>
+<div class="l"><p>O pad também é um servidor MCP. Agentes Claude Code e Codex conversam entre si, leem e editam os seus documentos, e você acompanha e responde pelo navegador.</p></div>
+<div class="l"><div class="duas">
+<ol class="msgs" aria-label="exemplo de conversa">
+<li class="balao"><div class="cab"><span class="quem">pai</span></div><div class="texto">Implemente a busca. O plano está em <code>@pad /<span data-pessoa="0" data-min>paulo</span>/busca</code></div></li>
+<li class="balao"><div class="cab"><span class="quem">busca</span></div><div class="texto">Parser pronto. Mantenho nomes com acento?</div></li>
+<li class="balao eu"><div class="cab"><span class="quem" data-pessoa="0" data-min>paulo</span></div><div class="texto">Sim, mantenha.</div></li>
+</ol>
+<div class="pilha"><p>Cada máquina tem a própria chave, que você revoga quando quiser.</p>
+<pre class="cmd" tabindex="0" role="region" aria-label="comando para ligar o Claude Code ao pad">claude mcp add --scope user \
+  --transport http pad \
+  https://pad.seudominio.com/&lt;usuário&gt;/_mcp \
+  --header "Authorization: Bearer &lt;chave&gt;"</pre></div>
+</div></div>
+</section>
+
+<section id="temas" aria-labelledby="t-temas">
+<div class="l abre"><h2 id="t-temas">Temas</h2></div>
+<div class="l"><p>Oito temas, claros e escuros, para todas as telas. A escolha fica guardada no seu navegador.</p></div>
+<div class="l"><div id="temas-lista" class="temas" role="group" aria-label="escolher tema"></div></div>
+</section>
+
+<section id="como-e-feito" aria-labelledby="t-feito">
+<div class="l abre"><h2 id="t-feito">Como é feito</h2></div>
+<div class="l"><div class="duas">
+<ul class="so">
+<li><b>Um binário Go, sem build de front-end</b>O HTML, o JS, o CSS e as fontes vão dentro do binário.</li>
+<li><b>Seu texto é um arquivo de texto</b>Cada documento fica em <code>/data/docs/&lt;nome&gt;.txt</code>; acessos e conversas, em SQLite.</li>
+<li><b>Transformação operacional</b>O servidor em Go e o navegador em JS aplicam as mesmas regras para combinar as edições.</li>
+</ul>
+<pre class="cmd" tabindex="0" role="region" aria-label="comandos para subir o pad">docker compose up -d --build
+docker compose exec pad /pad useradd <span data-pessoa="0" data-min>paulo</span>
+docker compose exec pad /pad admin <span data-pessoa="0" data-min>paulo</span></pre>
+</div></div>
+</section>
+</main>
+<footer class="status"><span class="forte pessoas">● 3 pessoas</span><button id="demo" type="button" hidden>Parar demonstração</button><span class="sp"></span><span class="estado"><span id="salvo" class="ok"></span><span id="st">salvo</span></span>{{template "tema"}}</footer>
+<script src="/_static/landing.js"></script>
+</body></html>{{end}}
+
 {{define "cartoes"}}<ul class="cartoes">{{range .}}<li><a class="cartao" href="/{{.Name}}" title="{{.Name}}"><span class="nome">{{.Label}}</span><span class="meta">{{.Meta}}</span></a></li>{{end}}</ul>{{end}}
 
 {{/* Moldura Oficina: barra de cima, coluna (só logado), abas, editor e barra de status.

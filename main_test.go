@@ -62,7 +62,7 @@ func TestAcessoECompartilhamento(t *testing.T) {
 			t.Errorf("%s: status %d, queria %d", what, got, want)
 		}
 	}
-	check(status(login("ana", "errada"), "GET", "/", ""), 401, "senha errada")
+	check(status(login("ana", "errada"), "GET", "/_convite", ""), 401, "senha errada")
 	check(status(ana, "POST", "/ana/hoje", "oi <b>"), 204, "ana cria")
 	if b, _ := os.ReadFile(filepath.Join(dir, "docs", "ana", "hoje.txt")); string(b) != "oi <b>" {
 		t.Errorf("arquivo = %q", b)
@@ -99,7 +99,11 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	if _, err := a.db.Exec(`UPDATE sessions SET expires = ?`, time.Now().Add(time.Hour).Unix()); err != nil {
 		t.Fatal(err)
 	}
-	check(status(bia, "GET", "/", ""), 200, "bia com sessão quase vencida")
+	// a raiz responde 200 para todos: só a lista de documentos prova que há sessão
+	temSessao := func(c *http.Client) bool { return strings.Contains(pagina(t, c, srv.URL+"/"), `id="coluna"`) }
+	if !temSessao(bia) {
+		t.Error("bia com sessão quase vencida não entrou")
+	}
 	var exp int64
 	if err := a.db.QueryRow(`SELECT MAX(s.expires) FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.name = 'bia'`).Scan(&exp); err != nil {
 		t.Fatal(err)
@@ -108,7 +112,10 @@ func TestAcessoECompartilhamento(t *testing.T) {
 		t.Errorf("sessão da bia não renovou: vence em %v", time.Until(time.Unix(exp, 0)))
 	}
 	check(status(ana, "POST", "/_logout", ""), 401, "logout leva ao login")
-	check(status(ana, "GET", "/", ""), 401, "depois do logout")
+	check(status(ana, "GET", "/_convite", ""), 401, "depois do logout")
+	if temSessao(ana) {
+		t.Error("ana continua com sessão depois do logout")
+	}
 
 	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	for next, want := range map[string]string{"/ana/hoje": "/ana/hoje", "/\t/evil.com": "/", "//evil.com": "/", "/\\evil.com": "/", "https://evil.com": "/"} {
@@ -216,7 +223,9 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	if code, path := form(davi, url.Values{"name": {" Davi "}, "pass": {"senha-forte"}, "pass2": {"senha-forte"}}); code != 200 || path != "/" {
 		t.Errorf("cadastro: status %d em %s", code, path)
 	}
-	check(status(davi, "GET", "/", ""), 200, "davi entra logado")
+	if !temSessao(davi) {
+		t.Error("davi não entrou logado depois do cadastro")
+	}
 	check(status(davi, "GET", join, ""), 404, "convite reusado")
 
 	if err := runCLI(a.db, []string{"userdel", "ana"}, nil); err == nil {

@@ -69,7 +69,7 @@
     return n.length + ' pessoas editando agora';
   }
 
-  const PadShell = { abas, coluna, pastas, linhaColuna, editando, montarColuna, montarAbas };
+  const PadShell = { abas, coluna, pastas, linhaColuna, editando, montarColuna, montarAbas, amostras };
   if (typeof module !== 'undefined') module.exports = PadShell;
   if (typeof document === 'undefined') return;
   globalThis.PadShell = PadShell;
