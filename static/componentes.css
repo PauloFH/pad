@@ -95,3 +95,22 @@ a.cartao:hover{background:var(--hov)}
 
 /* some da tela, fica para o leitor de tela */
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* painel MCP (/_mcp): tabelas que rolam de lado no celular, chave nova e comandos para colar */
+.tabela{overflow-x:auto;border-radius:10px;box-shadow:0 0 0 1px var(--line)}
+.tabela table{width:100%;border-collapse:collapse;font-size:13px}
+.tabela th,.tabela td{padding:7px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
+.tabela tr:last-child td{border-bottom:0}
+.tabela th{color:var(--mut);font-weight:400;font-size:11px}
+.tabela td form{margin:0}
+.tabela .mono,.mcp .mono{font-family:var(--mono);font-size:12.5px}
+.mcp .nova{display:grid;gap:8px;padding:14px;border-radius:12px;background:var(--field);box-shadow:0 0 0 1px var(--acc)}
+.mcp .nova h2{margin:0;color:var(--fg);font-size:14px;font-weight:600}
+.mcp .nova p{margin:0}
+.mcp .linha{display:flex;flex-wrap:wrap;gap:8px}
+.mcp .linha .campo{flex:1 1 14rem}
+.mcp .cmd-h{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--mut);font-size:12px}
+.mcp pre.cmd{margin:0;padding:10px 12px;overflow-x:auto;border-radius:9px;background:var(--bg);box-shadow:inset 0 1px 3px #0005,0 0 0 1px var(--line);font:12px/1.5 var(--mono)}
+.mcp .nova-conversa{display:flex;flex-wrap:wrap;gap:8px}
+.mcp .nova-conversa .campo{flex:1 1 12rem}
+.mcp .cartao .meta{overflow-wrap:anywhere}

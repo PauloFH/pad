@@ -44,7 +44,8 @@ var tmplFS embed.FS
 var staticFS embed.FS
 
 var (
-	tmpl = template.Must(template.New("").Funcs(template.FuncMap{"ramo": ramo, "corta": corta}).ParseFS(tmplFS, "templates.html"))
+	tmpl = template.Must(template.New("").Funcs(template.FuncMap{"ramo": ramo, "corta": corta, "hora": hora,
+		"quando": func(t time.Time) string { return quando(t, time.Now()) }}).ParseFS(tmplFS, "templates.html"))
 	// o nome vira caminho de arquivo: sem "..", "/" inicial, "//" ou ponto
 	validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9_-]+)*$`)
 	// o usuário é o primeiro trecho do endereço (/paulo/notas): só minúsculas, para Paulo e paulo não coexistirem
@@ -265,6 +266,18 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_unshare/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_delete/{name...}", a.auth(a.del))
 	mux.HandleFunc("POST /_mcp", a.mcpRPC)
+	mux.HandleFunc("GET /_mcp", func(w http.ResponseWriter, r *http.Request) {
+		// o GET de um cliente MCP (abrir o fluxo SSE, que não oferecemos) não tem cookie: responde 405 em vez de ir ao login
+		if r.Header.Get("Authorization") != "" {
+			w.Header().Set("Allow", "POST, DELETE")
+			http.Error(w, "use POST ou DELETE", http.StatusMethodNotAllowed)
+			return
+		}
+		a.auth(a.painel)(w, r)
+	})
+	mux.HandleFunc("POST /_mcp/maquinas", a.auth(a.novaMaquina))
+	mux.HandleFunc("POST /_mcp/maquinas/{id}/revogar", a.auth(a.revogar))
+	mux.HandleFunc("GET /_mcp/conectados", a.auth(a.conectados))
 	mux.HandleFunc("DELETE /_mcp", a.mcpFim)
 	return http.NewCrossOriginProtection().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
