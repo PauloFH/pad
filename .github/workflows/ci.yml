@@ -5,12 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.26"
           check-latest: true
@@ -23,8 +26,8 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.26"
           check-latest: true
@@ -39,7 +42,7 @@ jobs:
     env:
       SSH_TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: chave ssh
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -51,8 +54,8 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
       - name: build e subida na vpsarm
         run: |
-          tar czf - --exclude=.git . | ssh "$SSH_TARGET" \
-            'mkdir -p ~/pad && tar xzf - -C ~/pad && cd ~/pad && docker compose -f compose.yaml -f compose.traefik.yaml up -d --build'
+          tar czf - --exclude=.git . | ssh -o ServerAliveInterval=30 "$SSH_TARGET" \
+            'mkdir -p ~/pad && tar xzf - -C ~/pad && cd ~/pad && { sh deploy.sh >~/pad-deploy.log 2>&1; rc=$?; tail -n 40 ~/pad-deploy.log; exit $rc; }'
       - name: conferir que responde pelo Traefik
         run: |
           ssh "$SSH_TARGET" 'for i in $(seq 10); do

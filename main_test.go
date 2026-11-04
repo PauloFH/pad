@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -521,19 +522,18 @@ func TestLoginLimite(t *testing.T) {
 			t.Fatalf("tentativa %d: %d", i, st)
 		}
 	}
-	if st := tenta("ana", "senha-forte", "10.4.0.0"); st != 429 {
-		t.Fatalf("IP que errou com a conta cheia: %d, queria 429", st)
-	}
 	// o dono, em outro IP, continua entrando: errar a senha dos outros não deixa ninguém de fora
 	if st := tenta("ana", "senha-forte", "10.5.0.1"); st != 303 {
 		t.Fatalf("dono com a conta cheia: %d, queria 303", st)
 	}
-	// IP novo tem uma tentativa só com a conta cheia
-	if st := tenta("ana", "errada-123", "10.5.0.2"); st != 401 {
-		t.Fatalf("primeira de um IP novo: %d", st)
+	// com a conta cheia, um IP só tem as poucas tentativas do limite por par
+	for range a.limLoginPar.max {
+		if st := tenta("ana", "errada-123", "10.5.0.2"); st != 401 {
+			t.Fatalf("IP novo errando: %d", st)
+		}
 	}
 	if st := tenta("ana", "senha-forte", "10.5.0.2"); st != 429 {
-		t.Fatalf("segunda de um IP novo: %d, queria 429", st)
+		t.Fatalf("IP que errou com a conta cheia: %d, queria 429", st)
 	}
 	// nome que não pode existir não vira chave
 	tenta(strings.Repeat("x", 500), "errada-123", "10.6.0.1")
@@ -569,6 +569,98 @@ func TestLoginConcorrenteRespeitaLimite(t *testing.T) {
 	wg.Wait()
 	if got, teto := erradas.Load(), int64(a.limLoginIP.max+cap(a.vagasBcrypt)); got > teto {
 		t.Fatalf("%d senhas testadas, teto %d", got, teto)
+	}
+}
+
+// o bloqueio por IP não perde para onde a pessoa ia depois do login.
+func TestLoginBloqueadoGuardaNext(t *testing.T) {
+	a, srv, _ := wsApp(t)
+	a.limLoginIP = novoLimite(0, time.Minute)
+	res, err := http.PostForm(srv.URL+"/_login", url.Values{"name": {"ana"}, "pass": {"x"}, "next": {"/ana/notas"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	if res.StatusCode != 429 || !strings.Contains(string(b), `value="/ana/notas"`) {
+		t.Fatalf("status %d, página sem o next", res.StatusCode)
+	}
+}
+
+// HSTS só em HTTPS (atrás do proxy, pelo X-Forwarded-Proto), e a CSP em todas as respostas.
+func TestCabecalhosDeSeguranca(t *testing.T) {
+	_, srv, _ := wsApp(t)
+	pega := func(proto string) http.Header {
+		req, _ := http.NewRequest("GET", srv.URL+"/_login", nil)
+		if proto != "" {
+			req.Header.Set("X-Forwarded-Proto", proto)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.Header
+	}
+	if h := pega("https"); !strings.Contains(h.Get("Strict-Transport-Security"), "max-age=") {
+		t.Errorf("sem HSTS em HTTPS: %v", h)
+	}
+	if h := pega(""); h.Get("Strict-Transport-Security") != "" {
+		t.Error("HSTS em HTTP")
+	}
+	for _, d := range []string{"frame-ancestors 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'self'"} {
+		if !strings.Contains(pega("").Get("Content-Security-Policy"), d) {
+			t.Errorf("CSP sem %s", d)
+		}
+	}
+}
+
+// a sessão que cai enquanto o corpo chega não grava: ela é conferida de novo depois da leitura.
+func TestSaveSessaoCaiDuranteOCorpo(t *testing.T) {
+	a, srv, login := wsApp(t)
+	ana := login("ana")
+	pr, pw := io.Pipe()
+	req, _ := http.NewRequest("POST", srv.URL+"/ana/lento", pr)
+	fim := make(chan int)
+	go func() {
+		res, err := ana.Do(req)
+		if err != nil {
+			t.Error(err)
+			fim <- 0
+			return
+		}
+		res.Body.Close()
+		fim <- res.StatusCode
+	}()
+	pw.Write([]byte("começo"))
+	time.Sleep(200 * time.Millisecond) // o handler já passou da primeira conferência e espera o corpo
+	if _, err := a.db.Exec(`DELETE FROM sessions`); err != nil {
+		t.Fatal(err)
+	}
+	pw.Close()
+	if st := <-fim; st != 401 {
+		t.Fatalf("status %d, queria 401", st)
+	}
+	if _, err := os.Stat(a.docPath("ana/lento")); !os.IsNotExist(err) {
+		t.Fatal("gravou com a sessão já revogada")
+	}
+}
+
+// corpo que para no meio não prende a conexão: o prazo vence, e o servidor responde e fecha.
+func TestLoginCorpoParado(t *testing.T) {
+	old := prazoLogin
+	prazoLogin = 200 * time.Millisecond
+	t.Cleanup(func() { prazoLogin = old })
+	_, srv, _ := wsApp(t)
+	c, err := net.Dial("tcp", srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	fmt.Fprintf(c, "POST /_login HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 1000\r\n\r\nname=ana")
+	c.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, err := io.ReadAll(c); err != nil {
+		t.Fatalf("a conexão ficou presa: %v", err)
 	}
 }
 
