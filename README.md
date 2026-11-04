@@ -89,6 +89,10 @@ docker compose exec pad /pad <comando>
 
 Push na `main` roda o CI e, com ele verde, o job `deploy` fica esperando aprovação no Environment `production` (**Actions** > a execução > **Review deployments**). O ruleset `proteger-main` impede force-push e apagar a `main`.
 
+A chave SSH do CI fica no Environment e é restrita no `authorized_keys` da VPS (`restrict,command=".../pad-deploy-ssh.sh"`): ela só pede `deploy <commit>` ou `conferir` e não executa mais nada. O código vem sempre da `main` no GitHub, e o deploy recusa um commit que não seja a ponta dela: se a `main` andou, aprove a execução mais nova.
+
+O `~/pad-deploy-ssh.sh` da VPS é uma cópia do `deploy-ssh.sh` e não é atualizado pelo deploy, de propósito: ao mudar o arquivo aqui, copie-o de novo à mão. Para criar ou trocar a chave, use o `instalar-chave-deploy.sh`, que não remove a anterior.
+
 ## Backup
 
 Na vpsarm os dados ficam em `/srv/pad` (fora dos volumes do Docker, para nenhuma limpeza alcançá-los). Cada deploy (`deploy.sh`) para o serviço, grava `~/pad-backups/pad-<data>.tgz` sem a área `/publico` e guarda os 7 últimos; a saída fica em `~/pad-deploy.log`. Se o backup falhar ou vier sem o banco, a versão atual volta ao ar e o deploy para. Os arquivos têm os documentos privados e os hashes de senha: guarde uma cópia fora da VPS, com o mesmo cuidado.

@@ -44,7 +44,6 @@ jobs:
     env:
       SSH_TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: chave ssh
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -54,13 +53,8 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519
+      # a chave é restrita a estas duas ações (deploy-ssh.sh): o código vem da main, não deste job
       - name: build e subida na vpsarm
-        run: |
-          tar czf - --exclude=.git . | ssh -o ServerAliveInterval=30 "$SSH_TARGET" \
-            'mkdir -p ~/pad && tar xzf - -C ~/pad && cd ~/pad && { sh deploy.sh >~/pad-deploy.log 2>&1; rc=$?; tail -n 40 ~/pad-deploy.log; exit $rc; }'
+        run: ssh -o ServerAliveInterval=30 "$SSH_TARGET" "deploy $GITHUB_SHA"
       - name: conferir que responde pelo Traefik
-        run: |
-          ssh "$SSH_TARGET" 'for i in $(seq 10); do
-            code=$(curl -sk -o /dev/null -w "%{http_code}" --resolve pad.pauloholanda.com.br:443:127.0.0.1 https://pad.pauloholanda.com.br/_login)
-            [ "$code" = 200 ] && exit 0; sleep 3
-          done; echo "status $code"; docker logs --tail 20 pad-pad-1; exit 1'
+        run: ssh "$SSH_TARGET" conferir
