@@ -74,6 +74,45 @@ func (a *app) painelMCP(u user) (painelPage, error) {
 	return p, nil
 }
 
+// mcpRoutes é a área MCP de cada usuário (/{usuario}/_mcp...), separada do mux principal; o routes() desvia para cá.
+func (a *app) mcpRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /{usuario}/_mcp", a.mcpRPC)
+	mux.HandleFunc("DELETE /{usuario}/_mcp", a.mcpFim)
+	mux.HandleFunc("GET /{usuario}/_mcp", func(w http.ResponseWriter, r *http.Request) {
+		// o GET de um cliente MCP (abrir o fluxo SSE, que não oferecemos) não tem cookie: responde 405 em vez de ir ao login
+		if r.Header.Get("Authorization") != "" {
+			w.Header().Set("Allow", "POST, DELETE")
+			http.Error(w, "use POST ou DELETE", http.StatusMethodNotAllowed)
+			return
+		}
+		a.daConta(false, a.painel)(w, r)
+	})
+	mux.HandleFunc("POST /{usuario}/_mcp/maquinas", a.daConta(false, a.novaMaquina))
+	mux.HandleFunc("POST /{usuario}/_mcp/maquinas/{id}/revogar", a.daConta(false, a.revogar))
+	mux.HandleFunc("GET /{usuario}/_mcp/conectados", a.daConta(true, a.conectados))
+	mux.HandleFunc("POST /{usuario}/_mcp/c", a.daConta(false, a.novaConversa))
+	mux.HandleFunc("GET /{usuario}/_mcp/c/{nome}", a.daConta(false, a.chat))
+	mux.HandleFunc("GET /{usuario}/_mcp/c/{nome}/msgs", a.daConta(true, a.chatMsgs))
+	mux.HandleFunc("POST /{usuario}/_mcp/c/{nome}/msgs", a.daConta(true, a.chatEnviar))
+	mux.HandleFunc("POST /{usuario}/_mcp/c/{nome}/apagar", a.daConta(false, a.chatApagar))
+	return mux
+}
+
+// daConta exige a sessão e que {usuario} seja quem está logado; a área de outro usuário dá 404 (simples nas rotas JSON).
+func (a *app) daConta(json bool, h func(http.ResponseWriter, *http.Request, user)) http.HandlerFunc {
+	return a.auth(func(w http.ResponseWriter, r *http.Request, u user) {
+		switch {
+		case r.PathValue("usuario") == u.Name:
+			h(w, r, u)
+		case json:
+			http.NotFound(w, r)
+		default:
+			render(w, http.StatusNotFound, "msg", msgPage{Msg: "página não encontrada ou sem acesso. Sua área MCP fica em /" + u.Name + "/_mcp", Me: u.Name})
+		}
+	})
+}
+
 func (a *app) painel(w http.ResponseWriter, r *http.Request, u user) {
 	p, err := a.painelMCP(u)
 	if err != nil {
@@ -102,18 +141,18 @@ func (a *app) novaMaquina(w http.ResponseWriter, r *http.Request, u user) {
 		p.Err = err.Error()
 	} else {
 		nome, _ := curto(r.FormValue("nome"))
-		p.Nova = comandos(r, nome, chave)
+		p.Nova = comandos(r, u.Name, nome, chave)
 	}
 	render(w, status, "mcp", p)
 }
 
 // comandos monta o que a pessoa cola na máquina; a base vem da própria requisição.
-func comandos(r *http.Request, nome, chave string) *novaChave {
+func comandos(r *http.Request, usuario, nome, chave string) *novaChave {
 	scheme := "http"
 	if isHTTPS(r) {
 		scheme = "https"
 	}
-	base := scheme + "://" + r.Host + "/_mcp"
+	base := scheme + "://" + r.Host + "/" + usuario + "/_mcp"
 	return &novaChave{
 		Nome:   nome,
 		Chave:  chave,
@@ -133,7 +172,7 @@ func (a *app) revogar(w http.ResponseWriter, r *http.Request, u user) {
 		serverError(w, err)
 		return
 	}
-	http.Redirect(w, r, "/_mcp", http.StatusSeeOther)
+	http.Redirect(w, r, "/"+u.Name+"/_mcp", http.StatusSeeOther)
 }
 
 func (a *app) conectados(w http.ResponseWriter, r *http.Request, u user) {
@@ -162,7 +201,7 @@ func (a *app) novaConversa(w http.ResponseWriter, r *http.Request, u user) {
 	nome, _ := curto(r.FormValue("nome"))
 	err := a.criarConversa(u.ID, nome, humana(u, r.FormValue("mensagem")))
 	if err == nil {
-		http.Redirect(w, r, "/_mcp/c/"+nome, http.StatusSeeOther)
+		http.Redirect(w, r, "/"+u.Name+"/_mcp/c/"+nome, http.StatusSeeOther)
 		return
 	}
 	if !errors.Is(err, errNomeInvalido) && !errors.Is(err, errConversaExiste) && !errors.Is(err, errMsgVazia) && !errors.Is(err, errMsgGrande) {
@@ -306,5 +345,5 @@ func (a *app) chatApagar(w http.ResponseWriter, r *http.Request, u user) {
 		serverError(w, err)
 		return
 	}
-	http.Redirect(w, r, "/_mcp", http.StatusSeeOther)
+	http.Redirect(w, r, "/"+u.Name+"/_mcp", http.StatusSeeOther)
 }

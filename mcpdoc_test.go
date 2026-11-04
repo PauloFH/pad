@@ -66,7 +66,7 @@ func TestDiffOp(t *testing.T) {
 func docApp(t *testing.T) (*app, *httptest.Server, *mcpCliente, func(string) *http.Client) {
 	t.Helper()
 	a, srv, login := wsApp(t)
-	ag := mcpCli(t, srv, chaveDe(t, a, 1, "note"), "claude-code") // ana é o usuário 1
+	ag := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "note"), "claude-code") // ana é o usuário 1
 	ag.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é pai")
 	return a, srv, ag, login
 }

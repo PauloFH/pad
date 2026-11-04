@@ -148,9 +148,9 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 </script></section>{{end}}
 {{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <h2>Conversas</h2>
-{{if .Conversas}}<ul class="cartoes">{{range .Conversas}}<li><a class="cartao" href="/_mcp/c/{{.Nome}}" title="{{.Nome}}"><span class="nome">{{.Nome}}{{if .NaoLidas}} · {{.NaoLidas}} nova{{if gt .NaoLidas 1}}s{{end}}{{end}}</span><span class="meta">{{.UltimoRotulo}} · {{quando .UltimaEm}}</span>{{with index $.Agentes .Nome}}<span class="meta">{{range $i, $r := .}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}</a></li>{{end}}</ul>
+{{if .Conversas}}<ul class="cartoes">{{range .Conversas}}<li><a class="cartao" href="/{{$.Me}}/_mcp/c/{{.Nome}}" title="{{.Nome}}"><span class="nome">{{.Nome}}{{if .NaoLidas}} · {{.NaoLidas}} nova{{if gt .NaoLidas 1}}s{{end}}{{end}}</span><span class="meta">{{.UltimoRotulo}} · {{quando .UltimaEm}}</span>{{with index $.Agentes .Nome}}<span class="meta">{{range $i, $r := .}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}</a></li>{{end}}</ul>
 {{else}}<p class="mut">Nenhuma conversa ainda.</p>{{end}}
-<form method="post" action="/_mcp/c" class="nova-conversa">
+<form method="post" action="/{{.Me}}/_mcp/c" class="nova-conversa">
 <input class="campo" name="nome" placeholder="nome da conversa" aria-label="nome da conversa" required maxlength="60">
 <input class="campo" name="mensagem" placeholder="primeira mensagem" aria-label="primeira mensagem" required>
 <button class="btn pri">Criar conversa</button>
@@ -158,15 +158,15 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 <h2>Máquinas</h2>
 {{if .Maquinas}}<div class="tabela"><table><thead><tr><th>nome</th><th>cadastrada</th><th>vista por último</th><th></th></tr></thead><tbody>
 {{range .Maquinas}}<tr><td class="mono">{{.Nome}}</td><td>{{quando .Criada}}</td><td>{{if .Vista.Unix}}{{quando .Vista}}{{else}}nunca{{end}}</td>
-<td><form method="post" action="/_mcp/maquinas/{{.ID}}/revogar"><button class="btn perigo" aria-label="Revogar {{.Nome}}">Revogar</button></form></td></tr>{{end}}
+<td><form method="post" action="/{{$.Me}}/_mcp/maquinas/{{.ID}}/revogar"><button class="btn perigo" aria-label="Revogar {{.Nome}}">Revogar</button></form></td></tr>{{end}}
 </tbody></table></div>{{else}}<p class="mut">Nenhuma máquina cadastrada. Cadastre uma para gerar a chave de um agente.</p>{{end}}
-<form method="post" action="/_mcp/maquinas" class="nova-conversa">
+<form method="post" action="/{{.Me}}/_mcp/maquinas" class="nova-conversa">
 <input class="campo" name="nome" placeholder="nome da máquina (ex.: desktop)" aria-label="nome da máquina" required maxlength="60" autocomplete="off">
 <button class="btn pri">Cadastrar máquina</button>
 </form>
 <h2>Agora conectados</h2>
 <p id="resumo" class="mut" aria-live="polite">{{.Resumo}}</p>
-<div class="tabela"><table id="agentes"><thead><tr><th>apelido</th><th>máquina</th><th>tipo</th><th>conversas</th><th>última atividade</th></tr></thead><tbody>
+<div class="tabela"><table id="agentes" data-base="/{{.Me}}/_mcp"><thead><tr><th>apelido</th><th>máquina</th><th>tipo</th><th>conversas</th><th>última atividade</th></tr></thead><tbody>
 {{range .Conectados}}<tr><td class="mono">{{.Apelido}}</td><td>{{.Maquina}}</td><td>{{.Tipo}}</td><td>{{range $i, $c := .Conversas}}{{if $i}}, {{end}}{{$c}}{{end}}</td><td>{{hora .Ultima}}</td></tr>{{end}}
 </tbody></table></div>
 </main></div></div>
@@ -176,10 +176,10 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 
 {{/* chat de uma conversa; as mensagens chegam pelo chat.js (msgs), sem HTML de mensagem no servidor */}}
 {{define "mcp-conversa"}}{{template "head" .Nome}}<body class="ed">
-<header class="topo"><script src="/_static/shell.js"></script><a class="btn" href="/_mcp">← mcp</a><span class="crumb" title="{{.Nome}}"><span>{{.Nome}}</span></span><span class="sp"></span>{{template "conta" .}}</header>
-<div class="meio"><div class="centro"><main id="chat" class="chat" data-nome="{{.Nome}}">
+<header class="topo"><script src="/_static/shell.js"></script><a class="btn" href="/{{.Me}}/_mcp">← mcp</a><span class="crumb" title="{{.Nome}}"><span>{{.Nome}}</span></span><span class="sp"></span>{{template "conta" .}}</header>
+<div class="meio"><div class="centro"><main id="chat" class="chat" data-base="/{{.Me}}/_mcp" data-nome="{{.Nome}}">
 <div class="info"><p id="ativos" class="ativos" aria-live="polite">carregando…</p>
-<form id="apagar" method="post" action="/_mcp/c/{{.Nome}}/apagar"><button class="btn perigo">apagar conversa</button></form></div>
+<form id="apagar" method="post" action="/{{.Me}}/_mcp/c/{{.Nome}}/apagar"><button class="btn perigo">apagar conversa</button></form></div>
 <ol id="msgs" class="msgs" role="log" aria-label="mensagens de {{.Nome}}" tabindex="0"></ol>
 <form id="enviar" class="enviar"><label class="vh" for="texto">mensagem</label>
 <textarea id="texto" class="campo" rows="2" placeholder="Mensagem (Enter envia, Shift+Enter quebra a linha)" autocomplete="off"></textarea>
@@ -205,7 +205,7 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{/* avatar com o menu da conta; o visitante vê o Entrar que volta para a página */}}
 {{define "conta"}}{{if .Me}}<div class="conta"><button id="conta" class="av" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="conta-menu" title="{{.Me}}" aria-label="conta de {{.Me}}">{{slice .Me 0 1}}</button>
 <div id="conta-menu" class="menu" role="menu" hidden><span class="menu-grupo" role="presentation">{{.Me}}</span>
-<a class="menu-item" role="menuitem" href="/">documentos</a><a class="menu-item" role="menuitem" href="/_mcp">mcp</a>{{if .Admin}}<a class="menu-item" role="menuitem" href="/_convite">convidar</a>{{end}}
+<a class="menu-item" role="menuitem" href="/">documentos</a><a class="menu-item" role="menuitem" href="/{{.Me}}/_mcp">mcp</a>{{if .Admin}}<a class="menu-item" role="menuitem" href="/_convite">convidar</a>{{end}}
 <form method="post" action="/_logout"><button class="menu-item" role="menuitem">sair</button></form></div></div>
 {{else}}<a class="btn pri" href="/_login?next=/{{.Name}}">Entrar</a>{{end}}{{end}}
 

@@ -270,6 +270,7 @@ func (a *app) mcpEntrada(w http.ResponseWriter, r *http.Request) (m maquina, u u
 			http.Error(w, "erro interno", http.StatusInternalServerError)
 			return m, u, false
 		}
+		ok = ok && u.Name == r.PathValue("usuario") // chave de outro usuário vale tanto quanto chave inválida
 	}
 	if !ok {
 		w.Header().Set("WWW-Authenticate", "Bearer")

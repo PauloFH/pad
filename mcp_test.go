@@ -37,7 +37,7 @@ func initialize(versao, cliente string) string {
 		`","capabilities":{},"clientInfo":{"name":"` + cliente + `","version":"1"}}}`
 }
 
-// mcpReq monta o POST /_mcp; chave e sessão vazias ficam sem header.
+// mcpReq monta o POST <url>/_mcp, com url até o usuário (srv.URL+"/ana"); chave e sessão vazias ficam sem header.
 func mcpReq(method, url, chave, sessao, corpo string) *http.Request {
 	req, _ := http.NewRequest(method, url+"/_mcp", strings.NewReader(corpo))
 	req.Header.Set("Content-Type", "application/json")
@@ -63,9 +63,9 @@ func fazer(t *testing.T, req *http.Request) (*http.Response, []byte) {
 	return res, b
 }
 
-func mcpCli(t *testing.T, srv *httptest.Server, chave, clientName string) *mcpCliente {
+func mcpCli(t *testing.T, srv *httptest.Server, usuario, chave, clientName string) *mcpCliente {
 	t.Helper()
-	c := &mcpCliente{t: t, url: srv.URL, chave: chave}
+	c := &mcpCliente{t: t, url: srv.URL + "/" + usuario, chave: chave}
 	res, b := c.post(initialize("2025-06-18", clientName))
 	c.sessao = res.Header.Get("Mcp-Session-Id")
 	if res.StatusCode != 200 || c.sessao == "" {
@@ -177,7 +177,7 @@ func TestMCPInitialize(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
 	chave := chaveDe(t, a, 1, "desktop")
 	for _, v := range [][2]string{{"2025-06-18", "2025-06-18"}, {"2025-11-25", "2025-11-25"}, {"2025-03-26", "2025-03-26"}, {"1999-01-01", "2025-06-18"}} {
-		res, b := fazer(t, mcpReq("POST", srv.URL, chave, "", initialize(v[0], "claude-code")))
+		res, b := fazer(t, mcpReq("POST", srv.URL+"/ana", chave, "", initialize(v[0], "claude-code")))
 		var r struct {
 			ID     int
 			Result struct {
@@ -209,19 +209,19 @@ func TestMCPInitialize(t *testing.T) {
 func TestMCPAuth(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
 	chave := chaveDe(t, a, 1, "desktop")
-	res, _ := fazer(t, mcpReq("POST", srv.URL, "", "", initialize("2025-06-18", "x")))
+	res, _ := fazer(t, mcpReq("POST", srv.URL+"/ana", "", "", initialize("2025-06-18", "x")))
 	if res.StatusCode != 401 || res.Header.Get("WWW-Authenticate") != "Bearer" {
 		t.Fatalf("sem chave: %d %q", res.StatusCode, res.Header.Get("WWW-Authenticate"))
 	}
-	if res, _ := fazer(t, mcpReq("POST", srv.URL, "pad_errada", "", initialize("2025-06-18", "x"))); res.StatusCode != 401 {
+	if res, _ := fazer(t, mcpReq("POST", srv.URL+"/ana", "pad_errada", "", initialize("2025-06-18", "x"))); res.StatusCode != 401 {
 		t.Fatalf("chave errada: %d", res.StatusCode)
 	}
-	req := mcpReq("POST", srv.URL, chave, "", initialize("2025-06-18", "x"))
+	req := mcpReq("POST", srv.URL+"/ana", chave, "", initialize("2025-06-18", "x"))
 	req.Header.Set("Origin", "https://mal.example")
 	if res, _ := fazer(t, req); res.StatusCode != 403 {
 		t.Fatalf("origem de fora: %d", res.StatusCode)
 	}
-	req = mcpReq("POST", srv.URL, chave, "", initialize("2025-06-18", "x"))
+	req = mcpReq("POST", srv.URL+"/ana", chave, "", initialize("2025-06-18", "x"))
 	req.Header.Set("Origin", srv.URL)
 	if res, b := fazer(t, req); res.StatusCode != 200 {
 		t.Fatalf("mesma origem: %d %s", res.StatusCode, b)
@@ -235,11 +235,11 @@ func TestMCPAuth(t *testing.T) {
 func TestMCPSessaoDesconhecida(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
 	chave := chaveDe(t, a, 1, "desktop")
-	c := mcpCli(t, srv, chave, "claude-code")
+	c := mcpCli(t, srv, "ana", chave, "claude-code")
 	if _, st := c.call("tools/list", nil); st != 200 {
 		t.Fatalf("tools/list: %d", st)
 	}
-	outra := mcpCli(t, srv, chaveDe(t, a, 1, "note"), "codex")
+	outra := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "note"), "codex")
 	outra.sessao = c.sessao // sessão de outra máquina
 	if _, st := outra.call("ping", nil); st != 404 {
 		t.Fatalf("sessão de outra máquina: %d", st)
@@ -248,21 +248,21 @@ func TestMCPSessaoDesconhecida(t *testing.T) {
 	if _, st := c.call("tools/list", nil); st != 404 {
 		t.Fatalf("sessão x: %d", st)
 	}
-	c = mcpCli(t, srv, chave, "claude-code")
-	if res, _ := fazer(t, mcpReq("DELETE", srv.URL, chave, c.sessao, "")); res.StatusCode != 204 {
+	c = mcpCli(t, srv, "ana", chave, "claude-code")
+	if res, _ := fazer(t, mcpReq("DELETE", srv.URL+"/ana", chave, c.sessao, "")); res.StatusCode != 204 {
 		t.Fatalf("DELETE: %d", res.StatusCode)
 	}
 	if _, st := c.call("ping", nil); st != 404 {
 		t.Fatalf("depois do DELETE: %d", st)
 	}
-	if res, _ := fazer(t, mcpReq("DELETE", srv.URL, chave, c.sessao, "")); res.StatusCode != 404 {
+	if res, _ := fazer(t, mcpReq("DELETE", srv.URL+"/ana", chave, c.sessao, "")); res.StatusCode != 404 {
 		t.Fatalf("DELETE de novo: %d", res.StatusCode)
 	}
 }
 
 func TestMCPNotificacao(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
-	c := mcpCli(t, srv, chaveDe(t, a, 1, "desktop"), "claude-code")
+	c := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "desktop"), "claude-code")
 	res, b := c.post(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
 	if res.StatusCode != 202 || len(b) != 0 {
 		t.Fatalf("notificação: %d %q", res.StatusCode, b)
@@ -271,7 +271,7 @@ func TestMCPNotificacao(t *testing.T) {
 
 func TestMCPErrosRPC(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
-	c := mcpCli(t, srv, chaveDe(t, a, 1, "desktop"), "claude-code")
+	c := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "desktop"), "claude-code")
 	for corpo, code := range map[string]int{
 		`{`: -32700,
 		`[{"jsonrpc":"2.0","id":1,"method":"ping"}]`:                              -32600,
@@ -312,29 +312,29 @@ func TestMCPErrosRPC(t *testing.T) {
 func TestMCPApresentar(t *testing.T) {
 	a, srv := mcpApp(t, "ana", "bia")
 	chave := chaveDe(t, a, 1, "desktop")
-	c1 := mcpCli(t, srv, chave, "claude-code")
+	c1 := mcpCli(t, srv, "ana", chave, "claude-code")
 	c1.quer("conversas", nil, true, "apresentar")
 	c1.quer("apresentar", map[string]any{"apelido": "Ana"}, true, "login")
 	c1.quer("apresentar", map[string]any{"apelido": "com espaço"}, true, "inválido")
 	c1.quer("apresentar", map[string]any{"apelido": " Pai "}, false, "você é pai · claude · desktop")
 	c1.quer("conversas", nil, false, "nenhuma conversa")
 
-	c2 := mcpCli(t, srv, chave, "codex-mcp-client")
+	c2 := mcpCli(t, srv, "ana", chave, "codex-mcp-client")
 	c2.quer("apresentar", map[string]any{"apelido": "pai"}, true, "apelido em uso por claude · desktop")
-	outraMaquina := mcpCli(t, srv, chaveDe(t, a, 1, "note"), "claude-code")
+	outraMaquina := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "note"), "claude-code")
 	outraMaquina.quer("apresentar", map[string]any{"apelido": "pai"}, true, "apelido em uso por claude · desktop")
 	// outra conta pode usar o mesmo apelido
-	mcpCli(t, srv, chaveDe(t, a, 2, "desktop"), "claude-code").quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é pai")
+	mcpCli(t, srv, "bia", chaveDe(t, a, 2, "desktop"), "claude-code").quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é pai")
 
 	// mesmo cliente na mesma máquina é reconexão: a sessão nova fica com o apelido, mesmo com a velha ativa
-	c3 := mcpCli(t, srv, chave, "claude-code")
+	c3 := mcpCli(t, srv, "ana", chave, "claude-code")
 	c3.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é pai · claude · desktop")
 	c1.quer("conversas", nil, true, "apresente-se")
 	c2.quer("apresentar", map[string]any{"apelido": "pai"}, true, "apelido em uso por claude · desktop")
 
 	// quem está num esperar não perde o apelido nem para o mesmo cliente
 	c3.sessaoEm(a, func(s *sessao) { s.esperando = 1 })
-	c4 := mcpCli(t, srv, chave, "claude-code")
+	c4 := mcpCli(t, srv, "ana", chave, "claude-code")
 	c4.quer("apresentar", map[string]any{"apelido": "pai"}, true, "apelido em uso por claude · desktop")
 	c3.sessaoEm(a, func(s *sessao) { s.esperando = 0 })
 
@@ -345,8 +345,8 @@ func TestMCPApresentar(t *testing.T) {
 
 func TestMCPConversaPaiFilho(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
-	pai := mcpCli(t, srv, chaveDe(t, a, 1, "desktop"), "claude-code")
-	filho := mcpCli(t, srv, chaveDe(t, a, 1, "note"), "codex-mcp-client")
+	pai := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "desktop"), "claude-code")
+	filho := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "note"), "codex-mcp-client")
 	pai.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é pai")
 	pai.quer("criar_conversa", map[string]any{"nome": "Login", "mensagem": "faz o login"}, false, "conversa login criada")
 	pai.quer("criar_conversa", map[string]any{"nome": "login", "mensagem": "de novo"}, true, "já existe")
@@ -387,7 +387,7 @@ func TestMCPEsperarPrazo(t *testing.T) {
 	esperaMax = 200 * time.Millisecond
 	t.Cleanup(func() { esperaMax = velho })
 	a, srv := mcpApp(t, "ana")
-	c := mcpCli(t, srv, chaveDe(t, a, 1, "desktop"), "claude-code")
+	c := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "desktop"), "claude-code")
 	c.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é")
 	t0 := time.Now()
 	c.quer("esperar", nil, false, "nada ainda")
@@ -398,7 +398,7 @@ func TestMCPEsperarPrazo(t *testing.T) {
 
 func TestMCPRevogaDuranteEsperar(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
-	c := mcpCli(t, srv, chaveDe(t, a, 1, "desktop"), "claude-code")
+	c := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "desktop"), "claude-code")
 	c.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é")
 	espera := c.emFundo("esperar", map[string]any{"segundos": 50})
 	c.esperandoJa(a)
@@ -416,7 +416,7 @@ func TestMCPRevogaDuranteEsperar(t *testing.T) {
 
 func TestMCPEncerrarAcordaEspera(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
-	c := mcpCli(t, srv, chaveDe(t, a, 1, "desktop"), "claude-code")
+	c := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "desktop"), "claude-code")
 	c.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é")
 	espera := c.emFundo("esperar", map[string]any{"segundos": 50})
 	c.esperandoJa(a)
@@ -430,12 +430,12 @@ func TestMCPEncerrarAcordaEspera(t *testing.T) {
 func TestMCPLimiteSessoes(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
 	chave := chaveDe(t, a, 1, "desktop")
-	cs := []*mcpCliente{mcpCli(t, srv, chave, "claude-code")}
+	cs := []*mcpCliente{mcpCli(t, srv, "ana", chave, "claude-code")}
 	cs[0].quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é")
 	espera := cs[0].emFundo("esperar", map[string]any{"segundos": 50})
 	cs[0].esperandoJa(a)
 	for range maxSessoes {
-		cs = append(cs, mcpCli(t, srv, chave, "claude-code"))
+		cs = append(cs, mcpCli(t, srv, "ana", chave, "claude-code"))
 	}
 	// cs[0] é a mais antiga, mas está num esperar: cai a mais antiga das paradas
 	if _, st := cs[1].call("ping", nil); st != 404 {
@@ -453,7 +453,7 @@ func TestMCPLimiteSessoes(t *testing.T) {
 	for _, c := range cs[2:] {
 		c.sessaoEm(a, func(s *sessao) { s.esperando++ })
 	}
-	mcpCli(t, srv, chave, "claude-code")
+	mcpCli(t, srv, "ana", chave, "claude-code")
 	if r := receber(t, espera); !r.erro || r.texto != "sessão encerrada" {
 		t.Fatalf("esperar: %+v", r)
 	}
@@ -464,8 +464,8 @@ func TestMCPLimiteSessoes(t *testing.T) {
 
 func TestMCPEsperarNovidades(t *testing.T) {
 	a, srv := mcpApp(t, "ana")
-	pai := mcpCli(t, srv, chaveDe(t, a, 1, "desktop"), "claude-code")
-	filho := mcpCli(t, srv, chaveDe(t, a, 1, "note"), "codex")
+	pai := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "desktop"), "claude-code")
+	filho := mcpCli(t, srv, "ana", chaveDe(t, a, 1, "note"), "codex")
 	pai.quer("apresentar", map[string]any{"apelido": "pai"}, false, "você é")
 	filho.quer("apresentar", map[string]any{"apelido": "filho"}, false, "você é")
 	for _, n := range []string{"b", "a"} {

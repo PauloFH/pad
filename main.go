@@ -265,28 +265,20 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_share/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_unshare/{name...}", a.auth(a.share))
 	mux.HandleFunc("POST /_delete/{name...}", a.auth(a.del))
-	mux.HandleFunc("POST /_mcp", a.mcpRPC)
-	mux.HandleFunc("GET /_mcp", func(w http.ResponseWriter, r *http.Request) {
-		// o GET de um cliente MCP (abrir o fluxo SSE, que não oferecemos) não tem cookie: responde 405 em vez de ir ao login
-		if r.Header.Get("Authorization") != "" {
-			w.Header().Set("Allow", "POST, DELETE")
-			http.Error(w, "use POST ou DELETE", http.StatusMethodNotAllowed)
-			return
-		}
-		a.auth(a.painel)(w, r)
-	})
-	mux.HandleFunc("POST /_mcp/maquinas", a.auth(a.novaMaquina))
-	mux.HandleFunc("POST /_mcp/maquinas/{id}/revogar", a.auth(a.revogar))
-	mux.HandleFunc("GET /_mcp/conectados", a.auth(a.conectados))
-	mux.HandleFunc("POST /_mcp/c", a.auth(a.novaConversa))
-	mux.HandleFunc("GET /_mcp/c/{nome}", a.auth(a.chat))
-	mux.HandleFunc("GET /_mcp/c/{nome}/msgs", a.auth(a.chatMsgs))
-	mux.HandleFunc("POST /_mcp/c/{nome}/msgs", a.auth(a.chatEnviar))
-	mux.HandleFunc("POST /_mcp/c/{nome}/apagar", a.auth(a.chatApagar))
-	mux.HandleFunc("DELETE /_mcp", a.mcpFim)
+	mux.HandleFunc("GET /_mcp", a.auth(func(w http.ResponseWriter, r *http.Request, u user) {
+		http.Redirect(w, r, "/"+u.Name+"/_mcp", http.StatusSeeOther)
+	}))
+	mcp := a.mcpRoutes()
 	return http.NewCrossOriginProtection().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+		// /{usuario}/_mcp... fica num mux à parte: o padrão se sobrepõe a /_static/, /_ws/, /_join/ e /_public/ sem ser mais
+		// específico que nenhum, e o ServeMux entra em pânico ao registrar os dois no mesmo mux.
+		if u, resto, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/"); ok && validUser.MatchString(u) &&
+			(resto == "_mcp" || strings.HasPrefix(resto, "_mcp/")) {
+			mcp.ServeHTTP(w, r)
+			return
+		}
 		mux.ServeHTTP(w, r)
 	}))
 }

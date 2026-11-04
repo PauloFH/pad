@@ -1,4 +1,4 @@
-// Páginas do MCP: o painel /_mcp (tabela dos agentes ao vivo) e o chat de cada conversa (/_mcp/c/{nome}).
+// Páginas do MCP: o painel /{usuario}/_mcp (tabela dos agentes ao vivo) e o chat de cada conversa (/{usuario}/_mcp/c/{nome}).
 // Tudo que vem de fora (mensagem, login, apelido) entra na página só por textContent.
 (function () {
   // trecho de código; a linha da linguagem fica de fora
@@ -62,7 +62,7 @@
 
     async function atualizar() {
       try {
-        const r = await fetch('/_mcp/conectados', { headers: { Accept: 'application/json' } });
+        const r = await fetch(tabela.dataset.base + '/conectados', { headers: { Accept: 'application/json' } });
         if (r.ok) desenhar(await r.json());
       } catch {} // sem rede ou sessão vencida: mantém o que está na tela e tenta de novo
     }
@@ -104,7 +104,7 @@
   function chat() {
     const raiz = document.getElementById('chat');
     if (!raiz) return;
-    const base = '/_mcp/c/' + encodeURIComponent(raiz.dataset.nome);
+    const base = raiz.dataset.base + '/c/' + encodeURIComponent(raiz.dataset.nome);
     const lista = document.getElementById('msgs');
     const ativos = document.getElementById('ativos');
     const form = document.getElementById('enviar');
