@@ -33,7 +33,7 @@
   const pad = (window.pad = { sync: null, undo: new PadSync.UndoStack(), socket: null, peers: [], me: null });
   let prev = t.value; // texto que o sync conhece; o textarea difere dele só no meio de um input
   // resetNext: o próximo init recomeça do servidor; guarda o motivo a mostrar
-  let composing = false, moving = null, queue = [], resetNext = '', delay = 500, selTimer = 0, msgTimer = 0;
+  let composing = false, moving = null, queue = [], resetNext = '', delay = 500, selTimer = 0, msgTimer = 0, alertaFixo = false;
   let saved = { s: 0, e: 0, d: 'none' }; // seleção antes do input, para desfazer um input barrado
   let visitor = null;
   try { visitor = localStorage['pad:visitor'] || null; } catch {}
@@ -74,8 +74,17 @@
   function warn(text) {
     lockMsg.textContent = text;
     lockMsg.hidden = false;
+    alertaFixo = false;
     clearTimeout(msgTimer);
     msgTimer = setTimeout(() => (lockMsg.hidden = true), 2000);
+  }
+
+  // o que a pessoa escreveu foi descartado: o aviso fica à vista até a próxima edição, não some em 2 s
+  function alerta(text) {
+    lockMsg.textContent = text;
+    lockMsg.hidden = false;
+    alertaFixo = true;
+    clearTimeout(msgTimer);
   }
 
   // troca o texto mantendo a seleção própria e a rolagem. Uma seleção é trava: como no
@@ -122,6 +131,10 @@
       t.setSelectionRange(saved.s, saved.e, saved.d);
       return warn('trecho travado por ' + who);
     }
+    if (alertaFixo) {
+      alertaFixo = false;
+      lockMsg.hidden = true;
+    }
     pad.undo.record(op, before, Date.now());
     send(pad.sync.local(op));
     changed();
@@ -164,8 +177,8 @@
     changed();
     send(msg);
     t.readOnly = !(canEditPage && m.canEdit);
-    if (resetNext) say(resetNext); // depois de um reject, o motivo fica à vista
-    else saveState();
+    saveState();
+    if (resetNext) alerta(resetNext); // depois de um reject, o motivo fica à vista
     resetNext = '';
     sendSel();
     fire('pad:peers');
@@ -220,7 +233,7 @@
         return;
       }
       // 1009: a mensagem passou do limite. Reenviar a mesma op cairia de novo, para sempre; o próximo init a descarta
-      if (e.code === 1009) resetNext = 'texto grande demais para este documento';
+      if (e.code === 1009) resetNext = 'texto grande demais para este documento: a colagem não foi salva';
       say('reconectando…');
       setTimeout(connect, delay);
       delay = Math.min(delay * 2, 10000);

@@ -38,6 +38,8 @@ jobs:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # espera a aprovação de quem está no Environment; só a main pode usá-lo
+    environment: production
     concurrency: deploy-vpsarm
     env:
       SSH_TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
