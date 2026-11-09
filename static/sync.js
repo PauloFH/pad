@@ -10,13 +10,9 @@
   // op que leva o texto local antigo ao novo, para o editor atualizar o textarea
   const change = (a, b) => (a == null || a === b ? null : OT.diff(a, b, 0));
 
-  // getRandomValues funciona também fora de contexto seguro (http), ao contrário de randomUUID
-  const randomId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
-
   class SyncClient {
-    // cid + seq deixam o servidor reconhecer uma op já aplicada cujo ack se perdeu
-    constructor(rev, text, cid = randomId()) {
-      this.cid = cid;
+    // a seq, com o cid que a aba manda ao conectar (editor.js), deixa o servidor reconhecer uma op já aplicada cujo ack se perdeu
+    constructor(rev, text) {
       this.seq = 0; // seq da última op enviada; o inflight é sempre ela
       this.reset(rev, text);
     }
@@ -31,7 +27,7 @@
       return change(old, text);
     }
 
-    msg() { return { t: 'op', rev: this.rev, op: this.inflight, cid: this.cid, seq: this.seq }; }
+    msg() { return { t: 'op', rev: this.rev, op: this.inflight, seq: this.seq }; }
 
     local(op) {
       this.text = OT.apply(this.text, op);

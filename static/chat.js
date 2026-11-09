@@ -39,10 +39,8 @@
     return `${dois(d.getDate())}/${dois(d.getMonth() + 1)} ${dois(d.getHours())}:${dois(d.getMinutes())}`;
   }
 
-  // sessão do navegador vencida: o fetch seguiu o redirecionamento para o login (HTML no lugar do JSON) ou levou 401
-  function vencida(r) {
-    return r.status === 401 || r.redirected || (r.ok && !(r.headers.get('Content-Type') || '').includes('json'));
-  }
+  // sessão do navegador vencida: as rotas JSON respondem 401 em vez de levar ao login
+  const vencida = (r) => r.status === 401;
 
   if (typeof module !== 'undefined') module.exports = { partes, quando, vencida };
   if (typeof document === 'undefined') return;

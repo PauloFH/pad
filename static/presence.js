@@ -11,7 +11,6 @@
     return st;
   }
 
-  // linha (a partir de 0) do índice i
   function lineAt(st, i) {
     let lo = 0, hi = st.length - 1;
     while (lo < hi) {
@@ -69,16 +68,23 @@
   // leitor que nunca mexeu no cursor: sem isso os anônimos se empilham na linha 1
   const parked = (p) => p.reading && p.a === 0 && p.h === 0;
 
-  // item do menu que recebe o foco com a tecla; i = -1 quando o foco está fora dos itens
-  function nextIndex(i, n, key) {
-    if (key === 'Home') return 0;
-    if (key === 'End') return n - 1;
-    if (key === 'ArrowDown') return (i + 1) % n;
-    if (key === 'ArrowUp') return i <= 0 ? n - 1 : i - 1;
-    return -1;
+  function linhaColuna(text, i) {
+    const antes = text.slice(0, i), nl = antes.lastIndexOf('\n');
+    return [antes.split('\n').length, i - nl];
   }
 
-  if (typeof module !== 'undefined') module.exports = { lineStarts, lineAt, span, state, groups, pick, stopsFollow, changed, parked, nextIndex };
+  // quem edita agora, para quem só lê; uma pessoa por key, como as bolinhas
+  function editando(peers, me) {
+    const nomes = new Map();
+    for (const p of peers) if (!p.reading && p.id !== me) nomes.set(p.key, p.name);
+    const n = [...nomes.values()].map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+    if (!n.length) return '';
+    if (n.length === 1) return n[0] + ' está editando agora';
+    if (n.length === 2) return n[0] + ' e ' + n[1] + ' estão editando agora';
+    return n.length + ' pessoas editando agora';
+  }
+
+  if (typeof module !== 'undefined') module.exports = { lineStarts, lineAt, span, state, groups, pick, stopsFollow, changed, parked, linhaColuna, editando };
   if (typeof document === 'undefined') return;
 
   const $ = (id) => document.getElementById(id);
@@ -86,7 +92,7 @@
   const box = $('peers'), btn = $('quem'), menu = $('quem-menu'), bar = $('seguir'), who = bar.querySelector('b');
   const range = document.createRange();
   const last = {}; // id da aba → hora da última op dela
-  let text = null, lines = [], starts = [0], frame = 0, follow = null, chase = false, tick = 0;
+  let text = null, lines = [], starts = [0], frame = 0, follow = null, chase = false;
 
   const schedule = () => { if (!frame) frame = requestAnimationFrame(draw); };
   const el = (tag, cls, txt) => {
@@ -283,16 +289,6 @@
     schedule();
   }
 
-  function open(v) {
-    menu.hidden = !v;
-    btn.setAttribute('aria-expanded', String(v));
-    clearInterval(tick);
-    if (!v) return;
-    tick = setInterval(schedule, 1000); // "digitando" vence sozinho
-    draw();
-    menu.querySelector('button')?.focus();
-  }
-
   function choose(key) {
     if (key === groups(pad.peers, pad.me).find((g) => g.mine)?.key) return;
     follow = key;
@@ -315,20 +311,23 @@
   t.addEventListener('keydown', quit);
   area.addEventListener('wheel', quit, { passive: true });
   bar.querySelector('button').addEventListener('click', stop);
-  btn.addEventListener('click', () => open(menu.hidden));
-  document.addEventListener('pointerdown', (e) => { if (!menu.hidden && !box.contains(e.target)) open(false); });
-  box.addEventListener('keydown', (e) => {
-    if (menu.hidden) return;
-    if (e.key === 'Escape') {
-      open(false);
-      btn.focus();
-    } else {
-      const items = [...menu.children], i = nextIndex(items.indexOf(document.activeElement), items.length, e.key);
-      if (i < 0) return;
-      e.preventDefault();
-      items[i]?.focus();
-    }
+  const open = PadShell.menu(btn, box, draw);
+  setInterval(() => { if (!menu.hidden) schedule(); }, 1000); // "digitando" vence sozinho
+
+  // barra de status: pessoas no documento e linha e coluna (editor), ou quem edita (página só leitura)
+  const pessoas = $('pessoas'), lc = $('lc'), ed = $('editando');
+  document.addEventListener('pad:peers', () => {
+    const n = groups(pad.peers, pad.me).length;
+    if (pessoas) pessoas.textContent = n ? '● ' + n + (n === 1 ? ' pessoa' : ' pessoas') : '';
+    if (ed) ed.textContent = editando(pad.peers, pad.me);
   });
-  // Tab para fora fecha; sem relatedTarget (foco para a janela, item refeito) fica aberto
-  box.addEventListener('focusout', (e) => { if (!menu.hidden && e.relatedTarget && !box.contains(e.relatedTarget)) open(false); });
+  const cursor = () => {
+    if (!lc) return;
+    const [l, c] = linhaColuna(t.value, t.selectionDirection === 'backward' ? t.selectionStart : t.selectionEnd);
+    lc.textContent = 'linha ' + l + ', coluna ' + c;
+  };
+  document.addEventListener('pad:text', cursor);
+  document.addEventListener('selectionchange', () => { if (document.activeElement === t) cursor(); });
+  t.addEventListener('input', cursor);
+  cursor();
 })();

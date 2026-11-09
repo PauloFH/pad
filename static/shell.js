@@ -52,24 +52,16 @@
     gravar: (u, l) => gravar('pad:pastas:' + u, l),
   };
 
-  // linha e coluna (a partir de 1) do índice i
-  function linhaColuna(text, i) {
-    const antes = text.slice(0, i), nl = antes.lastIndexOf('\n');
-    return [antes.split('\n').length, i - nl];
+  // item do menu que recebe o foco com a tecla; i = -1 quando o foco está fora dos itens
+  function nextIndex(i, n, key) {
+    if (key === 'Home') return 0;
+    if (key === 'End') return n - 1;
+    if (key === 'ArrowDown') return (i + 1) % n;
+    if (key === 'ArrowUp') return i <= 0 ? n - 1 : i - 1;
+    return -1;
   }
 
-  // quem edita agora, para quem só lê; uma pessoa por key, como as bolinhas
-  function editando(peers, me) {
-    const nomes = new Map();
-    for (const p of peers) if (!p.reading && p.id !== me) nomes.set(p.key, p.name);
-    const n = [...nomes.values()].map((s) => s.charAt(0).toUpperCase() + s.slice(1));
-    if (!n.length) return '';
-    if (n.length === 1) return n[0] + ' está editando agora';
-    if (n.length === 2) return n[0] + ' e ' + n[1] + ' estão editando agora';
-    return n.length + ' pessoas editando agora';
-  }
-
-  const PadShell = { abas, coluna, pastas, linhaColuna, editando, montarColuna, montarAbas, amostras };
+  const PadShell = { abas, coluna, pastas, montarColuna, montarAbas, menu, nextIndex };
   if (typeof module !== 'undefined') module.exports = PadShell;
   if (typeof document === 'undefined') return;
   globalThis.PadShell = PadShell;
@@ -123,14 +115,16 @@
   }
 
   // menus da barra (conta e tema): abre pelo botão, fecha com Esc, clique fora ou Tab para fora
+  // aoAbrir roda com o menu já visível, antes do foco: pode montar ou marcar os itens
   function menu(btn, box, aoAbrir) {
     const m = $(btn.getAttribute('aria-controls'));
     const itens = () => [...m.querySelectorAll('.menu-item')];
     const abrir = (v) => {
-      if (v && aoAbrir) aoAbrir();
       m.hidden = !v;
       btn.setAttribute('aria-expanded', String(v));
-      if (v) (m.querySelector('[aria-checked="true"]') || itens()[0])?.focus();
+      if (!v) return;
+      aoAbrir?.();
+      (m.querySelector('[aria-checked="true"]') || itens()[0])?.focus();
     };
     btn.addEventListener('click', () => abrir(m.hidden));
     document.addEventListener('pointerdown', (e) => { if (!m.hidden && !box.contains(e.target)) abrir(false); });
@@ -142,27 +136,12 @@
         btn.focus();
         return;
       }
-      const l = itens(), i = l.indexOf(document.activeElement);
-      const j = { ArrowDown: (i + 1) % l.length, ArrowUp: (i - 1 + l.length) % l.length, Home: 0, End: l.length - 1 }[e.key];
-      if (j == null) return;
+      const l = itens(), j = nextIndex(l.indexOf(document.activeElement), l.length, e.key);
+      if (j < 0) return;
       e.preventDefault();
       l[j].focus();
     });
     return abrir;
-  }
-
-  // as amostras usam as cores das regras de tema do pad.css, sem repetir os valores aqui
-  function amostras() {
-    const cores = {};
-    for (const s of document.styleSheets) {
-      try {
-        for (const r of s.cssRules) {
-          const m = /data-theme="(\w+)"/.exec(r.selectorText || '');
-          if (m) cores[m[1]] = [r.style.getPropertyValue('--bg'), r.style.getPropertyValue('--acc')];
-        }
-      } catch {} // folha de outra origem
-    }
-    return cores;
   }
 
   function tema() {
@@ -177,15 +156,12 @@
       rot.textContent = 'tema: ';
       btn.replaceChildren(rot, (t ? t.nome : '') + ' ▾');
     };
-    const item = (id, nome, cor) => {
+    const item = (id, nome) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'menu-item';
       b.setAttribute('role', 'menuitemradio');
-      const i = document.createElement('i');
-      i.className = 'amostra';
-      if (cor) Object.assign(i.style, { background: cor[0], boxShadow: 'inset 0 0 0 3px ' + cor[1] });
-      b.append(i, nome);
+      b.append(T.amostra(id), nome);
       b.onclick = () => {
         T.aplicar(id);
         abrir(false);
@@ -199,10 +175,9 @@
       g.setAttribute('role', 'presentation');
       return g;
     };
-    const cores = amostras();
     m.append(item('sistema', 'Seguir o sistema'));
     for (const [tipo, txt] of [['escuro', 'escuros'], ['claro', 'claros']]) {
-      m.append(grupo(txt), ...T.temas.filter((t) => t.tipo === tipo).map((t) => item(t.id, t.nome, cores[t.id])));
+      m.append(grupo(txt), ...T.temas.filter((t) => t.tipo === tipo).map((t) => item(t.id, t.nome)));
     }
     const abrir = menu(btn, btn.parentNode, () => {
       const e = T.escolha();
@@ -250,31 +225,9 @@
     });
   }
 
-  // barra de status: pessoas no documento, linha e coluna, e quem edita (página só leitura)
-  function status() {
-    const t = $('t'), pessoas = $('pessoas'), lc = $('lc'), ed = $('editando');
-    if (!t) return;
-    const peers = () => {
-      const pad = globalThis.pad, n = new Set(pad.peers.map((p) => p.key)).size;
-      if (pessoas) pessoas.textContent = n ? '● ' + n + (n === 1 ? ' pessoa' : ' pessoas') : '';
-      if (ed) ed.textContent = editando(pad.peers, pad.me);
-    };
-    const cursor = () => {
-      if (!lc) return;
-      const [l, c] = linhaColuna(t.value, t.selectionDirection === 'backward' ? t.selectionStart : t.selectionEnd);
-      lc.textContent = 'linha ' + l + ', coluna ' + c;
-    };
-    document.addEventListener('pad:peers', peers);
-    document.addEventListener('pad:text', cursor);
-    document.addEventListener('selectionchange', () => { if (document.activeElement === t) cursor(); });
-    t.addEventListener('input', cursor);
-    cursor();
-  }
-
   document.addEventListener('DOMContentLoaded', () => {
     for (const box of document.querySelectorAll('.conta')) menu(box.querySelector('button'), box);
     tema();
     ligarColuna();
-    status();
   });
 })();

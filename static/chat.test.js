@@ -36,14 +36,10 @@ test('partes: caminho colado a outro caminho, URL ou palavra fica texto; depois 
 test('partes: o código sem lookbehind, que o Safari antes do 16.4 não entende', () => {
   assert.ok(!/\(\?<[!=]/.test(require('node:fs').readFileSync(__dirname + '/chat.js', 'utf8')))
 })
-test('vencida: login no lugar do JSON, ou 401, é sessão vencida', () => {
-  const r = (status, tipo, redirected = false) => ({ status, ok: status < 300, redirected, headers: { get: () => tipo } })
-  assert.equal(vencida(r(200, 'application/json')), false)
-  assert.equal(vencida(r(200, 'text/html; charset=utf-8', true)), true)
-  assert.equal(vencida(r(200, 'text/html; charset=utf-8')), true)
-  assert.equal(vencida(r(401, 'text/plain; charset=utf-8')), true)
-  assert.equal(vencida(r(500, 'text/plain; charset=utf-8')), false)
-  assert.equal(vencida(r(200, null)), true)
+test('vencida: 401 é sessão vencida', () => {
+  assert.equal(vencida({ status: 200 }), false)
+  assert.equal(vencida({ status: 401 }), true)
+  assert.equal(vencida({ status: 500 }), false)
 })
 test('partes: vazio não gera trechos', () => {
   assert.deepEqual(partes(''), [])

@@ -80,20 +80,11 @@ textarea[readonly]:focus-visible{outline:2px solid var(--acc);outline-offset:-2p
 
 {{define "invite"}}{{template "head" "convidar"}}<body class="tela-cartao"><main class="largo">
 <h2>Convidar alguém</h2>
-<p class="sub">Cada link cria uma conta, vale uma vez e vence em 7 dias.</p>
-{{if .Link}}<div class="linha"><input id="link" class="campo mono" value="{{.Link}}" readonly aria-label="link de convite" onclick="this.select()"><button type="button" id="copiar" class="btn">Copiar</button></div>{{end}}
+<p class="sub">Cada link cria uma conta, vale uma vez e vence em {{(lim).DiasConvite}} dias.</p>
+{{if .Link}}<div class="linha"><input id="link" class="campo mono" value="{{.Link}}" readonly aria-label="link de convite" onclick="this.select()">{{template "copiavel" "link"}}</div>{{end}}
 <form method="post" action="/_convite" class="linha"><button class="btn pri">{{if .Link}}Gerar outro link{{else}}Gerar link de convite{{end}}</button></form>
 <div class="pe"><a href="/">← documentos</a> · {{.Me}} · {{template "logout"}}</div>
-{{if .Link}}<script>
-// sem a API da área de transferência (http fora do localhost), seleciona o link para o Ctrl+C
-document.getElementById('copiar').onclick = function () {
-  var b = this, l = document.getElementById('link')
-  var avisa = function (t) { b.textContent = t; setTimeout(function () { b.textContent = 'Copiar' }, 2500) }
-  var seleciona = function () { l.select(); avisa('Selecionado: use Ctrl+C') }
-  if (navigator.clipboard) navigator.clipboard.writeText(l.value).then(function () { avisa('Copiado') }, seleciona)
-  else seleciona()
-}
-</script>{{end}}
+{{if .Link}}{{template "copiar-js"}}{{end}}
 </main></body></html>{{end}}
 
 {{define "join"}}{{template "head" "criar conta"}}<body class="tela-cartao"><main>
@@ -101,9 +92,9 @@ document.getElementById('copiar').onclick = function () {
 <p class="sub">Você recebeu um convite. Escolha seu nome de usuário e uma senha.</p>
 {{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <form method="post">
-<label class="rotulo"><span>usuário</span><input class="campo" name="name" value="{{.Name}}" autocomplete="username" required autofocus></label>
-<label class="rotulo"><span>senha</span><input class="campo" name="pass" type="password" aria-describedby="regra-senha" autocomplete="new-password" required minlength="8" maxlength="72"></label>
-<p id="regra-senha" class="pe">A senha precisa de 8 caracteres ou mais.</p>
+<label class="rotulo"><span>usuário</span><input class="campo" name="name" value="{{.Name}}" autocomplete="username" required autofocus maxlength="{{(lim).UserMax}}"></label>
+<label class="rotulo"><span>senha</span><input class="campo" name="pass" type="password" aria-describedby="regra-senha" autocomplete="new-password" required minlength="{{(lim).SenhaMin}}" maxlength="{{(lim).SenhaMax}}"></label>
+<p id="regra-senha" class="pe">A senha precisa de {{(lim).SenhaMin}} caracteres ou mais.</p>
 <label class="rotulo"><span>repita a senha</span><input class="campo" name="pass2" type="password" autocomplete="new-password" required></label>
 <p class="pe">Ao criar a conta, você declara ter 18 anos ou mais e aceita os <a href="/_termos">Termos de uso</a> e declara ter lido a <a href="/_privacidade">Política de privacidade</a>.</p>
 <button class="btn pri">Criar conta</button>
@@ -120,7 +111,7 @@ document.getElementById('copiar').onclick = function () {
 <li>{{.Maquinas}} máquina{{if ne .Maquinas 1}}s{{end}} de agente e as chaves;</li>
 <li>{{.Conversas}} conversa{{if ne .Conversas 1}}s{{end}} com as mensagens.</li>
 </ul>
-<p class="sub">Ficam os documentos de outras pessoas e o que você escreveu na área pública. Antes, se quiser guardar uma cópia, use <a href="/_conta/exportar">baixar meus dados</a>. As cópias de segurança são trocadas a cada atualização do pad, e seus dados somem delas depois das próximas 7.</p>
+<p class="sub">Ficam os documentos de outras pessoas e o que você escreveu na área pública. Antes, se quiser guardar uma cópia, use <a href="/_conta/exportar">baixar meus dados</a>. As cópias de segurança são trocadas a cada atualização do pad, e seus dados somem delas depois das próximas {{(lim).Backups}}.</p>
 {{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <form method="post" action="/_conta/apagar">
 <input name="usuario" autocomplete="username" value="{{.Me}}" hidden>{{/* o gerenciador de senhas sabe de que conta é a senha */}}
@@ -144,7 +135,7 @@ document.getElementById('copiar').onclick = function () {
 <h2>Quais dados o pad trata</h2>
 <ul>
 <li><b>Conta:</b> nome de usuário; senha, guardada só como hash bcrypt, que não permite recuperá-la; se a conta é de administrador; os grupos de que você faz parte; e o convite usado para criar a conta (quem o gerou, validade e se foi usado).</li>
-<li><b>Sessão:</b> um código aleatório no cookie <code>sid</code>, ligado à sua conta, com validade de 30 dias renovada enquanto você usa o pad.</li>
+<li><b>Sessão:</b> um código aleatório no cookie <code>sid</code>, ligado à sua conta, com validade de {{(lim).DiasSessao}} dias renovada enquanto você usa o pad.</li>
 <li><b>Documentos:</b> o texto que você escreve, o nome (caminho) de cada documento, a data da última edição, com quem você o compartilhou e se ele é público.</li>
 <li><b>Presença ao vivo:</b> enquanto um documento está aberto, quem está nele vê seu nome de usuário, se você estiver logado e puder editar, ou senão um apelido aleatório de bicho; uma cor; a posição do seu cursor e o trecho selecionado. Isso fica só na memória do servidor e some quando você sai.</li>
 <li><b>Agentes (MCP):</b> nome de cada máquina cadastrada, a chave (guardada só como hash), as datas de cadastro e de último uso, as conversas com suas mensagens (autor, texto e hora), os apelidos dos agentes e até onde cada um leu.</li>
@@ -183,10 +174,10 @@ document.getElementById('copiar').onclick = function () {
 
 <h2>Por quanto tempo</h2>
 <ul>
-<li>Sessão: até você sair ou até passar 30 dias sem uso.</li>
+<li>Sessão: até você sair ou até passar {{(lim).DiasSessao}} dias sem uso.</li>
 <li>Conta, documentos e conversas: enquanto a conta existir. Um documento, uma conversa ou a conta inteira que você apaga sai na hora do servidor.</li>
 <li>Área pública: até alguém apagar o texto, um administrador apagar o documento ou a remoção automática, que, quando a área enche, apaga primeiro os documentos editados há mais tempo.</li>
-<li>Backups: a cada atualização do sistema é feita uma cópia (sem a área pública) e só as 7 mais recentes são mantidas. Algo apagado pode continuar nelas até sair dessa rotação.</li>
+<li>Backups: a cada atualização do sistema é feita uma cópia (sem a área pública) e só as {{(lim).Backups}} mais recentes são mantidas. Algo apagado pode continuar nelas até sair dessa rotação.</li>
 <li>IP: só na memória, durante as contagens de limite (até 15 minutos).</li>
 <li>Registros do servidor: apagados pela rotação, que guarda no máximo 30 MB e descarta os mais antigos primeiro.</li>
 </ul>
@@ -229,8 +220,8 @@ document.getElementById('copiar').onclick = function () {
 <h2>3. Área pública</h2>
 <p>Em <code>/publico</code>, qualquer pessoa lê, edita e apaga o que está escrito, sem login. Não há garantia de que um texto continue lá:</p>
 <ul>
-<li>cada documento tem até 256 KB;</li>
-<li>a área inteira tem até 1 GB e 50 mil itens;</li>
+<li>cada documento tem até {{(lim).PublicoDoc}};</li>
+<li>a área inteira tem até {{(lim).PublicoTotal}} e {{(lim).PublicoMilItens}} mil itens;</li>
 <li>quando a área enche, os documentos editados há mais tempo são apagados;</li>
 <li>um administrador pode apagar qualquer documento dela.</li>
 </ul>
@@ -274,28 +265,19 @@ document.getElementById('copiar').onclick = function () {
 <header class="topo">{{template "moldura-topo" .}}<span class="marca">pad</span><span class="sp"></span>{{if .Admin}}<a class="btn" href="/_convite">Convidar</a>{{end}}{{template "conta" .}}</header>
 <div class="meio">{{template "coluna" .}}<div class="centro"><main class="entrada">
 <h1 class="vh">Documentos de {{.Me}}</h1>
-<form class="criar" onsubmit="location='/{{.Me}}/'+this.n.value.trim();return false">
+<form class="criar" onsubmit="{{template "abrir-novo" .Me}}">
 <label class="rotulo"><span>novo documento</span><input class="campo" name="n" placeholder="ex.: notas" required></label><button class="btn pri">Criar</button>
 </form>
 {{with .Recentes}}<h2>Continuar de onde parou</h2>{{template "cartoes" .}}{{else}}<p class="mut">Nenhum documento ainda. Dê um nome acima para criar o primeiro.</p>{{end}}
 {{with .Compartilhados}}<h2>Compartilhados com você</h2>{{template "cartoes" .}}{{end}}
 </main></div></div>
-{{template "status" false}}
+{{template "status" ""}}
 </body></html>{{end}}
 
-{{/* painel MCP: conversas, máquinas com chave e agentes conectados (chat.js refaz a tabela) */}}
+{{/* criar documento: abre /eu/nome, e a primeira gravação o cria */}}
+{{define "abrir-novo"}}location='/{{.}}/'+this.n.value.trim();return false{{end}}
 {{define "copiavel"}}<button type="button" class="btn copiar" data-alvo="{{.}}">Copiar</button>{{end}}
-
-{{define "mcp"}}{{template "head" "mcp"}}<body class="ed">
-<header class="topo"><script src="{{st "shell.js"}}"></script><span class="marca">pad</span><span class="sp"></span>{{template "conta" .}}</header>
-<div class="meio"><div class="centro"><main class="entrada mcp">
-<h1 class="vh">MCP de {{.Me}}</h1>
-{{with .Nova}}<section class="nova" aria-labelledby="nova-t"><h2 id="nova-t">Máquina {{.Nome}} cadastrada</h2>
-<p class="err" role="alert">Guarde agora: a chave não aparece de novo.</p>
-<div class="linha"><input id="n-chave" class="campo mono" value="{{.Chave}}" readonly aria-label="chave" onclick="this.select()">{{template "copiavel" "n-chave"}}</div>
-<div class="cmd-h"><span>Claude Code</span>{{template "copiavel" "n-claude"}}</div><pre id="n-claude" class="cmd">{{.Claude}}</pre>
-<div class="cmd-h"><span>Codex</span>{{template "copiavel" "n-codex"}}</div><pre id="n-codex" class="cmd">{{.Codex}}</pre>
-<script>
+{{define "copiar-js"}}<script>
 // sem a API da área de transferência (http fora do localhost), seleciona o texto para o Ctrl+C
 document.querySelectorAll('.copiar').forEach(function (b) {
   b.onclick = function () {
@@ -309,13 +291,25 @@ document.querySelectorAll('.copiar').forEach(function (b) {
     else seleciona()
   }
 })
-</script></section>{{end}}
+</script>{{end}}
+
+{{/* painel MCP: conversas, máquinas com chave e agentes conectados (chat.js refaz a tabela) */}}
+{{define "mcp"}}{{template "head" "mcp"}}<body class="ed">
+<header class="topo"><script src="{{st "shell.js"}}"></script><span class="marca">pad</span><span class="sp"></span>{{template "conta" .}}</header>
+<div class="meio"><div class="centro"><main class="entrada mcp">
+<h1 class="vh">MCP de {{.Me}}</h1>
+{{with .Nova}}<section class="nova" aria-labelledby="nova-t"><h2 id="nova-t">Máquina {{.Nome}} cadastrada</h2>
+<p class="err" role="alert">Guarde agora: a chave não aparece de novo.</p>
+<div class="linha"><input id="n-chave" class="campo mono" value="{{.Chave}}" readonly aria-label="chave" onclick="this.select()">{{template "copiavel" "n-chave"}}</div>
+<div class="cmd-h"><span>Claude Code</span>{{template "copiavel" "n-claude"}}</div><pre id="n-claude" class="cmd">{{.Claude}}</pre>
+<div class="cmd-h"><span>Codex</span>{{template "copiavel" "n-codex"}}</div><pre id="n-codex" class="cmd">{{.Codex}}</pre>
+{{template "copiar-js"}}</section>{{end}}
 {{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <h2>Conversas</h2>
 {{if .Conversas}}<ul class="cartoes">{{range .Conversas}}<li><a class="cartao" href="/{{$.Me}}/_mcp/c/{{.Nome}}" title="{{.Nome}}"><span class="nome">{{.Nome}}{{if .NaoLidas}} · {{.NaoLidas}} nova{{if gt .NaoLidas 1}}s{{end}}{{end}}</span><span class="meta">{{.UltimoRotulo}} · {{quando .UltimaEm}}</span>{{with index $.Agentes .Nome}}<span class="meta">{{range $i, $r := .}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}</a></li>{{end}}</ul>
 {{else}}<p class="mut">Nenhuma conversa ainda.</p>{{end}}
 <form method="post" action="/{{.Me}}/_mcp/c" class="nova-conversa">
-<label class="rotulo"><span>nome da conversa</span><input class="campo" name="nome" required maxlength="60"></label>
+<label class="rotulo"><span>nome da conversa</span><input class="campo" name="nome" required maxlength="{{(lim).NomeCurto}}"></label>
 <label class="rotulo"><span>primeira mensagem</span><input class="campo" name="mensagem" required></label>
 <button class="btn pri">Criar conversa</button>
 </form>
@@ -325,7 +319,7 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 <td><form method="post" action="/{{$.Me}}/_mcp/maquinas/{{.ID}}/revogar"><button class="btn perigo" aria-label="Revogar {{.Nome}}">Revogar</button></form></td></tr>{{end}}
 </tbody></table></div>{{else}}<p class="mut">Nenhuma máquina cadastrada. Cadastre uma para gerar a chave de um agente.</p>{{end}}
 <form method="post" action="/{{.Me}}/_mcp/maquinas" class="nova-conversa">
-<label class="rotulo"><span>nome da máquina</span><input class="campo" name="nome" placeholder="ex.: desktop" required maxlength="60" autocomplete="off"></label>
+<label class="rotulo"><span>nome da máquina</span><input class="campo" name="nome" placeholder="ex.: desktop" required maxlength="{{(lim).NomeCurto}}" autocomplete="off"></label>
 <button class="btn pri">Cadastrar máquina</button>
 </form>
 <h2>Agora conectados</h2>
@@ -334,7 +328,7 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 {{range .Conectados}}<tr><td class="mono">{{.Apelido}}</td><td>{{.Maquina}}</td><td>{{.Tipo}}</td><td>{{range $i, $c := .Conversas}}{{if $i}}, {{end}}{{$c}}{{end}}</td><td>{{hora .Ultima}}</td></tr>{{end}}
 </tbody></table></div>
 </main></div></div>
-{{template "status" false}}
+{{template "status" ""}}
 <script src="{{st "chat.js"}}" defer></script>
 </body></html>{{end}}
 
@@ -351,7 +345,7 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 <button class="btn pri">Enviar</button></form>
 <p id="erro" class="err" role="status"></p>
 </main></div></div>
-{{template "status" false}}
+{{template "status" ""}}
 <script src="{{st "chat.js"}}" defer></script>
 </body></html>{{end}}
 
@@ -385,7 +379,7 @@ Os nomes em data-pessoa são sorteados pelo landing.js; sem JS valem estes e a c
 <div class="l"><div class="duas">
 <ul class="so">
 <li><b>Veja quem está no documento</b>Cada pessoa tem uma cor, na bolha, no cursor e na seleção.</li>
-<li><b>Sem escrever por cima do outro</b>O trecho selecionado fica travado até a pessoa ficar 30 s parada.</li>
+<li><b>Sem escrever por cima do outro</b>O trecho selecionado fica travado até a pessoa ficar {{(lim).SegundosTrava}} s parada.</li>
 <li><b>Siga alguém</b>Pelo menu das bolhas, você acompanha o que a pessoa vê.</li>
 <li><b>Ctrl+Z desfaz só o que é seu</b>As mudanças dos outros continuam lá.</li>
 </ul>
@@ -404,7 +398,7 @@ Os nomes em data-pessoa são sorteados pelo landing.js; sem JS valem estes e a c
 <li><b>Dê acesso a pessoas ou grupos</b>Quem recebe pode ler e editar.</li>
 <li><b>Publique só para leitura</b>O endereço passa a abrir sem login.</li>
 <li><b>Ou use a área pública</b>Em <code>/publico</code>, qualquer um lê e escreve, sem conta.</li>
-<li><b>Contas por convite</b>Cada link cria uma conta, vale uma vez e vence em 7 dias.</li>
+<li><b>Contas por convite</b>Cada link cria uma conta, vale uma vez e vence em {{(lim).DiasConvite}} dias.</li>
 </ul>
 <div class="replica pop" aria-hidden="true">
 <b>Compartilhar <span data-pessoa="0" data-min>paulo</span>/notas</b>
@@ -480,7 +474,7 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{if .Arvore}}<div class="col-h">documentos</div>{{template "nos" (ramo .Atual .Arvore)}}{{end}}
 {{if .Compartilhados}}<div class="col-h">compartilhados</div><ul>{{range .Compartilhados}}<li><a class="it" href="/{{.Name}}" title="{{.Name}}"{{if eq .Name $.Coluna.Atual}} aria-current="page"{{end}}>{{.Name}}</a></li>{{end}}</ul>{{end}}
 <a class="it publico" href="/publico"{{if eq .Atual "publico"}} aria-current="page"{{end}}>área pública</a>
-<form class="novo" onsubmit="location='/{{$.Me}}/'+this.n.value.trim();return false"><input class="campo" name="n" placeholder="+ novo documento" aria-label="nome do novo documento" required></form>
+<form class="novo" onsubmit="{{template "abrir-novo" $.Me}}"><input class="campo" name="n" placeholder="+ novo documento" aria-label="nome do novo documento" required></form>
 </nav><script>PadShell.montarColuna()</script>{{end}}{{end}}
 
 {{define "nos"}}<ul>{{range .Nos}}<li>{{if .Pasta}}<button class="it pasta" type="button" aria-expanded="false" data-pasta="{{.Caminho}}" title="{{.Caminho}}">{{.Nome}}</button>{{template "nos" (ramo $.Atual .Filhos)}}
@@ -492,8 +486,8 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{/* seletor de tema: o menu é montado pelo shell.js com os temas do theme.js */}}
 {{define "tema"}}<span class="tema"><button id="tema" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="tema-menu">tema</button><span id="tema-menu" class="menu" role="menu" hidden></span></span>{{end}}
 
-{{/* barra de status; true no editor (pessoas e linha), false na página só leitura (quem edita) */}}
-{{define "status"}}<footer class="status">{{if .}}<span id="pessoas" class="forte"></span><span id="lc"></span>{{else}}<span id="editando"></span>{{end}}<span class="sp"></span><span><span id="salvo"></span><span id="st" aria-live="polite"></span></span>{{template "legal"}}{{template "tema"}}</footer>{{end}}
+{{/* barra de baixo; "doc" e "public" ganham os campos que o editor ao vivo preenche (editor.js e presence.js) */}}
+{{define "status"}}<footer class="status">{{if eq . "doc"}}<span id="pessoas" class="forte"></span><span id="lc"></span>{{else if eq . "public"}}<span id="editando"></span>{{end}}<span class="sp"></span>{{if .}}<span><span id="salvo"></span><span id="st" aria-live="polite"></span></span>{{end}}{{template "legal"}}{{template "tema"}}</footer>{{end}}
 
 {{define "legal"}}<a class="legal" href="/_privacidade">privacidade</a><a class="legal" href="/_termos">termos</a>{{end}}
 
@@ -503,7 +497,7 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
 <textarea id="t" readonly spellcheck="false" aria-label="{{.Name}}" data-name="{{.Name}}" data-can-edit="false">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
 </main></div>
-{{template "status" false}}
+{{template "status" "public"}}
 {{template "live"}}
 </body></html>{{end}}
 
@@ -518,7 +512,7 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
 <textarea id="t" spellcheck="false" autofocus aria-label="{{.Label}}" data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
 </main></div>
-{{template "status" true}}
+{{template "status" "doc"}}
 {{template "live"}}
 </body></html>{{end}}
 

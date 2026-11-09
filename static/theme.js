@@ -39,7 +39,27 @@
     document.documentElement.dataset.theme = resolver(e, escuro());
   }
 
-  const PadTheme = { temas, resolver, aplicar, escolha };
+  // cores de cada tema lidas das regras dele no pad.css, sem repetir os valores aqui; a primeira amostra lê
+  let cores = null;
+  function amostra(id) {
+    if (!cores) {
+      cores = {};
+      for (const s of document.styleSheets) {
+        try {
+          for (const r of s.cssRules) {
+            const m = /data-theme="(\w+)"/.exec(r.selectorText || '');
+            if (m) cores[m[1]] = [r.style.getPropertyValue('--bg'), r.style.getPropertyValue('--acc')];
+          }
+        } catch {} // folha de outra origem (extensão do navegador)
+      }
+    }
+    const i = document.createElement('i');
+    i.className = 'amostra';
+    if (cores[id]) Object.assign(i.style, { background: cores[id][0], boxShadow: 'inset 0 0 0 3px ' + cores[id][1] });
+    return i;
+  }
+
+  const PadTheme = { temas, resolver, aplicar, escolha, amostra };
   if (typeof module !== 'undefined') module.exports = PadTheme;
   if (typeof document === 'undefined') return;
   globalThis.PadTheme = PadTheme;
