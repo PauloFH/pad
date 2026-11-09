@@ -160,7 +160,8 @@ func lerMensagens(q consulta, cid, depois int64, outrosDe string) ([]mensagem, e
 }
 
 // mensagensAntes devolve as n mensagens anteriores a antes (0: as mais recentes), em ordem, e se há outras mais antigas.
-// É a página do chat no navegador: uma conversa longa não chega inteira de uma vez.
+// É a página do chat no navegador: uma conversa longa não chega inteira de uma vez. Ignora autor vazio, como o
+// lerMensagens que o navegador usava antes.
 func (a *app) mensagensAntes(uid int64, conversa string, antes int64, n int) ([]mensagem, bool, error) {
 	cid, err := conversaID(a.db, uid, conversa)
 	if err != nil {
@@ -170,7 +171,7 @@ func (a *app) mensagensAntes(uid int64, conversa string, antes int64, n int) ([]
 		antes = math.MaxInt64
 	}
 	ms, err := escanear(a.db.Query(`SELECT id, autor, rotulo, humano, em, texto FROM mcp_mensagens
-		WHERE conversa_id = ? AND id < ? ORDER BY id DESC LIMIT ?`, cid, antes, n+1))
+		WHERE conversa_id = ? AND id < ? AND autor <> '' ORDER BY id DESC LIMIT ?`, cid, antes, n+1))
 	mais := len(ms) > n
 	if mais {
 		ms = ms[:n]

@@ -15,7 +15,7 @@
   const nav = performance.getEntriesByType('navigation')[0];
   if (nav) v.ttfb = nav.responseStart;
   let enviado = false;
-  addEventListener('visibilitychange', () => {
+  document.addEventListener('visibilitychange', () => {
     if (enviado || document.visibilityState !== 'hidden') return;
     enviado = true;
     navigator.sendBeacon('/_vitais', new Blob([JSON.stringify(v)], { type: 'application/json' }));

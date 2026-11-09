@@ -302,7 +302,8 @@ func (a *app) chatMsgs(w http.ResponseWriter, r *http.Request, u user) {
 		serverError(w, err)
 		return
 	}
-	if len(ms) > 0 { // a pessoa viu: o "N novas" dela no painel zera
+	// a pessoa viu: o "N novas" dela no painel zera; as anteriores (?antes=) não mudam o que é novo
+	if len(ms) > 0 && antes == 0 {
 		if err := a.lidoPor(u.ID, nome, u.Name); err != nil {
 			log.Print(err)
 		}

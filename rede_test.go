@@ -78,6 +78,10 @@ func TestCompressaoECacheDosEstaticos(t *testing.T) {
 	if res, _ := pedir(t, srv.URL+"/_static/shell.js?v=0000000000000000", gz); res.Header.Get("Cache-Control") != "no-cache" {
 		t.Errorf("?v= antigo: Cache-Control %q", res.Header.Get("Cache-Control"))
 	}
+	// uma fonte que não existe não pode ficar um ano no cache como 404 (o FileServer apaga o Cache-Control no erro)
+	if res, _ := pedir(t, srv.URL+"/_static/fonts/nao-existe.woff2", gz); res.StatusCode != 404 || res.Header.Get("Cache-Control") == umAno {
+		t.Errorf("fonte inexistente: status %d, Cache-Control %q", res.StatusCode, res.Header.Get("Cache-Control"))
+	}
 	// a fonte já vem comprimida: o woff2 não passa pelo gzip
 	if res, _ := pedir(t, srv.URL+"/_static/fonts/jetbrains-mono-latin-400-normal.woff2", gz); res.Header.Get("Content-Encoding") != "" {
 		t.Errorf("woff2 com Content-Encoding %q", res.Header.Get("Content-Encoding"))
@@ -161,6 +165,17 @@ func TestTipoDePagina(t *testing.T) {
 	} {
 		if got := tipoDePagina(p); got != quero {
 			t.Errorf("tipoDePagina(%q) = %q, quero %q", p, got, quero)
+		}
+	}
+}
+
+func TestAceitaGzip(t *testing.T) {
+	for ae, quero := range map[string]bool{
+		"gzip": true, "gzip, deflate, br, zstd": true, "br;q=1.0, gzip;q=0.8": true, " gzip ; q=0.5": true,
+		"gzip;q=0": false, "gzip;q=0.0": false, "br, gzip;q=0": false, "x-gzip": false, "": false, "identity": false,
+	} {
+		if got := aceitaGzip(ae); got != quero {
+			t.Errorf("aceitaGzip(%q) = %v, quero %v", ae, got, quero)
 		}
 	}
 }

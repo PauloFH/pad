@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,11 +44,28 @@ func comprime(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
-		// shortcut: não lê o q= do Accept-Encoding ("gzip;q=0" ainda comprime); nenhum navegador manda isso
-		g := &gzipWriter{ResponseWriter: w, aceita: strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")}
+		g := &gzipWriter{ResponseWriter: w, aceita: aceitaGzip(r.Header.Get("Accept-Encoding"))}
 		defer g.fechar()
 		h.ServeHTTP(g, r)
 	})
+}
+
+// aceitaGzip lê o Accept-Encoding: o gzip conta se vier na lista sem q=0 ("gzip;q=0" é recusa explícita).
+// shortcut: o "*" sozinho não conta como gzip; nenhum navegador manda só ele
+func aceitaGzip(ae string) bool {
+	for _, c := range strings.Split(ae, ",") {
+		nome, params, _ := strings.Cut(c, ";")
+		if strings.TrimSpace(nome) != "gzip" {
+			continue
+		}
+		q, tem := strings.CutPrefix(strings.TrimSpace(params), "q=")
+		if !tem {
+			return true
+		}
+		f, err := strconv.ParseFloat(q, 64)
+		return err == nil && f > 0
+	}
+	return false
 }
 
 type gzipWriter struct {
