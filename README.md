@@ -83,7 +83,7 @@ O HTML, o CSS, o JS e o JSON saem em gzip, e o JS e o CSS vêm com `?v=<hash>` n
 
 ```sh
 docker compose -f compose.yaml -f compose.traefik.yaml stop
-docker compose -f compose.yaml -f compose.traefik.yaml run --rm pad /pad apagar-tudo NOME  # pede o nome de novo
+docker compose -f compose.yaml -f compose.traefik.yaml run --rm pad apagar-tudo NOME  # o ENTRYPOINT já é /pad; pede o nome de novo
 docker compose -f compose.yaml -f compose.traefik.yaml start
 ```
 
