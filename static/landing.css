@@ -10,7 +10,7 @@ html{scroll-behavior:smooth;scroll-padding-top:6rem}
 #demo{padding:2px 4px;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
 
 /* cores das pessoas: as mesmas da paleta do live.go */
-.p0{--c:#db2777}.p1{--c:#0891b2}.p2{--c:#ea580c}.p3{--c:#0d9488}
+.p0{--c:#db2777}.p1{--c:#0e7490}.p2{--c:#c2410c}.p3{--c:#0f766e}
 .bolhas .dot{background:var(--c)}
 .sel{background:color-mix(in srgb,var(--c) 28%,transparent);border-radius:2px}
 /* em linha e sem largura: o cursor no meio de uma palavra não cria um ponto de quebra nem empurra o texto */

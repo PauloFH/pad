@@ -208,7 +208,7 @@
     for (let L = v0; L <= v1; L++) {
       const d = el('div', on.has(L) ? 'on' : '', String(L + 1));
       d.style.top = mir.children[L].offsetTop - t.scrollTop + 'px';
-      if (on.has(L)) d.style.color = on.get(L);
+      if (on.has(L)) d.style.boxShadow = 'inset -3px 0 0 ' + on.get(L); // marcador na borda da calha; o número fica em --fg (.gut .on)
       out.push(d);
     }
     gut.style.width = `calc(${String(lines.length).length}ch + 1rem)`;

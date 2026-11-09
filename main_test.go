@@ -365,8 +365,10 @@ func TestTelasSimplesUsamCartao(t *testing.T) {
 		status     int
 		tem        []string
 	}{
-		{"login", "/_login", http.DefaultClient, 200, []string{"pad<span", "Blocos de notas compartilhados, ao vivo."}},
-		{"criar conta", join, http.DefaultClient, 200, nil},
+		{"login", "/_login", http.DefaultClient, 200, []string{"pad<span", "Blocos de notas compartilhados, ao vivo.", `href="/_termos"`, `href="/_privacidade"`}},
+		{"criar conta", join, http.DefaultClient, 200, []string{"18 anos ou mais e aceita os", `href="/_termos"`, `href="/_privacidade"`, `aria-describedby="regra-senha"`}},
+		{"privacidade", "/_privacidade", http.DefaultClient, 200, []string{"Política de privacidade", "paulorfholanda@gmail.com", "art. 18", "Oracle", `href="/_termos"`}},
+		{"termos", "/_termos", http.DefaultClient, 200, []string{"Termos de uso", "paulorfholanda@gmail.com", "18 anos", `href="/_privacidade"`}},
 		{"mensagem", "/zeca/nao-existe", ana, 404, nil},
 		{"convite", "/_convite", ana, 200, nil},
 	} {
@@ -379,6 +381,20 @@ func TestTelasSimplesUsamCartao(t *testing.T) {
 				t.Errorf("%s sem %q", c.nome, s)
 			}
 		}
+		if strings.Contains(page, "[[PREENCHER") {
+			t.Errorf("%s com marcador [[PREENCHER]] por preencher", c.nome)
+		}
+	}
+	// a área pública avisa que é aberta, e a barra de status de toda tela da moldura leva aos documentos legais
+	_, pub := ler(http.Get(srv.URL + "/publico/x"))
+	_, doc := ler(ana.Get(srv.URL + "/ana/notas"))
+	for _, s := range []string{"aberto a todos", `href="/_privacidade"`, `href="/_termos"`, `<main class="centro">`} {
+		if !strings.Contains(pub, s) {
+			t.Errorf("/publico/x sem %q", s)
+		}
+	}
+	if strings.Contains(doc, "aberto a todos") || !strings.Contains(doc, `href="/_privacidade"`) {
+		t.Error("documento privado: não deveria ter o selo de aberto e deveria ter o link da privacidade")
 	}
 	// o convite gerado traz o link, o Copiar e o Gerar outro
 	for _, s := range []string{"Copiar", "Gerar outro link"} {

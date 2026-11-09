@@ -10,6 +10,10 @@ services:
       TZ: America/Sao_Paulo
       GOMEMLIMIT: 900MiB # abaixo do mem_limit: o coletor do Go não conhece o teto do contêiner
     volumes: [pad-data:/data]
+    # rotação do log: a política de privacidade promete no máximo 30 MB, os mais antigos saem primeiro
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
 
 volumes:
   pad-data:

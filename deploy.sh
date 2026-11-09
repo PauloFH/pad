@@ -47,7 +47,7 @@ trap devolver EXIT
 
 # parado para o SQLite não ser copiado no meio de uma escrita; fora o /publico, que é descartável e chega a 1 GB
 compose stop
-docker run --rm --network none -v "$DADOS:/data:ro" alpine:3 tar czf - -C /data --exclude=./docs/publico . >"$parcial"
+docker run --rm --network none -v "$DADOS:/data:ro" alpine:3 tar czf - -C /data --exclude=./docs/publico --exclude=./docs/publico.txt . >"$parcial"
 # um caminho errado monta uma pasta vazia e o tar sai com 0: sem o banco no arquivo, não é backup
 gzip -t "$parcial"
 tar tzf "$parcial" | grep -q '^\./pad\.db$' || {

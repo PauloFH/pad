@@ -17,6 +17,7 @@ const usage = `uso:
   pad useradd NOME         cria usuário (senha pelo stdin)
   pad passwd NOME          troca a senha (senha pelo stdin), encerra as sessões e revoga as chaves de máquina
   pad userdel NOME         apaga usuário (falha se ele ainda for dono de documentos)
+  pad apagar-tudo NOME     apaga o usuário e tudo dele: documentos, máquinas e conversas (com o pad parado)
   pad admin NOME           torna o usuário administrador (pode gerar convites em /_convite)
   pad groupadd GRUPO       cria grupo
   pad groupdel GRUPO       apaga grupo

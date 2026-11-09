@@ -17,6 +17,7 @@ input,button{font:inherit;padding:.3rem .5rem}
 form.inline{display:inline} button.link{background:none;border:0;color:var(--acc);cursor:pointer;padding:0}
 body.ed{display:flex;flex-direction:column;height:100dvh}
 textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);resize:none;outline:none}
+textarea[readonly]:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
 .area{flex:1;display:flex;min-height:0}
 .area.fol{outline:2px solid var(--fc);outline-offset:-2px}
 .box{flex:1;position:relative;overflow:hidden}
@@ -32,7 +33,7 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 #lay .c.dn span{bottom:auto;top:100%;border-radius:0 3px 3px 3px}
 #lay .k{border-radius:3px;display:flex;align-items:center}
 .gut{position:relative;overflow:hidden;flex:none;color:var(--mut);border-right:1px solid var(--line);user-select:none}
-.gut div{position:absolute;right:.5rem} .gut .on{font-weight:700}
+.gut div{position:absolute;left:0;right:0;padding-right:.5rem;text-align:right} .gut .on{font-weight:700;color:var(--fg)}
 #peers{position:relative}
 #quem{display:inline-flex;background:none;border:0;padding:0 0 0 6px;cursor:pointer}
 .dot{width:22px;height:22px;border-radius:50%;color:#fff;display:inline-grid;place-items:center;font:600 11px var(--ui);margin-left:-6px;border:2px solid var(--bg)}
@@ -69,11 +70,12 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 {{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <form method="post" action="/_login">
 <input type="hidden" name="next" value="{{.Next}}">
-<input class="campo" name="name" placeholder="usuário" aria-label="usuário" autocomplete="username" required autofocus>
-<input class="campo" name="pass" type="password" placeholder="senha" aria-label="senha" autocomplete="current-password" required>
+<label class="rotulo"><span>usuário</span><input class="campo" name="name" autocomplete="username" required autofocus></label>
+<label class="rotulo"><span>senha</span><input class="campo" name="pass" type="password" autocomplete="current-password" required></label>
 <button class="btn pri">Entrar</button>
 </form>
 <p class="pe">Sem conta? Escreva na <a href="/publico">área pública</a>, sem login.</p>
+<p class="pe"><a href="/_termos">Termos de uso</a> · <a href="/_privacidade">Privacidade</a></p>
 </main></body></html>{{end}}
 
 {{define "invite"}}{{template "head" "convidar"}}<body class="tela-cartao"><main class="largo">
@@ -99,11 +101,172 @@ document.getElementById('copiar').onclick = function () {
 <p class="sub">Você recebeu um convite. Escolha seu nome de usuário e uma senha.</p>
 {{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
 <form method="post">
-<input class="campo" name="name" value="{{.Name}}" placeholder="usuário" aria-label="usuário" autocomplete="username" required autofocus>
-<input class="campo" name="pass" type="password" placeholder="senha (8+ caracteres)" aria-label="senha (8+ caracteres)" autocomplete="new-password" required minlength="8" maxlength="72">
-<input class="campo" name="pass2" type="password" placeholder="repita a senha" aria-label="repita a senha" autocomplete="new-password" required>
+<label class="rotulo"><span>usuário</span><input class="campo" name="name" value="{{.Name}}" autocomplete="username" required autofocus></label>
+<label class="rotulo"><span>senha</span><input class="campo" name="pass" type="password" aria-describedby="regra-senha" autocomplete="new-password" required minlength="8" maxlength="72"></label>
+<p id="regra-senha" class="pe">A senha precisa de 8 caracteres ou mais.</p>
+<label class="rotulo"><span>repita a senha</span><input class="campo" name="pass2" type="password" autocomplete="new-password" required></label>
+<p class="pe">Ao criar a conta, você declara ter 18 anos ou mais e aceita os <a href="/_termos">Termos de uso</a> e declara ter lido a <a href="/_privacidade">Política de privacidade</a>.</p>
 <button class="btn pri">Criar conta</button>
 </form>
+</main></body></html>{{end}}
+
+{{/* exclusão pelo titular: a senha confirma, e a lista diz o que sai */}}
+{{define "apagar-conta"}}{{template "head" "apagar conta"}}<body class="tela-cartao"><main>
+<h1 class="marca">pad<span>_</span></h1>
+<h2>Apagar a conta {{.Me}}</h2>
+<p>Isto apaga de vez a conta e tudo o que é dela:</p>
+<ul class="lista">
+<li>{{.Docs}} documento{{if ne .Docs 1}}s{{end}}, com o texto e os compartilhamentos;</li>
+<li>{{.Maquinas}} máquina{{if ne .Maquinas 1}}s{{end}} de agente e as chaves;</li>
+<li>{{.Conversas}} conversa{{if ne .Conversas 1}}s{{end}} com as mensagens.</li>
+</ul>
+<p class="sub">Ficam os documentos de outras pessoas e o que você escreveu na área pública. Antes, se quiser guardar uma cópia, use <a href="/_conta/exportar">baixar meus dados</a>. As cópias de segurança são trocadas a cada atualização do pad, e seus dados somem delas depois das próximas 7.</p>
+{{if .Err}}<p class="err" role="alert">{{.Err}}</p>{{end}}
+<form method="post" action="/_conta/apagar">
+<input name="usuario" autocomplete="username" value="{{.Me}}" hidden>{{/* o gerenciador de senhas sabe de que conta é a senha */}}
+<label for="senha">Sua senha, para confirmar</label>
+<input id="senha" class="campo" name="pass" type="password" autocomplete="current-password" required>
+<button class="btn perigo">Apagar tudo</button>
+</form>
+<p class="pe"><a href="/">Cancelar</a></p>
+</main></body></html>{{end}}
+
+{{/* documentos legais: escritos a partir do que o código guarda; mudou o que se coleta, mude o texto e a data */}}
+{{define "privacidade"}}{{template "head" "privacidade"}}<body class="tela-cartao"><main class="texto">
+<p class="marca"><a href="/">pad<span>_</span></a></p>
+<h1>Política de privacidade</h1>
+<p class="sub">Atualizada em 9 de novembro de 2026.</p>
+<p>Esta política explica quais dados pessoais o pad (pad.pauloholanda.com.br) trata, para quê, por quanto tempo e como você exerce seus direitos, conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018, LGPD).</p>
+
+<h2>Quem é o controlador</h2>
+<p>Paulo Holanda, pessoa física, que mantém o pad como projeto pessoal, gratuito e sem fins econômicos. Ele também atende os titulares de dados, no papel de encarregado: <a href="mailto:paulorfholanda@gmail.com">paulorfholanda@gmail.com</a>.</p>
+
+<h2>Quais dados o pad trata</h2>
+<ul>
+<li><b>Conta:</b> nome de usuário; senha, guardada só como hash bcrypt, que não permite recuperá-la; se a conta é de administrador; os grupos de que você faz parte; e o convite usado para criar a conta (quem o gerou, validade e se foi usado).</li>
+<li><b>Sessão:</b> um código aleatório no cookie <code>sid</code>, ligado à sua conta, com validade de 30 dias renovada enquanto você usa o pad.</li>
+<li><b>Documentos:</b> o texto que você escreve, o nome (caminho) de cada documento, a data da última edição, com quem você o compartilhou e se ele é público.</li>
+<li><b>Presença ao vivo:</b> enquanto um documento está aberto, quem está nele vê seu nome de usuário, se você estiver logado e puder editar, ou senão um apelido aleatório de bicho; uma cor; a posição do seu cursor e o trecho selecionado. Isso fica só na memória do servidor e some quando você sai.</li>
+<li><b>Agentes (MCP):</b> nome de cada máquina cadastrada, a chave (guardada só como hash), as datas de cadastro e de último uso, as conversas com suas mensagens (autor, texto e hora), os apelidos dos agentes e até onde cada um leu.</li>
+<li><b>Endereço IP:</b> usado só na memória do servidor, em contagens de curta duração (janelas de 1 a 15 minutos), para limitar abusos: tentativas de senha, conexões simultâneas, gravações na área pública e envio de métricas. O pad não grava o IP em banco nem em log, e ele some da memória quando a contagem recomeça ou o servidor reinicia.</li>
+<li><b>Métricas de desempenho:</b> ao sair da página, o navegador envia tempos de carregamento e de resposta (Web Vitals). O servidor registra só o tipo da página, como “documento” ou “login”, e os números: nada de IP, usuário ou nome de documento.</li>
+<li><b>Registros de erro:</b> quando a leitura ou a gravação de um arquivo falha, o registro do servidor pode conter o nome do documento.</li>
+</ul>
+<p>O pad não pede e-mail, telefone, CPF nem nenhum outro dado além desses. Os documentos guardam o que você escreve neles: não escreva senhas, documentos de identidade, dados de saúde ou outros dados sensíveis, seus ou de outras pessoas.</p>
+
+<h2>Área pública</h2>
+<p>Tudo o que se escreve em <code>/publico</code> pode ser lido, alterado e apagado por qualquer pessoa, sem login. Quem tem conta e está logado aparece aos outros com o nome da conta. Não publique ali dados pessoais, seus ou de terceiros.</p>
+
+<h2>Cookies e armazenamento no navegador</h2>
+<ul>
+<li><b>Cookie <code>sid</code>:</b> mantém você logado. É estritamente necessário, só é criado quando você entra e é apagado quando você sai.</li>
+<li><b>Armazenamento local (localStorage):</b> o tema escolhido (<code>pad:tema</code>); o apelido de visitante da área pública (<code>pad:visitor</code>); e, para quem tem conta, os documentos abertos em abas, a coluna aberta ou fechada e as pastas expandidas (<code>pad:abas:&lt;conta&gt;</code>, <code>pad:col:&lt;conta&gt;</code>, <code>pad:pastas:&lt;conta&gt;</code>, que guardam o nome da conta e de documentos). Esses dados ficam só no seu navegador e você pode apagá-los nas configurações dele.</li>
+</ul>
+<p>O pad não usa cookies de publicidade nem de rastreamento e não carrega scripts, fontes ou imagens de terceiros. Por isso não há banner de cookies.</p>
+
+<h2>Para que e com qual base legal</h2>
+<ul>
+<li><b>Prestar o serviço</b> (conta, sessão, documentos, compartilhamento, presença, agentes): execução do contrato, isto é, destes <a href="/_termos">Termos de uso</a> (LGPD, art. 7º, V).</li>
+<li><b>Segurança e prevenção de abuso</b> (IP e registros de erro): legítimo interesse (art. 7º, IX), com o mínimo de dados e pelo menor tempo possível.</li>
+<li><b>Medir o desempenho do site</b> (métricas sem identificação): legítimo interesse (art. 7º, IX).</li>
+<li><b>Cumprir ordens judiciais e obrigações legais</b> e defender direitos em processo: art. 7º, II e VI.</li>
+</ul>
+
+<h2>Com quem os dados são compartilhados</h2>
+<ul>
+<li><b>Oracle (Oracle Cloud Infrastructure):</b> hospeda o servidor e os backups, como operadora. Os dados ficam armazenados na região de São Paulo.</li>
+<li><b>Outras pessoas:</b> só quem você autorizar (usuários ou grupos com quem compartilhou, ou qualquer pessoa, se você tornar o documento público) e, na área pública, todos.</li>
+<li><b>Seus agentes de IA:</b> quando você conecta um agente (como Claude Code ou Codex) com uma chave sua, o que ele lê no pad vai para o provedor do agente, sob o contrato entre você e esse provedor, que pode tratá-lo fora do Brasil. O pad não envia nada a eles por conta própria.</li>
+<li><b>Autoridades:</b> quando houver ordem judicial ou obrigação legal.</li>
+</ul>
+<p>Os dados não são vendidos nem cedidos a terceiros para publicidade.</p>
+
+<h2>Por quanto tempo</h2>
+<ul>
+<li>Sessão: até você sair ou até passar 30 dias sem uso.</li>
+<li>Conta, documentos e conversas: enquanto a conta existir. Um documento, uma conversa ou a conta inteira que você apaga sai na hora do servidor.</li>
+<li>Área pública: até alguém apagar o texto, um administrador apagar o documento ou a remoção automática, que, quando a área enche, apaga primeiro os documentos editados há mais tempo.</li>
+<li>Backups: a cada atualização do sistema é feita uma cópia (sem a área pública) e só as 7 mais recentes são mantidas. Algo apagado pode continuar nelas até sair dessa rotação.</li>
+<li>IP: só na memória, durante as contagens de limite (até 15 minutos).</li>
+<li>Registros do servidor: apagados pela rotação, que guarda no máximo 30 MB e descarta os mais antigos primeiro.</li>
+</ul>
+
+<h2>Segurança</h2>
+<p>O acesso é por HTTPS. A senha e as chaves de máquina são guardadas só como hash, o cookie de sessão não é acessível a scripts e há limite de tentativas de senha. O texto dos documentos fica em arquivos no servidor, sem criptografia própria do pad: quem administra o servidor tem acesso técnico a eles. Se houver um incidente de segurança que possa causar risco ou dano relevante, os titulares e a ANPD serão comunicados, conforme o art. 48 da LGPD.</p>
+
+<h2>Seus direitos</h2>
+<p>Pela LGPD (art. 18), você pode pedir:</p>
+<ul>
+<li>confirmação de que tratamos seus dados e acesso a eles;</li>
+<li>correção;</li>
+<li>anonimização, bloqueio ou eliminação do que for desnecessário ou excessivo;</li>
+<li>portabilidade;</li>
+<li>eliminação dos dados e da conta;</li>
+<li>informação sobre com quem eles são compartilhados;</li>
+<li>e se opor a um tratamento feito por legítimo interesse.</li>
+</ul>
+<p>Boa parte disso você faz sozinho: editar e apagar documentos, desfazer compartilhamentos, revogar máquinas, baixar num .zip tudo o que é seu (documentos, conversas, compartilhamentos e máquinas) em “baixar meus dados” e apagar a conta inteira, com tudo o que é dela, em “apagar conta”, os dois no menu da conta. Para o resto, ou se não conseguir entrar, escreva para <a href="mailto:paulorfholanda@gmail.com">paulorfholanda@gmail.com</a>. A resposta vem em até 15 dias. Você também pode reclamar à Autoridade Nacional de Proteção de Dados (ANPD).</p>
+
+<h2>Crianças e adolescentes</h2>
+<p>O pad não é destinado a menores de 18 anos. Se soubermos que uma conta é de alguém com menos de 18, ela e os dados dela serão apagados.</p>
+
+<h2>Mudanças nesta política</h2>
+<p>Quando esta política mudar, a data no topo desta página muda junto. Mudanças relevantes, como novas finalidades ou novos compartilhamentos, serão avisadas no próprio site antes de valer; se não concordar, você pode pedir a exclusão da conta.</p>
+<p class="pe"><a href="/_termos">Termos de uso</a> · <a href="/">Voltar ao pad</a></p>
+</main></body></html>{{end}}
+
+{{define "termos"}}{{template "head" "termos de uso"}}<body class="tela-cartao"><main class="texto">
+<p class="marca"><a href="/">pad<span>_</span></a></p>
+<h1>Termos de uso</h1>
+<p class="sub">Atualizados em 9 de novembro de 2026.</p>
+
+<h2>1. O serviço</h2>
+<p>O pad (pad.pauloholanda.com.br) é um bloco de notas colaborativo mantido por Paulo Holanda, pessoa física, como projeto pessoal, gratuito e sem fins econômicos. Ao usar o pad, você concorda com estes termos e com a <a href="/_privacidade">Política de privacidade</a>.</p>
+
+<h2>2. Quem pode usar</h2>
+<p>O pad é para maiores de 18 anos. As contas são criadas só por convite. Você responde pela sua senha, pelas chaves de máquina que cadastrar e por tudo o que for feito com elas, inclusive pelos agentes de IA que você conectar.</p>
+
+<h2>3. Área pública</h2>
+<p>Em <code>/publico</code>, qualquer pessoa lê, edita e apaga o que está escrito, sem login. Não há garantia de que um texto continue lá:</p>
+<ul>
+<li>cada documento tem até 256 KB;</li>
+<li>a área inteira tem até 1 GB e 50 mil itens;</li>
+<li>quando a área enche, os documentos editados há mais tempo são apagados;</li>
+<li>um administrador pode apagar qualquer documento dela.</li>
+</ul>
+<p>Não escreva ali dados pessoais, seus ou de outras pessoas, nem senhas.</p>
+
+<h2>4. Seu conteúdo</h2>
+<p>O que você escreve continua sendo seu, e você responde por ele. Você autoriza o pad a guardá-lo, mostrá-lo a quem tiver acesso e copiá-lo em backup, só para prestar o serviço.</p>
+<p>É proibido usar o pad para:</p>
+<ul>
+<li>publicar conteúdo ilegal, como ameaças, discurso de ódio, assédio, apologia de crime ou material de abuso sexual infantil;</li>
+<li>divulgar cenas de nudez ou sexo sem o consentimento de quem aparece;</li>
+<li>expor dados pessoais de outras pessoas;</li>
+<li>violar direitos autorais ou marcas;</li>
+<li>distribuir malware, golpes ou spam;</li>
+<li>tentar burlar os limites e a segurança do serviço;</li>
+<li>plantar instruções para enganar agentes de IA de outras pessoas.</li>
+</ul>
+
+<h2>5. Denúncias e remoção</h2>
+<p>Para denunciar um conteúdo, escreva para <a href="mailto:paulorfholanda@gmail.com">paulorfholanda@gmail.com</a> com o endereço do documento e o motivo. Conteúdo que viole a lei ou estes termos pode ser removido, e a conta responsável pode ser excluída. Imagens ou textos de nudez ou sexo divulgados sem consentimento são removidos depois da notificação, conforme o art. 21 do Marco Civil da Internet (Lei 12.965/2014). Ordens judiciais são cumpridas.</p>
+
+<h2>6. Agentes de IA (MCP)</h2>
+<p>Uma chave de máquina dá a um agente acesso aos seus documentos e conversas, fora da área pública. O que o agente lê vai para o provedor dele, sob o contrato entre você e esse provedor, que pode tratá-lo fora do Brasil. O pad marca o texto de documentos como dado, mas não impede que um documento traga instruções maliciosas: não deixe um agente com aprovação automática ler documentos em que você não confia. Claude Code e Codex são marcas de seus titulares; o pad não é afiliado a eles.</p>
+
+<h2>7. Disponibilidade</h2>
+<p>O pad é oferecido de graça, como está, sem garantia de que vai funcionar sem interrupções ou de que nunca vai perder dados. Guarde uma cópia do que for importante. Na medida em que a lei permite, o mantenedor não responde por danos indiretos do uso do serviço. Nada nestes termos tira direitos que a lei garante a você e que não podem ser afastados por contrato.</p>
+
+<h2>8. Encerramento</h2>
+<p>Você pode apagar sua conta a qualquer momento, em “apagar conta”, no menu da conta, ou pedir a exclusão pelo e-mail acima. Se o pad for encerrado, haverá aviso no próprio site com antecedência, para você copiar seus documentos.</p>
+
+<h2>9. Mudanças nestes termos</h2>
+<p>Quando estes termos mudarem, a data no topo desta página muda junto. Mudanças relevantes serão avisadas no próprio site antes de valer; se não concordar, você pode pedir a exclusão da conta.</p>
+
+<h2>10. Lei aplicável</h2>
+<p>Valem as leis do Brasil. Quando você for consumidor, o foro é o do seu domicílio, como prevê o Código de Defesa do Consumidor.</p>
+<p class="pe"><a href="/_privacidade">Política de privacidade</a> · <a href="/">Voltar ao pad</a></p>
 </main></body></html>{{end}}
 
 {{/* entrada (B2): a moldura com a coluna e, no centro, criar e os recentes em blocos */}}
@@ -112,7 +275,7 @@ document.getElementById('copiar').onclick = function () {
 <div class="meio">{{template "coluna" .}}<div class="centro"><main class="entrada">
 <h1 class="vh">Documentos de {{.Me}}</h1>
 <form class="criar" onsubmit="location='/{{.Me}}/'+this.n.value.trim();return false">
-<input class="campo" name="n" placeholder="nome do novo documento" aria-label="nome do novo documento" required><button class="btn pri">Criar</button>
+<label class="rotulo"><span>novo documento</span><input class="campo" name="n" placeholder="ex.: notas" required></label><button class="btn pri">Criar</button>
 </form>
 {{with .Recentes}}<h2>Continuar de onde parou</h2>{{template "cartoes" .}}{{else}}<p class="mut">Nenhum documento ainda. Dê um nome acima para criar o primeiro.</p>{{end}}
 {{with .Compartilhados}}<h2>Compartilhados com você</h2>{{template "cartoes" .}}{{end}}
@@ -152,8 +315,8 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 {{if .Conversas}}<ul class="cartoes">{{range .Conversas}}<li><a class="cartao" href="/{{$.Me}}/_mcp/c/{{.Nome}}" title="{{.Nome}}"><span class="nome">{{.Nome}}{{if .NaoLidas}} · {{.NaoLidas}} nova{{if gt .NaoLidas 1}}s{{end}}{{end}}</span><span class="meta">{{.UltimoRotulo}} · {{quando .UltimaEm}}</span>{{with index $.Agentes .Nome}}<span class="meta">{{range $i, $r := .}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}</a></li>{{end}}</ul>
 {{else}}<p class="mut">Nenhuma conversa ainda.</p>{{end}}
 <form method="post" action="/{{.Me}}/_mcp/c" class="nova-conversa">
-<input class="campo" name="nome" placeholder="nome da conversa" aria-label="nome da conversa" required maxlength="60">
-<input class="campo" name="mensagem" placeholder="primeira mensagem" aria-label="primeira mensagem" required>
+<label class="rotulo"><span>nome da conversa</span><input class="campo" name="nome" required maxlength="60"></label>
+<label class="rotulo"><span>primeira mensagem</span><input class="campo" name="mensagem" required></label>
 <button class="btn pri">Criar conversa</button>
 </form>
 <h2>Máquinas</h2>
@@ -162,7 +325,7 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 <td><form method="post" action="/{{$.Me}}/_mcp/maquinas/{{.ID}}/revogar"><button class="btn perigo" aria-label="Revogar {{.Nome}}">Revogar</button></form></td></tr>{{end}}
 </tbody></table></div>{{else}}<p class="mut">Nenhuma máquina cadastrada. Cadastre uma para gerar a chave de um agente.</p>{{end}}
 <form method="post" action="/{{.Me}}/_mcp/maquinas" class="nova-conversa">
-<input class="campo" name="nome" placeholder="nome da máquina (ex.: desktop)" aria-label="nome da máquina" required maxlength="60" autocomplete="off">
+<label class="rotulo"><span>nome da máquina</span><input class="campo" name="nome" placeholder="ex.: desktop" required maxlength="60" autocomplete="off"></label>
 <button class="btn pri">Cadastrar máquina</button>
 </form>
 <h2>Agora conectados</h2>
@@ -237,7 +400,7 @@ Os nomes em data-pessoa são sorteados pelo landing.js; sem JS valem estes e a c
 <div class="l abre"><h2 id="t-compartilhar">Compartilhar</h2></div>
 <div class="l"><div class="duas">
 <ul class="so">
-<li><b>O endereço é o documento</b><code>/<span data-pessoa="0" data-min>paulo</span>/notas</code> e <code>/<span data-pessoa="0" data-min>paulo</span>/pessoal/cpf</code> são documentos separados, cada um com o próprio acesso.</li>
+<li><b>O endereço é o documento</b><code>/<span data-pessoa="0" data-min>paulo</span>/notas</code> e <code>/<span data-pessoa="0" data-min>paulo</span>/pessoal/receitas</code> são documentos separados, cada um com o próprio acesso.</li>
 <li><b>Dê acesso a pessoas ou grupos</b>Quem recebe pode ler e editar.</li>
 <li><b>Publique só para leitura</b>O endereço passa a abrir sem login.</li>
 <li><b>Ou use a área pública</b>Em <code>/publico</code>, qualquer um lê e escreve, sem conta.</li>
@@ -289,7 +452,7 @@ docker compose exec pad /pad admin <span data-pessoa="0" data-min>paulo</span></
 </div></div>
 </section>
 </main>
-<footer class="status"><span class="forte pessoas">● 3 pessoas</span><button id="demo" type="button" hidden>Parar demonstração</button><span class="sp"></span><span class="estado"><span id="salvo" class="ok"></span><span id="st">salvo</span></span>{{template "tema"}}</footer>
+<footer class="status"><span class="forte pessoas">● 3 pessoas</span><button id="demo" type="button" hidden>Parar demonstração</button><span class="sp"></span><span class="estado"><span id="salvo" class="ok"></span><span id="st">salvo</span></span>{{template "legal"}}{{template "tema"}}</footer>
 <script src="{{st "landing.js"}}"></script>
 </body></html>{{end}}
 
@@ -308,7 +471,7 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{/* avatar com o menu da conta; o visitante vê o Entrar que volta para a página */}}
 {{define "conta"}}{{if .Me}}<div class="conta"><button id="conta" class="av" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="conta-menu" title="{{.Me}}" aria-label="conta de {{.Me}}">{{slice .Me 0 1}}</button>
 <div id="conta-menu" class="menu" role="menu" hidden><span class="menu-grupo" role="presentation">{{.Me}}</span>
-<a class="menu-item" role="menuitem" href="/">documentos</a><a class="menu-item" role="menuitem" href="/{{.Me}}/_mcp">mcp</a>{{if .Admin}}<a class="menu-item" role="menuitem" href="/_convite">convidar</a>{{end}}
+<a class="menu-item" role="menuitem" href="/">documentos</a><a class="menu-item" role="menuitem" href="/{{.Me}}/_mcp">mcp</a>{{if .Admin}}<a class="menu-item" role="menuitem" href="/_convite">convidar</a>{{end}}<a class="menu-item" role="menuitem" href="/_conta/exportar">baixar meus dados</a><a class="menu-item" role="menuitem" href="/_conta/apagar">apagar conta</a>
 <form method="post" action="/_logout"><button class="menu-item" role="menuitem">sair</button></form></div></div>
 {{else}}<a class="btn pri" href="/_login?next=/{{.Name}}">Entrar</a>{{end}}{{end}}
 
@@ -330,29 +493,31 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{define "tema"}}<span class="tema"><button id="tema" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="tema-menu">tema</button><span id="tema-menu" class="menu" role="menu" hidden></span></span>{{end}}
 
 {{/* barra de status; true no editor (pessoas e linha), false na página só leitura (quem edita) */}}
-{{define "status"}}<footer class="status">{{if .}}<span id="pessoas" class="forte"></span><span id="lc"></span>{{else}}<span id="editando"></span>{{end}}<span class="sp"></span><span><span id="salvo"></span><span id="st" aria-live="polite"></span></span>{{template "tema"}}</footer>{{end}}
+{{define "status"}}<footer class="status">{{if .}}<span id="pessoas" class="forte"></span><span id="lc"></span>{{else}}<span id="editando"></span>{{end}}<span class="sp"></span><span><span id="salvo"></span><span id="st" aria-live="polite"></span></span>{{template "legal"}}{{template "tema"}}</footer>{{end}}
+
+{{define "legal"}}<a class="legal" href="/_privacidade">privacidade</a><a class="legal" href="/_termos">termos</a>{{end}}
 
 {{define "public"}}{{template "head" .Label}}<body class="ed">
 <header class="topo">{{template "moldura-topo" .}}{{template "caminho" .Label}}<span class="selo">só leitura</span><span class="sp"></span>{{template "peers"}}{{template "conta" .}}</header>
-<div class="meio">{{template "coluna" .}}<div class="centro">{{template "abas" .}}
+<div class="meio">{{template "coluna" .}}<main class="centro"><h1 class="vh">{{.Label}}</h1>{{template "abas" .}}
 {{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
 <textarea id="t" readonly spellcheck="false" aria-label="{{.Name}}" data-name="{{.Name}}" data-can-edit="false">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
-</div></div>
+</main></div>
 {{template "status" false}}
 {{template "live"}}
 </body></html>{{end}}
 
 {{define "doc"}}{{template "head" .Label}}<body class="ed">
-<header class="topo">{{template "moldura-topo" .}}{{template "caminho" .Label}}{{if .Public}}<span class="selo">público</span>{{end}}<span class="sp"></span>
+<header class="topo">{{template "moldura-topo" .}}{{template "caminho" .Label}}{{if .Public}}<span class="selo">público</span>{{end}}{{if .Aberto}}<span class="selo" title="qualquer pessoa lê e edita, sem login; não escreva dados pessoais">aberto a todos</span>{{end}}<span class="sp"></span>
 {{template "peers"}}
 {{template "compartilhar" .}}
 {{if .Moderar}}<form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} da área pública?')"><button class="btn perigo">Apagar</button></form>{{end}}
 {{template "conta" .}}
 </header>
-<div class="meio">{{template "coluna" .}}<div class="centro">{{template "abas" .}}
+<div class="meio">{{template "coluna" .}}<main class="centro"><h1 class="vh">{{.Label}}</h1>{{template "abas" .}}
 {{template "seguir"}}<div id="area" class="area"><div id="gut" class="gut" aria-hidden="true"></div><div class="box"><div id="mir" aria-hidden="true"></div>
 <textarea id="t" spellcheck="false" autofocus aria-label="{{.Label}}" data-name="{{.Name}}" data-can-edit="true">{{.Body}}</textarea><div id="lay" aria-hidden="true"></div></div></div>
-</div></div>
+</main></div>
 {{template "status" true}}
 {{template "live"}}
 </body></html>{{end}}
@@ -365,7 +530,7 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 {{if .NotFound}}<p class="err" role="alert">Usuário ou grupo não encontrado.</p>{{end}}
 <form method="post" action="/_share/{{.Name}}">
 <div class="seg" role="radiogroup" aria-label="Compartilhar com"><label><input type="radio" name="tipo" value="user" checked>Usuário</label><label><input type="radio" name="tipo" value="group">Grupo</label></div>
-<div class="comp-linha"><input class="campo" name="alvo" placeholder="nome" required autocomplete="off" aria-label="Nome do usuário ou grupo"><button class="btn pri">Adicionar</button></div>
+<div class="comp-linha"><label class="rotulo"><span>nome do usuário ou grupo</span><input class="campo" name="alvo" required autocomplete="off"></label><button class="btn pri">Adicionar</button></div>
 </form>
 <ul class="comp-lista">
 {{range .Users}}<li><span class="av" aria-hidden="true">{{printf "%.1s" .}}</span><span class="comp-nome">{{.}}</span><form method="post" action="/_unshare/{{$.Name}}"><input type="hidden" name="tipo" value="user"><input type="hidden" name="alvo" value="{{.}}"><button class="comp-rem" aria-label="Remover {{.}}">remover</button></form></li>{{end}}
