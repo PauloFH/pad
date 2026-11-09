@@ -260,7 +260,11 @@ type msgJSON struct {
 	Texto  string `json:"texto"`
 }
 
+// paginaChat é quantas mensagens o chat traz por vez ao abrir e a cada "mensagens anteriores".
+var paginaChat = 50
+
 // chatMsgs devolve as mensagens depois de ?depois=; com ?esperar=1 e nada novo, segura até chegar algo.
+// Ao abrir (depois=0 sem esperar) e com ?antes= vem só uma página, com "mais" dizendo se há anteriores.
 func (a *app) chatMsgs(w http.ResponseWriter, r *http.Request, u user) {
 	nome, ok := a.conversaDaRota(w, r, u)
 	if !ok {
@@ -268,10 +272,18 @@ func (a *app) chatMsgs(w http.ResponseWriter, r *http.Request, u user) {
 	}
 	q := r.URL.Query()
 	depois, _ := strconv.ParseInt(q.Get("depois"), 10, 64)
+	antes, _ := strconv.ParseInt(q.Get("antes"), 10, 64)
 	m := a.mcp
 	sinal := m.sinal() // antes da consulta: mensagem que chega no meio ainda acorda a espera
-	ms, err := a.mensagens(u.ID, nome, depois)
-	if err == nil && len(ms) == 0 && q.Get("esperar") == "1" {
+	var ms []mensagem
+	var mais bool
+	var err error
+	if antes > 0 || (depois == 0 && q.Get("esperar") != "1") {
+		ms, mais, err = a.mensagensAntes(u.ID, nome, antes, paginaChat)
+	} else {
+		ms, err = a.mensagens(u.ID, nome, depois)
+	}
+	if err == nil && len(ms) == 0 && antes == 0 && q.Get("esperar") == "1" {
 		timer := time.NewTimer(esperaWeb)
 		defer timer.Stop()
 		select {
@@ -298,7 +310,8 @@ func (a *app) chatMsgs(w http.ResponseWriter, r *http.Request, u user) {
 	out := struct {
 		Mensagens []msgJSON `json:"mensagens"`
 		Agentes   []string  `json:"agentes"`
-	}{[]msgJSON{}, []string{}}
+		Mais      bool      `json:"mais"`
+	}{[]msgJSON{}, []string{}, mais}
 	for _, x := range ms {
 		out.Mensagens = append(out.Mensagens, msgJSON{x.ID, x.Rotulo, x.Humano, x.Em.Unix(), x.Texto})
 	}

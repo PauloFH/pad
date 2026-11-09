@@ -388,7 +388,7 @@ func TestTelasSimplesUsamCartao(t *testing.T) {
 	}
 }
 
-// /_static/ revalida a cada carga (no-cache), mas com ETag do conteúdo embutido: sem mudança volta 304
+// /_static/ sem ?v= revalida a cada carga (no-cache), mas com ETag do conteúdo embutido: sem mudança volta 304
 func TestStaticETag(t *testing.T) {
 	a, err := openApp(t.TempDir())
 	if err != nil {
@@ -397,14 +397,15 @@ func TestStaticETag(t *testing.T) {
 	srv := httptest.NewServer(a.routes())
 	defer srv.Close()
 	tags := map[string]bool{}
-	for _, path := range []string{"/_static/pad.css", "/_static/ot.js", "/_static/fonts/space-grotesk-latin-400-normal.woff2"} {
+	for path, cc := range map[string]string{"/_static/pad.css": "no-cache", "/_static/ot.js": "no-cache",
+		"/_static/fonts/space-grotesk-latin-400-normal.woff2": umAno} {
 		res, err := http.Get(srv.URL + path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		res.Body.Close()
 		tag := res.Header.Get("ETag")
-		if tag == "" || res.Header.Get("Cache-Control") != "no-cache" {
+		if tag == "" || res.Header.Get("Cache-Control") != cc {
 			t.Fatalf("%s: ETag %q, Cache-Control %q", path, tag, res.Header.Get("Cache-Control"))
 		}
 		tags[tag] = true

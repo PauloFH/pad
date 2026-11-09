@@ -129,7 +129,8 @@
     const caixa = document.getElementById('texto');
     const botao = form.querySelector('button');
     const erro = document.getElementById('erro');
-    let ultimo = 0;
+    const anteriores = document.getElementById('anteriores');
+    let ultimo = 0, primeiro = 0;
 
     function agentes(ags) {
       const t = ags.length ? 'ativos agora: ' + ags.join(', ') : 'nenhum agente ativo agora';
@@ -146,6 +147,31 @@
       if (ms.length && noFim) lista.scrollTop = lista.scrollHeight;
     }
 
+    // a conversa abre com a última página; as anteriores entram em cima sem tirar do lugar o que a pessoa lia
+    // sem o botão (HTML de antes do deploy voltando do cache com este JS), o chat segue sem as anteriores
+    function maisAntigas(d) {
+      if (d.mensagens.length) primeiro = d.mensagens[0].id;
+      if (anteriores) anteriores.hidden = !d.mais;
+    }
+    anteriores?.addEventListener('click', async () => {
+      anteriores.disabled = true;
+      try {
+        const r = await fetch(`${base}/msgs?antes=${primeiro}`, { headers: { Accept: 'application/json' } });
+        if (vencida(r)) return avisarVencida(erro);
+        if (!r.ok) throw new Error(String(r.status));
+        const d = await r.json();
+        // mede pela mensagem que estava no topo: o botão sumir também move a lista
+        const ref = lista.firstElementChild, topo = ref.getBoundingClientRect().top;
+        lista.prepend(...d.mensagens.map(balao));
+        maisAntigas(d);
+        lista.scrollTop += ref.getBoundingClientRect().top - topo;
+      } catch {
+        erro.textContent = 'não foi possível carregar as mensagens anteriores';
+      } finally {
+        anteriores.disabled = false;
+      }
+    });
+
     async function laco() {
       let primeira = true;
       for (;;) {
@@ -161,6 +187,7 @@
           }
           if (!r.ok) throw new Error(String(r.status));
           const d = await r.json();
+          if (primeira) maisAntigas(d); // antes de desenhar: o botão encolhe a lista, e a rolagem vai até o fim depois
           desenhar(d.mensagens, primeira);
           agentes(d.agentes);
           primeira = false;

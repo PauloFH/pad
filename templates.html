@@ -6,9 +6,9 @@
 <script>try{var t=localStorage.getItem('pad:tema')}catch(e){}document.documentElement.dataset.theme=/^(grafite|madrugada|cafe|floresta|papel|ceu|areia|contraste)$/.test(t)?t:matchMedia('(prefers-color-scheme: dark)').matches?'grafite':'papel'</script>
 <link rel="preload" href="/_static/fonts/space-grotesk-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/_static/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/_static/pad.css">
-<link rel="stylesheet" href="/_static/componentes.css"><link rel="stylesheet" href="/_static/moldura.css">
-<script src="/_static/theme.js" defer></script>
+<link rel="stylesheet" href="{{st "pad.css"}}">
+<link rel="stylesheet" href="{{st "componentes.css"}}"><link rel="stylesheet" href="{{st "moldura.css"}}">
+<script src="{{st "theme.js"}}" defer></script><script src="{{st "vitais.js"}}" defer></script>
 <style>
 *{box-sizing:border-box} [hidden]{display:none!important}
 body{margin:0;font:15px/1.5 var(--ui);background:var(--bg);color:var(--fg)}
@@ -51,7 +51,7 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 
 {{define "live"}}<p id="trava" class="aviso err" role="status" hidden></p>
 <p id="fim" class="aviso" role="alert" hidden><span></span><a href="">recarregar</a></p>
-<script src="/_static/ot.js"></script><script src="/_static/sync.js"></script><script src="/_static/editor.js"></script><script src="/_static/presence.js"></script>{{end}}
+<script src="{{st "ot.js"}}" defer></script><script src="{{st "sync.js"}}" defer></script><script src="{{st "editor.js"}}" defer></script><script src="{{st "presence.js"}}" defer></script>{{end}}
 
 {{define "logout"}}<form method="post" action="/_logout" class="inline"><button class="link">sair</button></form>{{end}}
 
@@ -60,7 +60,7 @@ textarea{width:100%;border:0;padding:1rem;background:var(--bg);color:var(--fg);r
 <p>{{.Msg}}</p>
 <a class="btn" href="/">Voltar</a>
 {{/* documento apagado ou sem acesso: sai das abas de quem tentou abrir */}}
-{{with .Aba}}<script src="/_static/shell.js"></script><script>PadShell.abas.fechar({{$.Me}}, {{.}})</script>{{end}}
+{{with .Aba}}<script src="{{st "shell.js"}}"></script><script>PadShell.abas.fechar({{$.Me}}, {{.}})</script>{{end}}
 </main></body></html>{{end}}
 
 {{define "login"}}{{template "head" "entrar"}}<body class="tela-cartao"><main>
@@ -124,7 +124,7 @@ document.getElementById('copiar').onclick = function () {
 {{define "copiavel"}}<button type="button" class="btn copiar" data-alvo="{{.}}">Copiar</button>{{end}}
 
 {{define "mcp"}}{{template "head" "mcp"}}<body class="ed">
-<header class="topo"><script src="/_static/shell.js"></script><span class="marca">pad</span><span class="sp"></span>{{template "conta" .}}</header>
+<header class="topo"><script src="{{st "shell.js"}}"></script><span class="marca">pad</span><span class="sp"></span>{{template "conta" .}}</header>
 <div class="meio"><div class="centro"><main class="entrada mcp">
 <h1 class="vh">MCP de {{.Me}}</h1>
 {{with .Nova}}<section class="nova" aria-labelledby="nova-t"><h2 id="nova-t">Máquina {{.Nome}} cadastrada</h2>
@@ -172,15 +172,16 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 </tbody></table></div>
 </main></div></div>
 {{template "status" false}}
-<script src="/_static/chat.js"></script>
+<script src="{{st "chat.js"}}" defer></script>
 </body></html>{{end}}
 
 {{/* chat de uma conversa; as mensagens chegam pelo chat.js (msgs), sem HTML de mensagem no servidor */}}
 {{define "mcp-conversa"}}{{template "head" .Nome}}<body class="ed">
-<header class="topo"><script src="/_static/shell.js"></script><a class="btn" href="/{{.Me}}/_mcp">← mcp</a><span class="crumb" title="{{.Nome}}"><span>{{.Nome}}</span></span><span class="sp"></span>{{template "conta" .}}</header>
+<header class="topo"><script src="{{st "shell.js"}}"></script><a class="btn" href="/{{.Me}}/_mcp">← mcp</a><span class="crumb" title="{{.Nome}}"><span>{{.Nome}}</span></span><span class="sp"></span>{{template "conta" .}}</header>
 <div class="meio"><div class="centro"><main id="chat" class="chat" data-base="/{{.Me}}/_mcp" data-nome="{{.Nome}}">
 <div class="info"><p id="ativos" class="ativos" aria-live="polite">carregando…</p>
 <form id="apagar" method="post" action="/{{.Me}}/_mcp/c/{{.Nome}}/apagar"><button class="btn perigo">apagar conversa</button></form></div>
+<button id="anteriores" class="btn anteriores" type="button" hidden>mensagens anteriores</button>
 <ol id="msgs" class="msgs" role="log" aria-label="mensagens de {{.Nome}}" tabindex="0"></ol>
 <form id="enviar" class="enviar"><label class="vh" for="texto">mensagem</label>
 <textarea id="texto" class="campo" rows="2" placeholder="Mensagem (Enter envia, Shift+Enter quebra a linha)" autocomplete="off"></textarea>
@@ -188,14 +189,14 @@ document.querySelectorAll('.copiar').forEach(function (b) {
 <p id="erro" class="err" role="status"></p>
 </main></div></div>
 {{template "status" false}}
-<script src="/_static/chat.js"></script>
+<script src="{{st "chat.js"}}" defer></script>
 </body></html>{{end}}
 
 {{/* apresentação para quem chega em / sem sessão. A página imita um documento: cada .l é uma linha numerada.
 Os nomes em data-pessoa são sorteados pelo landing.js; sem JS valem estes e a cena fica no estado final. */}}
 {{define "landing"}}{{template "head" "apresentação"}}<body class="landing">
-<link rel="stylesheet" href="/_static/landing.css">
-<script src="/_static/shell.js"></script>
+<link rel="stylesheet" href="{{st "landing.css"}}">
+<script src="{{st "shell.js"}}"></script>
 <div class="fixo">
 <header class="topo"><span class="marca">pad<span>_</span></span><span class="selo">demonstração</span><span class="sp"></span>
 <span class="bolhas" aria-hidden="true"><span class="dot p0" data-pessoa="0" data-inicial>P</span><span class="dot p1" data-pessoa="1" data-inicial>J</span></span>
@@ -289,7 +290,7 @@ docker compose exec pad /pad admin <span data-pessoa="0" data-min>paulo</span></
 </section>
 </main>
 <footer class="status"><span class="forte pessoas">● 3 pessoas</span><button id="demo" type="button" hidden>Parar demonstração</button><span class="sp"></span><span class="estado"><span id="salvo" class="ok"></span><span id="st">salvo</span></span>{{template "tema"}}</footer>
-<script src="/_static/landing.js"></script>
+<script src="{{st "landing.js"}}"></script>
 </body></html>{{end}}
 
 {{define "cartoes"}}<ul class="cartoes">{{range .}}<li><a class="cartao" href="/{{.Name}}" title="{{.Name}}"><span class="nome">{{.Label}}</span><span class="meta">{{.Meta}}</span></a></li>{{end}}</ul>{{end}}
@@ -299,7 +300,7 @@ Os defines recebem um docPage (ou qualquer valor com Me, Admin, Name e Coluna). 
 
 {{/* começo da barra de cima: o shell.js, sem defer porque monta a coluna e as abas logo abaixo antes da
 primeira pintura (as telas de cartão não o carregam), e o botão que abre e fecha a coluna */}}
-{{define "moldura-topo"}}<script src="/_static/shell.js"></script>{{if .Coluna}}<button id="col" class="btn" type="button" aria-controls="coluna" aria-expanded="true" title="documentos" aria-label="documentos">◧</button>{{end}}{{end}}
+{{define "moldura-topo"}}<script src="{{st "shell.js"}}"></script>{{if .Coluna}}<button id="col" class="btn" type="button" aria-controls="coluna" aria-expanded="true" title="documentos" aria-label="documentos">◧</button>{{end}}{{end}}
 
 {{/* caminho com as pastas apagadas */}}
 {{define "caminho"}}<span class="crumb" title="{{.}}">{{with corta .}}<span class="mut">{{index . 0}}</span><span>{{index . 1}}</span>{{end}}</span>{{end}}
@@ -373,4 +374,4 @@ primeira pintura (as telas de cartão não o carregam), e o botão que abre e fe
 <form method="post" action="/_public/{{.Name}}" class="comp-pub"><input type="hidden" name="public" value="{{if .Public}}0{{else}}1{{end}}"><span id="comp-pub-t">Público, só leitura</span><button class="chave" role="switch" aria-checked="{{.Public}}" aria-labelledby="comp-pub-t"></button></form>
 <form method="post" action="/_delete/{{.Name}}" onsubmit="return confirm('Apagar {{.Name}} de vez?')"><button class="btn perigo">Apagar documento</button></form>
 </div>{{/* fecha já, antes de pintar, para o painel não piscar aberto enquanto o compartilhar.js chega */}}
-<script>{const p=document.getElementById('comp-painel');p.hidden=!p.hasAttribute('data-aberto')}</script><script src="/_static/compartilhar.js"></script></span>{{end}}{{end}}
+<script>{const p=document.getElementById('comp-painel');p.hidden=!p.hasAttribute('data-aberto')}</script><script src="{{st "compartilhar.js"}}"></script></span>{{end}}{{end}}

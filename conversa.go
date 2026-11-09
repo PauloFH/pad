@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -153,8 +155,31 @@ func (a *app) enviarMensagem(uid int64, conversa string, m mensagem) (int64, err
 
 // lerMensagens devolve as mensagens com id > depois, e só as de outros autores se outrosDe não for vazio.
 func lerMensagens(q consulta, cid, depois int64, outrosDe string) ([]mensagem, error) {
-	rows, err := q.Query(`SELECT id, autor, rotulo, humano, em, texto FROM mcp_mensagens
-		WHERE conversa_id = ? AND id > ? AND autor <> ? ORDER BY id`, cid, depois, outrosDe)
+	return escanear(q.Query(`SELECT id, autor, rotulo, humano, em, texto FROM mcp_mensagens
+		WHERE conversa_id = ? AND id > ? AND autor <> ? ORDER BY id`, cid, depois, outrosDe))
+}
+
+// mensagensAntes devolve as n mensagens anteriores a antes (0: as mais recentes), em ordem, e se há outras mais antigas.
+// É a página do chat no navegador: uma conversa longa não chega inteira de uma vez.
+func (a *app) mensagensAntes(uid int64, conversa string, antes int64, n int) ([]mensagem, bool, error) {
+	cid, err := conversaID(a.db, uid, conversa)
+	if err != nil {
+		return nil, false, err
+	}
+	if antes <= 0 {
+		antes = math.MaxInt64
+	}
+	ms, err := escanear(a.db.Query(`SELECT id, autor, rotulo, humano, em, texto FROM mcp_mensagens
+		WHERE conversa_id = ? AND id < ? ORDER BY id DESC LIMIT ?`, cid, antes, n+1))
+	mais := len(ms) > n
+	if mais {
+		ms = ms[:n]
+	}
+	slices.Reverse(ms)
+	return ms, mais, err
+}
+
+func escanear(rows *sql.Rows, err error) ([]mensagem, error) {
 	if err != nil {
 		return nil, err
 	}

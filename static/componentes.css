@@ -122,6 +122,7 @@ a.cartao:hover{background:var(--hov)}
 .chat .info{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 0}
 .chat .info form{margin:0}
 .chat .ativos{flex:1 1 12rem;min-width:0;margin:0;color:var(--mut);font-size:12px;overflow-wrap:anywhere}
+.chat .anteriores{flex:none;align-self:center;margin:4px 0}
 .msgs{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0;margin:0;padding:4px 0 12px;overflow-y:auto;list-style:none}
 .balao{align-self:flex-start;min-width:0;max-width:min(85%,40rem);padding:8px 12px;border-radius:12px 12px 12px 4px;background:var(--field);color:var(--fg);box-shadow:0 0 0 1px var(--line)}
 .balao.eu{align-self:flex-end;border-radius:12px 12px 4px 12px;background:color-mix(in srgb,var(--acc) 16%,var(--field));box-shadow:0 0 0 1px color-mix(in srgb,var(--acc) 45%,var(--line))}
