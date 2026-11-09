@@ -45,7 +45,7 @@ var tmplFS embed.FS
 var staticFS embed.FS
 
 var (
-	tmpl = template.Must(template.New("").Funcs(template.FuncMap{"ramo": ramo, "corta": corta, "hora": hora,
+	tmpl = template.Must(template.New("").Funcs(template.FuncMap{"ramo": ramo, "corta": corta, "hora": hora, "st": st,
 		"quando": func(t time.Time) string { return quando(t, time.Now()) }}).ParseFS(tmplFS, "templates.html"))
 	// o nome vira caminho de arquivo: sem "..", "/" inicial, "//" ou ponto
 	validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9_-]+)*$`)
@@ -112,6 +112,10 @@ CREATE TABLE IF NOT EXISTS mcp_mensagens (
 	autor TEXT NOT NULL, rotulo TEXT NOT NULL, humano INTEGER NOT NULL,
 	em INTEGER NOT NULL, texto TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS mcp_mensagens_conversa ON mcp_mensagens (conversa_id, id);
+-- a lista de documentos (toda página) filtra por dono e por quem recebeu: sem eles o SQLite varre docs
+CREATE INDEX IF NOT EXISTS docs_dono ON docs (owner_id);
+CREATE INDEX IF NOT EXISTS user_shares_usuario ON user_shares (user_id);
+CREATE INDEX IF NOT EXISTS members_usuario ON members (user_id);
 -- o "lido" é por apelido do agente, não por pessoa: dois agentes da mesma pessoa leem separado
 CREATE TABLE IF NOT EXISTS mcp_lido (
 	conversa_id INTEGER NOT NULL REFERENCES mcp_conversas ON DELETE CASCADE,
@@ -134,6 +138,7 @@ type app struct {
 	mcp                                   *mcpState
 	limWS                                 *limite       // conexões novas por IP
 	limPublico                            *limite       // POST em /publico por IP
+	limVitais                             *limite       // Web Vitals por IP (vão para o log)
 	limLoginIP, limLoginNome, limLoginPar *limite       // senhas erradas por IP, por conta e por IP nessa conta
 	vagasBcrypt                           chan struct{} // bcrypt custa caro de propósito: pedidos demais juntos não podem tomar a CPU
 }
@@ -217,7 +222,7 @@ func openApp(dataDir string) (*app, error) {
 		return nil, err
 	}
 	a := &app{db: db, docsDir: docsDir, visitorKey: key, mcp: newMcpState(),
-		limWS: novoLimite(60, time.Minute), limPublico: novoLimite(120, time.Minute),
+		limWS: novoLimite(60, time.Minute), limPublico: novoLimite(120, time.Minute), limVitais: novoLimite(30, time.Minute),
 		limLoginIP: novoLimite(10, 5*time.Minute), limLoginNome: novoLimite(20, 15*time.Minute), limLoginPar: novoLimite(3, 15*time.Minute),
 		vagasBcrypt: make(chan struct{}, max(1, runtime.NumCPU()/2))}
 	a.hub = &hub{a: a, docs: map[string]*liveDoc{}, perIP: map[string]int{}, perDoc: map[string]int{}}
@@ -240,9 +245,23 @@ var etags = func() map[string]string {
 	return m
 }()
 
-// noCache faz o navegador revalidar o JS, o CSS e as fontes a cada carga: o binário os embute e muda a cada deploy.
-// Com o ETag a revalidação volta 304 sem corpo enquanto o arquivo não mudar.
-func noCache(h http.Handler) http.Handler {
+// versao é o trecho do hash que vai na URL do estático (?v=): muda quando o arquivo muda.
+func versao(etag string) string { return etag[1:17] }
+
+// st é o endereço versionado de um estático, para o template: /_static/ot.js?v=<hash>.
+func st(p string) (string, error) {
+	tag, ok := etags[p]
+	if !ok {
+		return "", fmt.Errorf("estático inexistente: %s", p)
+	}
+	return "/_static/" + p + "?v=" + versao(tag), nil
+}
+
+const umAno = "public, max-age=31536000, immutable"
+
+// estaticos guarda por um ano o que vem com o ?v= do conteúdo atual: o binário embute os arquivos e muda a cada
+// deploy, e aí a URL muda junto. Sem o ?v= (ou com um antigo) revalida a cada carga; com o ETag volta 304 sem corpo.
+func estaticos(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/") { // sem listagem do diretório
 			http.NotFound(w, r)
@@ -251,9 +270,15 @@ func noCache(h http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 		if tag, ok := etags[strings.TrimPrefix(r.URL.Path, "/_static/")]; ok {
 			w.Header().Set("ETag", tag) // o http.FileServer responde 304 ao If-None-Match igual
+			if r.URL.Query().Get("v") == versao(tag) {
+				w.Header().Set("Cache-Control", umAno)
+			}
 		}
 		if strings.HasSuffix(r.URL.Path, ".woff2") { // o mime do Go não conhece .woff2 sem /etc/mime.types (imagem do Docker)
 			w.Header().Set("Content-Type", "font/woff2")
+			// shortcut: a fonte fica um ano no cache sem ?v= (o url() do CSS e o preload precisam da mesma URL);
+			// ao trocar o conteúdo de uma fonte, troque também o nome do arquivo
+			w.Header().Set("Cache-Control", umAno)
 		}
 		h.ServeHTTP(w, r)
 	})
@@ -268,8 +293,9 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_join/{token}", a.join)
 	mux.HandleFunc("GET /_convite", a.auth(a.invite))
 	mux.HandleFunc("POST /_convite", a.auth(a.invite))
-	mux.Handle("GET /_static/", noCache(http.StripPrefix("/_static/", http.FileServerFS(staticSub))))
+	mux.Handle("GET /_static/", estaticos(http.StripPrefix("/_static/", http.FileServerFS(staticSub))))
 	mux.HandleFunc("GET /_ws/{name...}", a.liveWS)
+	mux.HandleFunc("POST /_vitais", a.vitais)
 	mux.HandleFunc("GET /{$}", a.inicio)
 	mux.HandleFunc("GET /{name...}", a.view)  // sem auth: documento público abre sem login
 	mux.HandleFunc("POST /{name...}", a.save) // confere a sessão por dentro: /publico grava sem login
@@ -281,7 +307,7 @@ func (a *app) routes() http.Handler {
 		http.Redirect(w, r, "/"+u.Name+"/_mcp", http.StatusSeeOther)
 	}))
 	mcp := a.mcpRoutes()
-	return http.NewCrossOriginProtection().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.NewCrossOriginProtection().Handler(lentas(comprime(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		// shortcut: sem script-src porque as páginas têm scripts e onsubmit inline; tirá-los antes de restringir
 		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'")
@@ -296,7 +322,7 @@ func (a *app) routes() http.Handler {
 			return
 		}
 		mux.ServeHTTP(w, r)
-	}))
+	}))))
 }
 
 // --- sessão ---

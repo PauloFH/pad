@@ -68,7 +68,14 @@ pad.seudominio.com {
 
 O proxy precisa definir o `X-Real-Ip` com o IP real do cliente, sobrescrevendo o que vier de fora: os limites por IP (login, conexões e gravações em `/publico`) confiam nesse cabeçalho. O Traefik já faz isso por padrão, desde que o entrypoint não confie em cabeçalhos de qualquer origem (`forwardedHeaders.insecure`).
 
-Limites contra abuso: 10 senhas erradas por IP em 5 minutos e 20 por conta em 15 minutos (a conta cheia só barra os IPs que já erraram 3 vezes nela, para ninguém deixar o dono de fora), 60 conexões novas por minuto e 20 simultâneas por IP, e 120 gravações por minuto em `/publico`. O `compose.yaml` limita o contêiner a 1 GB de memória; ajuste `mem_limit` ao tamanho da sua VPS.
+Limites contra abuso: 10 senhas erradas por IP em 5 minutos e 20 por conta em 15 minutos (a conta cheia só barra os IPs que já erraram 3 vezes nela, para ninguém deixar o dono de fora), 60 conexões novas por minuto e 20 simultâneas por IP, 120 gravações por minuto em `/publico` e 30 envios de Web Vitals por minuto. O `compose.yaml` limita o contêiner a 1 GB de memória; ajuste `mem_limit` ao tamanho da sua VPS.
+
+## Desempenho
+
+O HTML, o CSS, o JS e o JSON saem em gzip, e o JS e o CSS vêm com `?v=<hash>` na URL e ficam um ano no cache do navegador (um deploy muda a URL). Dois registros no log (`docker compose logs pad`) mostram como o pad está para quem usa:
+
+- `lenta: GET /{name...} 412ms`: requisição acima de 300 ms, pelo padrão da rota (sem nome de documento nem token). O WebSocket, o chat esperando mensagem e as chamadas MCP ficam de fora, porque demoram de propósito.
+- `vitais: /{usuario}/{doc} lcp=812ms inp=40ms cls=0.012 ...`: as Web Vitals medidas no navegador de cada visita, enviadas ao sair da página. O valor `0` quer dizer que o navegador não chegou a medir.
 
 ## Administrar
 

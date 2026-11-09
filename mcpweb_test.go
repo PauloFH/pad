@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -184,6 +185,51 @@ type chatMsgs struct {
 		Texto  string
 	}
 	Agentes []string
+	Mais    bool
+}
+
+// o chat abre com a última página e busca as anteriores com ?antes=; o laço de novidades (depois=N) vem inteiro
+func TestChatPaginado(t *testing.T) {
+	velho := paginaChat
+	paginaChat = 3
+	t.Cleanup(func() { paginaChat = velho })
+	_, srv := mcpApp(t, "ana")
+	ana := entrarWeb(t, srv, "ana")
+	res, err := ana.PostForm(srv.URL+"/ana/_mcp/c", url.Values{"nome": {"longa"}, "mensagem": {"m1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	for i := 2; i <= 7; i++ {
+		res, err := ana.Post(srv.URL+"/ana/_mcp/c/longa/msgs", "application/json", strings.NewReader(fmt.Sprintf(`{"texto":"m%d"}`, i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+	}
+	textos := func(d chatMsgs) (s []string) {
+		for _, m := range d.Mensagens {
+			s = append(s, m.Texto)
+		}
+		return s
+	}
+	base := srv.URL + "/ana/_mcp/c/longa/msgs"
+	d, _, _ := pegarMsgs(t, ana, base+"?depois=0")
+	if got := strings.Join(textos(d), ","); got != "m5,m6,m7" || !d.Mais {
+		t.Fatalf("primeira página: %s, mais=%v", got, d.Mais)
+	}
+	d, _, _ = pegarMsgs(t, ana, fmt.Sprintf("%s?antes=%d", base, d.Mensagens[0].ID))
+	if got := strings.Join(textos(d), ","); got != "m2,m3,m4" || !d.Mais {
+		t.Fatalf("segunda página: %s, mais=%v", got, d.Mais)
+	}
+	d, _, _ = pegarMsgs(t, ana, fmt.Sprintf("%s?antes=%d", base, d.Mensagens[0].ID))
+	if got := strings.Join(textos(d), ","); got != "m1" || d.Mais {
+		t.Fatalf("última página: %s, mais=%v", got, d.Mais)
+	}
+	d, _, _ = pegarMsgs(t, ana, fmt.Sprintf("%s?depois=%d", base, d.Mensagens[0].ID))
+	if got := strings.Join(textos(d), ","); got != "m2,m3,m4,m5,m6,m7" || d.Mais {
+		t.Fatalf("novidades depois de m1: %s, mais=%v", got, d.Mais)
+	}
 }
 
 // pegarMsgs lê o JSON do msgs; o status volta junto para os casos de erro.
