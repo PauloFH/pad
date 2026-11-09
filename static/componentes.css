@@ -17,7 +17,7 @@
 
 /* campos (input e select): sombra interna; no foco o contorno vira o anel de destaque */
 .campo{min-width:0;padding:8px 11px;border:0;border-radius:9px;font-family:inherit;font-size:inherit;line-height:1.25;
-  background:var(--field);color:var(--fg);box-shadow:inset 0 1px 3px #0004,0 0 0 1px var(--line)}
+  background:var(--field);color:var(--fg);box-shadow:inset 0 1px 3px #0004,0 0 0 1px color-mix(in srgb,var(--mut) 60%,var(--line))}
 .campo::placeholder{color:var(--mut);opacity:1}
 .campo:focus{outline:none;box-shadow:inset 0 1px 3px #0004,0 0 0 2px var(--acc)}
 
@@ -111,8 +111,8 @@ a.cartao:hover{background:var(--hov)}
 .mcp .linha .campo{flex:1 1 14rem}
 .mcp .cmd-h{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--mut);font-size:12px}
 .mcp pre.cmd{margin:0;padding:10px 12px;overflow-x:auto;border-radius:9px;background:var(--bg);box-shadow:inset 0 1px 3px #0005,0 0 0 1px var(--line);font:12px/1.5 var(--mono)}
-.mcp .nova-conversa{display:flex;flex-wrap:wrap;gap:8px}
-.mcp .nova-conversa .campo{flex:1 1 12rem}
+.mcp .nova-conversa{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px}
+.mcp .nova-conversa .rotulo{flex:1 1 12rem}
 .mcp .cartao .meta{overflow-wrap:anywhere}
 
 /* chat de uma conversa (/_mcp/c/{nome}): lista que rola, balões (pessoa à direita, agente à esquerda) e a caixa no rodapé */
@@ -125,7 +125,7 @@ a.cartao:hover{background:var(--hov)}
 .chat .anteriores{flex:none;align-self:center;margin:4px 0}
 .msgs{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0;margin:0;padding:4px 0 12px;overflow-y:auto;list-style:none}
 .balao{align-self:flex-start;min-width:0;max-width:min(85%,40rem);padding:8px 12px;border-radius:12px 12px 12px 4px;background:var(--field);color:var(--fg);box-shadow:0 0 0 1px var(--line)}
-.balao.eu{align-self:flex-end;border-radius:12px 12px 4px 12px;background:color-mix(in srgb,var(--acc) 16%,var(--field));box-shadow:0 0 0 1px color-mix(in srgb,var(--acc) 45%,var(--line))}
+.balao.eu{align-self:flex-end;border-radius:12px 12px 4px 12px;background:color-mix(in srgb,var(--acc) 6%,var(--field));box-shadow:0 0 0 1px color-mix(in srgb,var(--acc) 45%,var(--line))}
 .balao .cab{display:flex;flex-wrap:wrap;gap:4px 10px;margin-bottom:2px;color:var(--mut);font-size:11px}
 .balao .quem{font-family:var(--mono);overflow-wrap:anywhere}
 .balao .texto{white-space:pre-wrap;overflow-wrap:anywhere}
@@ -136,3 +136,15 @@ a.cartao:hover{background:var(--hov)}
 .chat #erro{flex:none;margin:0;padding-bottom:6px;font-size:13px;min-height:0}
 .chat #erro:empty{display:none}
 @media (max-width:767px){.chat{padding:0 10px}.balao{max-width:92%}}
+
+/* rótulo visível sobre o campo (o placeholder some ao digitar); nas linhas com botão, o botão desce até o campo */
+.rotulo{display:grid;gap:4px;min-width:0}
+.rotulo>span{color:var(--mut);font-size:12px}
+/* lista curta na tela de cartão (apagar conta) e páginas de texto longo (privacidade e termos) */
+.tela-cartao .lista{display:grid;gap:4px;margin:0;padding-left:1.2rem}
+.tela-cartao main.texto{max-width:44rem;line-height:1.6}
+.tela-cartao .texto h1{margin:0;font-size:24px;font-weight:600;line-height:1.3}
+.tela-cartao .texto h2{margin-top:12px;font-size:17px}
+.tela-cartao .texto ul{display:grid;gap:6px;margin:0;padding-left:1.2rem}
+.tela-cartao .texto .marca a{color:inherit;text-decoration:none}
+.tela-cartao .texto .marca a span{color:var(--acc)}

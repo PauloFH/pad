@@ -305,6 +305,17 @@ func (h *hub) persist(name, body string) error {
 	return h.a.writeDoc(name, []byte(body))
 }
 
+// flushName grava já o documento, se estiver aberto ao vivo (o exportar lê o disco).
+func (h *hub) flushName(name string) error {
+	h.mu.Lock()
+	d := h.docs[name]
+	h.mu.Unlock()
+	if d == nil {
+		return nil
+	}
+	return h.flush(d)
+}
+
 func (h *hub) flushAll() {
 	h.mu.Lock()
 	ds := make([]*liveDoc, 0, len(h.docs))

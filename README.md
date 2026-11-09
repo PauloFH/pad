@@ -1,6 +1,6 @@
 # pad
 
-Bloco de notas estilo dontpad, com login. Cada usuário tem seu espaço: `/paulo/notas`, `/paulo/pessoal/cpf` (até 5 níveis de subpasta, cada uma é um documento à parte, com acesso próprio). Fora dele, a área `/publico/...` é aberta: sem dono e sem login, qualquer um lê e escreve (até 256 KB por documento, 50 mil itens entre documentos e pastas e 1 GB no total; quando enche, os editados há mais tempo são apagados para abrir espaço; um administrador também apaga qualquer documento da área pela própria página). Quem cria vira dono e pode compartilhar com usuários ou grupos (quem recebe pode ler e editar). O dono também pode tornar um documento público: aí o endereço abre sem login, só para leitura. Salva sozinho enquanto você digita.
+Bloco de notas estilo dontpad, com login. Cada usuário tem seu espaço: `/paulo/notas`, `/paulo/pessoal/receitas` (até 5 níveis de subpasta, cada uma é um documento à parte, com acesso próprio). Fora dele, a área `/publico/...` é aberta: sem dono e sem login, qualquer um lê e escreve (até 256 KB por documento, 50 mil itens entre documentos e pastas e 1 GB no total; quando enche, os editados há mais tempo são apagados para abrir espaço; um administrador também apaga qualquer documento da área pela própria página). Quem cria vira dono e pode compartilhar com usuários ou grupos (quem recebe pode ler e editar). O dono também pode tornar um documento público: aí o endereço abre sem login, só para leitura. Salva sozinho enquanto você digita.
 
 Quem abre `/` sem sessão vê a apresentação do pad; com sessão, a lista de documentos.
 
@@ -77,6 +77,18 @@ O HTML, o CSS, o JS e o JSON saem em gzip, e o JS e o CSS vêm com `?v=<hash>` n
 - `lenta: GET /{name...} 412ms`: requisição acima de 300 ms, pelo padrão da rota (sem nome de documento nem token). O WebSocket, o chat esperando mensagem e as chamadas MCP ficam de fora, porque demoram de propósito.
 - `vitais: /{usuario}/{doc} lcp=812ms inp=40ms cls=0.012 ...`: as Web Vitals medidas no navegador de cada visita, enviadas ao sair da página. O valor `0` quer dizer que o navegador não chegou a medir.
 
+## Privacidade e termos
+
+`/_privacidade` e `/_termos` (templates `privacidade` e `termos` no `templates.html`) descrevem o que o código coleta, guarda e por quanto tempo, e saem linkados na barra de status, no login e no criar conta. Ao mudar o que se coleta (tabela nova, log, cookie, chave no localStorage, terceiro) ou a retenção (backups, rotação de log), mude o texto e a data deles. Quem tem conta se apaga sozinho em **apagar conta** (`/_conta/apagar`, pede a senha). Um pedido por e-mail de quem não consegue entrar se atende com o pad parado, porque o servidor guarda na memória os documentos abertos e não veria a exclusão:
+
+```sh
+docker compose -f compose.yaml -f compose.traefik.yaml stop
+docker compose -f compose.yaml -f compose.traefik.yaml run --rm pad /pad apagar-tudo NOME  # pede o nome de novo
+docker compose -f compose.yaml -f compose.traefik.yaml start
+```
+
+Os dois caminhos apagam a conta, os documentos e, em cascata, sessões, compartilhamentos, participação em grupos, convites, máquinas e conversas. O servidor segura o `pad.lock` da pasta de dados enquanto roda, e o `apagar-tudo` recusa se ele estiver preso: esquecer o `stop` não apaga nada por baixo do pad no ar. Se a remoção da pasta `docs/<nome>/` falhar depois de a conta sair, o log diz o caminho para apagar à mão. Os 7 backups em `~/pad-backups` guardam os dados até saírem da rotação. O proxy (Traefik da stack pathoplay) roda sem `--accesslog`: se isso mudar, a política precisa dizer que ele registra IPs.
+
 ## Administrar
 
 ```sh
@@ -87,6 +99,7 @@ docker compose exec pad /pad <comando>
 |---|---|
 | `useradd NOME` / `passwd NOME` | cria usuário / troca a senha (e derruba as sessões e as chaves de máquina dele) |
 | `userdel NOME` | apaga usuário; falha se ele ainda for dono de documentos |
+| `apagar-tudo NOME` | apaga o usuário com documentos, máquinas e conversas; só com o pad parado (veja Privacidade e termos) |
 | `admin NOME` | torna o usuário administrador (gera convites) |
 | `groupadd GRUPO` / `groupdel GRUPO` | cria / apaga grupo |
 | `join GRUPO NOME` / `leave GRUPO NOME` | põe / tira usuário do grupo |

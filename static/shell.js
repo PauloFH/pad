@@ -171,7 +171,11 @@
     const T = globalThis.PadTheme, m = $('tema-menu');
     const rotular = () => {
       const t = T.temas.find((t) => t.id === document.documentElement.dataset.theme);
-      btn.textContent = 'tema: ' + (t ? t.nome : '') + ' ▾';
+      // o rótulo some da vista em tela estreita (moldura.css), mas fica no nome acessível
+      const rot = document.createElement('span');
+      rot.className = 'rot';
+      rot.textContent = 'tema: ';
+      btn.replaceChildren(rot, (t ? t.nome : '') + ' ▾');
     };
     const item = (id, nome, cor) => {
       const b = document.createElement('button');

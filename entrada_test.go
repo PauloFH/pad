@@ -49,7 +49,7 @@ func TestQuemEsta(t *testing.T) {
 func TestEntradaVazia(t *testing.T) {
 	_, srv, login := wsApp(t)
 	page := pagina(t, login("ana"), srv.URL+"/")
-	for _, s := range []string{`id="coluna"`, `placeholder="nome do novo documento"`, "Nenhum documento ainda"} {
+	for _, s := range []string{`id="coluna"`, `<span>novo documento</span>`, "Nenhum documento ainda"} {
 		if !strings.Contains(page, s) {
 			t.Errorf("entrada vazia sem %q", s)
 		}

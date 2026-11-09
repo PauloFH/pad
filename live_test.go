@@ -510,9 +510,13 @@ func TestPaletaContraste(t *testing.T) {
 			t.Errorf("cor repetida %q", c)
 		}
 		seen[c] = true
-		for _, bg := range fundos {
-			if r := contraste(t, c, bg); r < 3 {
-				t.Errorf("%s contra %s: %.2f:1, quero 3:1", c, bg, r)
+		for i, bg := range fundos {
+			min := 3.0
+			if i == 0 {
+				min = 4.5 // etiqueta de texto pequeno
+			}
+			if r := contraste(t, c, bg); r < min {
+				t.Errorf("%s contra %s: %.2f:1, quero %.1f:1", c, bg, r, min)
 			}
 		}
 	}

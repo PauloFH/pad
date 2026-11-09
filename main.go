@@ -156,12 +156,22 @@ func main() {
 		log.Fatal(err)
 	}
 	if len(os.Args) > 1 {
-		if err := runCLI(a.db, os.Args[1:], os.Stdin); err != nil {
+		run := func() error { return runCLI(a.db, os.Args[1:], os.Stdin) }
+		if os.Args[1] == "apagar-tudo" && len(os.Args) == 3 { // precisa da pasta dos documentos, além do banco
+			run = func() error { return apagarTudoCLI(a, dataDir, os.Args[2], os.Stdin) }
+		}
+		if err := run(); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		return
 	}
+	// o apagar-tudo de outro contêiner vê esta trava e recusa; o defer mantém o arquivo vivo (o GC fecharia e soltaria)
+	trava, err := travaDados(dataDir, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer trava.Close()
 	srv := &http.Server{Addr: env("PAD_ADDR", ":8080"), Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
 	srv.RegisterOnShutdown(a.mcp.encerrar) // senão o Shutdown espera os esperar de até 50 s
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
@@ -290,6 +300,11 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("POST /_login", a.login)
 	mux.HandleFunc("POST /_logout", a.logout)
 	mux.HandleFunc("GET /_join/{token}", a.join)
+	mux.HandleFunc("GET /_privacidade", func(w http.ResponseWriter, r *http.Request) { render(w, http.StatusOK, "privacidade", nil) })
+	mux.HandleFunc("GET /_conta/apagar", a.auth(a.apagarConta))
+	mux.HandleFunc("GET /_conta/exportar", a.auth(a.exportar))
+	mux.HandleFunc("POST /_conta/apagar", a.auth(a.apagarConta))
+	mux.HandleFunc("GET /_termos", func(w http.ResponseWriter, r *http.Request) { render(w, http.StatusOK, "termos", nil) })
 	mux.HandleFunc("POST /_join/{token}", a.join)
 	mux.HandleFunc("GET /_convite", a.auth(a.invite))
 	mux.HandleFunc("POST /_convite", a.auth(a.invite))
@@ -399,13 +414,7 @@ func (a *app) login(w http.ResponseWriter, r *http.Request) {
 	demais := func() {
 		render(w, http.StatusTooManyRequests, "login", loginData{next, "tentativas demais, espere alguns minutos"})
 	}
-	// nome fora do formato não existe nem vira chave: o mapa não guarda texto arbitrário de quem tenta
-	contaNome := validUser.MatchString(name)
-	par := ip + "|" + name
-	// a conta cheia só barra quem já errou nela: senão qualquer um deixaria o dono de fora errando a senha dele de propósito
-	bloqueado := func(t time.Time) bool {
-		return a.limLoginIP.cheio(ip, t) || contaNome && a.limLoginNome.cheio(name, t) && a.limLoginPar.cheio(par, t)
-	}
+	bloqueado := func(t time.Time) bool { return a.senhaBloqueada(ip, name, t) }
 	if bloqueado(agora) {
 		demais()
 		return
@@ -434,11 +443,7 @@ func (a *app) login(w http.ResponseWriter, r *http.Request) {
 	errSenha := bcrypt.CompareHashAndPassword(hash, []byte(pass))
 	<-a.vagasBcrypt
 	if errSenha != nil || err != nil {
-		a.limLoginIP.somar(ip, agora)
-		if contaNome {
-			a.limLoginNome.somar(name, agora)
-			a.limLoginPar.somar(par, agora)
-		}
+		a.senhaErrada(ip, name, agora)
 		render(w, http.StatusUnauthorized, "login", loginData{next, "usuário ou senha incorretos"})
 		return
 	}
@@ -451,6 +456,21 @@ func (a *app) login(w http.ResponseWriter, r *http.Request) {
 		next = "/"
 	}
 	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
+// senhaBloqueada diz se ip já gastou as tentativas de senha, no total ou nesta conta.
+// A conta cheia só barra quem já errou nela: senão qualquer um deixaria o dono de fora errando a senha dele de propósito.
+func (a *app) senhaBloqueada(ip, name string, t time.Time) bool {
+	return a.limLoginIP.cheio(ip, t) || validUser.MatchString(name) && a.limLoginNome.cheio(name, t) && a.limLoginPar.cheio(ip+"|"+name, t)
+}
+
+// senhaErrada conta o erro; nome fora do formato não existe nem vira chave: o mapa não guarda texto arbitrário de quem tenta.
+func (a *app) senhaErrada(ip, name string, t time.Time) {
+	a.limLoginIP.somar(ip, t)
+	if validUser.MatchString(name) {
+		a.limLoginNome.somar(name, t)
+		a.limLoginPar.somar(ip+"|"+name, t)
+	}
 }
 
 func (a *app) startSession(w http.ResponseWriter, r *http.Request, uid int64) error {
@@ -840,6 +860,7 @@ func corta(s string) [2]string {
 type docPage struct {
 	Name, Label, Body, Me string
 	Admin, Moderar        bool // Moderar: admin vendo documento de /publico
+	Aberto                bool // documento de /publico: qualquer pessoa lê e edita
 	Exists, Owner, Public bool
 	NotFound              bool
 	Users, Groups         []string
@@ -873,7 +894,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 			serverError(w, err)
 			return
 		}
-		mostrar("doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Admin: u.Admin, Moderar: u.Admin, Exists: body != ""})
+		mostrar("doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Admin: u.Admin, Moderar: u.Admin, Aberto: true, Exists: body != ""})
 		return
 	}
 	exists, allowed, owner, public, err := a.access(name, u.ID)
