@@ -27,7 +27,7 @@ func contaComTudo(t *testing.T) (*app, string, *httptest.Server, *http.Client) {
 		t.Fatal(err)
 	}
 	for _, c := range [][]string{{"useradd", "ana"}, {"useradd", "bia"}, {"groupadd", "time"}, {"join", "time", "ana"}} {
-		if err := runCLI(a.db, c, strings.NewReader("senha-forte\n")); err != nil {
+		if err := runCLI(a, c, strings.NewReader("senha-forte\n")); err != nil {
 			t.Fatal(c, err)
 		}
 	}
@@ -176,20 +176,20 @@ func TestApagarTudoCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := apagarTudoCLI(a, dir, "ana", strings.NewReader("ana\n")); err == nil || !strings.Contains(err.Error(), "no ar") {
+	if err := apagarTudoCLI(a, "ana", strings.NewReader("ana\n")); err == nil || !strings.Contains(err.Error(), "no ar") {
 		t.Errorf("com o pad no ar: %v", err)
 	}
 	trava.Close()
-	if err := apagarTudoCLI(a, dir, "ana", strings.NewReader("bia\n")); err == nil {
+	if err := apagarTudoCLI(a, "ana", strings.NewReader("bia\n")); err == nil {
 		t.Error("confirmação com outro nome passou")
 	}
-	if err := apagarTudoCLI(a, dir, "zeca", strings.NewReader("zeca\n")); err == nil {
+	if err := apagarTudoCLI(a, "zeca", strings.NewReader("zeca\n")); err == nil {
 		t.Error("usuário inexistente passou")
 	}
 	if n, _ := sobrouDeAna(t, a, dir); n != tudoDeAna {
 		t.Fatalf("algo saiu antes da confirmação: %d linhas", n)
 	}
-	if err := apagarTudoCLI(a, dir, "ana", strings.NewReader("ana\n")); err != nil {
+	if err := apagarTudoCLI(a, "ana", strings.NewReader("ana\n")); err != nil {
 		t.Fatal(err)
 	}
 	if n, arqs := sobrouDeAna(t, a, dir); n != 0 || len(arqs) != 0 {

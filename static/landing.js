@@ -138,15 +138,13 @@
   }
 
   function temas() {
-    const T = globalThis.PadTheme, cores = globalThis.PadShell.amostras(), lista = $('temas-lista');
+    const T = globalThis.PadTheme, lista = $('temas-lista');
     const botoes = T.temas.map((t) => {
-      const b = document.createElement('button'), i = document.createElement('i');
+      const b = document.createElement('button');
       b.type = 'button';
       b.className = 'btn';
       b.dataset.tema = t.id;
-      i.className = 'amostra';
-      if (cores[t.id]) Object.assign(i.style, { background: cores[t.id][0], boxShadow: 'inset 0 0 0 3px ' + cores[t.id][1] });
-      b.append(i, t.nome);
+      b.append(T.amostra(t.id), t.nome);
       b.onclick = () => T.aplicar(t.id);
       return b;
     });

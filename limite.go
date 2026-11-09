@@ -35,7 +35,6 @@ func (l *limite) cheio(chave string, now time.Time) bool {
 	return l.cont[chave] >= l.max
 }
 
-// somar conta um evento da chave.
 func (l *limite) somar(chave string, now time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

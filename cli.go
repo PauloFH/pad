@@ -25,16 +25,19 @@ const usage = `uso:
   pad leave GRUPO NOME     tira o usuário do grupo
   pad list                 lista usuários e seus grupos`
 
-func runCLI(db *sql.DB, args []string, stdin io.Reader) error {
-	arity := map[string]int{"useradd": 1, "passwd": 1, "userdel": 1, "admin": 1, "groupadd": 1, "groupdel": 1, "join": 2, "leave": 2, "list": 0}
+func runCLI(app *app, args []string, stdin io.Reader) error {
+	db := app.db
+	arity := map[string]int{"apagar-tudo": 1, "useradd": 1, "passwd": 1, "userdel": 1, "admin": 1, "groupadd": 1, "groupdel": 1, "join": 2, "leave": 2, "list": 0}
 	if n, ok := arity[args[0]]; !ok || len(args)-1 != n {
 		return errors.New(usage)
 	}
 	a := args[1:]
 	switch args[0] {
+	case "apagar-tudo":
+		return apagarTudoCLI(app, a[0], stdin)
 	case "useradd", "passwd":
-		if args[0] == "useradd" && !validUserName(a[0]) {
-			return errors.New("nome: de 2 a 40 letras minúsculas, números, - ou _ (e não pode ser \"publico\")")
+		if err := checkUserName(a[0]); args[0] == "useradd" && err != nil {
+			return err
 		}
 		hash, err := readPassword(stdin)
 		if err != nil {

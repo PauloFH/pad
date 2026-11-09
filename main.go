@@ -36,6 +36,10 @@ const (
 	maxDepth      = 5 // níveis de pasta abaixo do usuário (ou de /publico)
 	sessionTTL    = 30 * 24 * time.Hour
 	inviteTTL     = 7 * 24 * time.Hour
+	minUser       = 2
+	maxUser       = 40
+	senhaMin      = 8
+	senhaMax      = 72 // o bcrypt ignora o que passa de 72 bytes
 )
 
 //go:embed templates.html
@@ -46,13 +50,20 @@ var staticFS embed.FS
 
 var (
 	tmpl = template.Must(template.New("").Funcs(template.FuncMap{"ramo": ramo, "corta": corta, "hora": hora, "st": st,
-		"quando": func(t time.Time) string { return quando(t, time.Now()) }}).ParseFS(tmplFS, "templates.html"))
+		"quando": func(t time.Time) string { return quando(t, time.Now()) }, "lim": func() any { return limites }}).
+		ParseFS(tmplFS, "templates.html"))
+	// limites são os números que as páginas mostram em texto e atributos, tirados do que o servidor aplica
+	limites = struct {
+		UserMax, SenhaMin, SenhaMax, NomeCurto, DiasConvite, DiasSessao, SegundosTrava, Backups, PublicoMilItens int
+		PublicoDoc, PublicoTotal                                                                                 string
+	}{maxUser, senhaMin, senhaMax, maxCurto, int(inviteTTL / (24 * time.Hour)), int(sessionTTL / (24 * time.Hour)),
+		int(lockIdle / time.Second), backupsGuardados, maxPublicoItems / 1000, tamanho(maxPublicoDoc), tamanho(maxPublicoBytes)}
 	// o nome vira caminho de arquivo: sem "..", "/" inicial, "//" ou ponto
 	validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9_-]+)*$`)
 	// o usuário é o primeiro trecho do endereço (/paulo/notas): só minúsculas, para Paulo e paulo não coexistirem
-	validUser = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,39}$`)
-	// usado quando o usuário não existe, para o login levar o mesmo tempo
-	dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy"), bcrypt.DefaultCost)
+	validUser = regexp.MustCompile(fmt.Sprintf(`^[a-z0-9][a-z0-9_-]{%d,%d}$`, minUser-1, maxUser-1))
+	// usado quando o usuário não existe: o login leva o mesmo tempo, e a senha sorteada nunca confere
+	dummyHash, _ = bcrypt.GenerateFromPassword([]byte(rand.Text()), bcrypt.DefaultCost)
 )
 
 const schema = `
@@ -125,6 +136,7 @@ CREATE TABLE IF NOT EXISTS mcp_lido (
 
 type app struct {
 	db      *sql.DB
+	dataDir string // pad.db, pad.lock e docs/
 	docsDir string
 	// serializa salvar/apagar: sem isso, um autosave em curso recria o arquivo de um doc recém-apagado
 	writeMu sync.Mutex
@@ -156,11 +168,7 @@ func main() {
 		log.Fatal(err)
 	}
 	if len(os.Args) > 1 {
-		run := func() error { return runCLI(a.db, os.Args[1:], os.Stdin) }
-		if os.Args[1] == "apagar-tudo" && len(os.Args) == 3 { // precisa da pasta dos documentos, além do banco
-			run = func() error { return apagarTudoCLI(a, dataDir, os.Args[2], os.Stdin) }
-		}
-		if err := run(); err != nil {
+		if err := runCLI(a, os.Args[1:], os.Stdin); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -231,7 +239,7 @@ func openApp(dataDir string) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &app{db: db, docsDir: docsDir, visitorKey: key, mcp: newMcpState(),
+	a := &app{db: db, dataDir: dataDir, docsDir: docsDir, visitorKey: key, mcp: newMcpState(),
 		limWS: novoLimite(60, time.Minute), limPublico: novoLimite(120, time.Minute), limVitais: novoLimite(30, time.Minute),
 		limLoginIP: novoLimite(10, 5*time.Minute), limLoginNome: novoLimite(20, 15*time.Minute), limLoginPar: novoLimite(3, 15*time.Minute),
 		vagasBcrypt: make(chan struct{}, max(1, runtime.NumCPU()/2))}
@@ -343,6 +351,12 @@ func (a *app) routes() http.Handler {
 // --- sessão ---
 
 func (a *app) auth(h func(http.ResponseWriter, *http.Request, user)) http.HandlerFunc {
+	return a.exigeSessao(true, h)
+}
+
+// exigeSessao chama h com quem está logado. Sem sessão, o GET de uma página vai ao login; o resto, e toda rota
+// JSON, leva 401, que o fetch reconhece sem seguir o redirecionamento.
+func (a *app) exigeSessao(pagina bool, h func(http.ResponseWriter, *http.Request, user)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		u, ok, err := a.currentUser(w, r)
 		switch {
@@ -350,7 +364,7 @@ func (a *app) auth(h func(http.ResponseWriter, *http.Request, user)) http.Handle
 			serverError(w, err)
 		case ok:
 			h(w, r, u)
-		case r.Method == http.MethodGet:
+		case pagina && r.Method == http.MethodGet:
 			toLogin(w, r)
 		default:
 			http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
@@ -360,7 +374,7 @@ func (a *app) auth(h func(http.ResponseWriter, *http.Request, user)) http.Handle
 
 // currentUser lê a sessão do cookie e a renova; ok é false quando não há sessão válida.
 func (a *app) currentUser(w http.ResponseWriter, r *http.Request) (u user, ok bool, err error) {
-	c, err := r.Cookie("sid")
+	c, err := r.Cookie(cookieSessao)
 	if err != nil {
 		return u, false, nil
 	}
@@ -384,9 +398,15 @@ func (a *app) currentUser(w http.ResponseWriter, r *http.Request) (u user, ok bo
 	return u, true, nil
 }
 
+const cookieSessao = "sid"
+
+func apagarCookieSessao(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: cookieSessao, Path: "/", MaxAge: -1})
+}
+
 func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, expires time.Time) {
 	http.SetCookie(w, &http.Cookie{
-		Name: "sid", Value: token, Path: "/", Expires: expires,
+		Name: cookieSessao, Value: token, Path: "/", Expires: expires,
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isHTTPS(r),
 	})
 }
@@ -401,61 +421,86 @@ func (a *app) loginPage(w http.ResponseWriter, r *http.Request) {
 	render(w, http.StatusOK, "login", loginData{Next: r.URL.Query().Get("next")})
 }
 
-// prazoLogin limita o corpo lento no login; var para o teste baixar
+// prazoLogin limita o corpo lento dos formulários com senha; var para o teste baixar. Fica acima de esperaBcrypt:
+// vencido antes, ele cancelaria o r.Context() de quem só espera a vaga.
 var prazoLogin = 30 * time.Second
 
-func (a *app) login(w http.ResponseWriter, r *http.Request) {
-	ip, agora := clientIP(r), time.Now()
-	// tamanho e prazo antes de ler: sem isso o formulário pode ter dezenas de MB e não custa nada a quem envia
-	// o prazo cobre também a fila do bcrypt (até 10 s): vencido antes, ele cancelaria o r.Context() de quem só espera a vaga
+const esperaBcrypt = 10 * time.Second
+
+// formularioDeSenha limita tamanho e prazo antes de ler: sem isso o formulário pode ter dezenas de MB e não custa
+// nada a quem envia.
+func formularioDeSenha(w http.ResponseWriter, r *http.Request) {
 	http.NewResponseController(w).SetReadDeadline(time.Now().Add(prazoLogin))
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+}
+
+func (a *app) login(w http.ResponseWriter, r *http.Request) {
+	formularioDeSenha(w, r)
 	name, pass, next := normUser(r.FormValue("name")), r.FormValue("pass"), r.FormValue("next")
-	demais := func() {
-		render(w, http.StatusTooManyRequests, "login", loginData{next, "tentativas demais, espere alguns minutos"})
-	}
-	bloqueado := func(t time.Time) bool { return a.senhaBloqueada(ip, name, t) }
-	if bloqueado(agora) {
-		demais()
-		return
-	}
 	var id int64
 	hash := dummyHash
-	err := a.db.QueryRow(`SELECT id, hash FROM users WHERE name = ?`, name).Scan(&id, &hash)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := a.db.QueryRow(`SELECT id, hash FROM users WHERE name = ?`, name).Scan(&id, &hash); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		serverError(w, err)
 		return
 	}
-	select {
-	case a.vagasBcrypt <- struct{}{}:
-	case <-r.Context().Done():
+	err := a.confereSenha(r, name, hash, pass)
+	switch {
+	case errors.Is(err, errTentativas):
+		render(w, http.StatusTooManyRequests, "login", loginData{next, err.Error()})
 		return
-	case <-time.After(10 * time.Second):
-		render(w, http.StatusServiceUnavailable, "login", loginData{next, "servidor ocupado, tente de novo"})
+	case errors.Is(err, errOcupado):
+		render(w, http.StatusServiceUnavailable, "login", loginData{next, err.Error()})
 		return
-	}
-	// de novo com a vaga: quem esperou na fila entrou antes de os erros dos outros serem contados
-	if bloqueado(time.Now()) {
-		<-a.vagasBcrypt
-		demais()
-		return
-	}
-	errSenha := bcrypt.CompareHashAndPassword(hash, []byte(pass))
-	<-a.vagasBcrypt
-	if errSenha != nil || err != nil {
-		a.senhaErrada(ip, name, agora)
+	case errors.Is(err, errSenha):
 		render(w, http.StatusUnauthorized, "login", loginData{next, "usuário ou senha incorretos"})
+		return
+	case err != nil: // a conexão caiu na fila: ninguém lê a resposta
 		return
 	}
 	if err := a.startSession(w, r, id); err != nil {
 		serverError(w, err)
 		return
 	}
-	// só caminhos de documento: "//x", "/\x" ou "/\t/x" levariam para outro site
+	// só caminhos de documento: "//x", "/\\x" ou "/\t/x" levariam para outro site
 	if next != "/" && !validName.MatchString(strings.TrimPrefix(next, "/")) {
 		next = "/"
 	}
 	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
+var (
+	errSenha      = falha("senha incorreta")
+	errTentativas = falha("tentativas demais, espere alguns minutos")
+	errOcupado    = falha("servidor ocupado, tente de novo")
+)
+
+// confereSenha compara pass com hash na fila do bcrypt, contando o erro nos limites do login: nil é senha certa;
+// senão errSenha, errTentativas, errOcupado ou o erro do r.Context(). O login e o apagar conta passam por aqui,
+// para nenhuma tela virar atalho para adivinhar senha.
+func (a *app) confereSenha(r *http.Request, name string, hash []byte, pass string) error {
+	ip := clientIP(r)
+	if a.senhaBloqueada(ip, name, time.Now()) {
+		return errTentativas
+	}
+	select {
+	case a.vagasBcrypt <- struct{}{}:
+	case <-r.Context().Done():
+		return r.Context().Err()
+	case <-time.After(esperaBcrypt):
+		return errOcupado
+	}
+	// de novo com a vaga: quem esperou na fila entrou antes de os erros dos outros serem contados
+	if a.senhaBloqueada(ip, name, time.Now()) {
+		<-a.vagasBcrypt
+		return errTentativas
+	}
+	err := bcrypt.CompareHashAndPassword(hash, []byte(pass))
+	<-a.vagasBcrypt
+	if err != nil {
+		a.senhaErrada(ip, name, time.Now())
+		return errSenha
+	}
+	return nil
 }
 
 // senhaBloqueada diz se ip já gastou as tentativas de senha, no total ou nesta conta.
@@ -490,6 +535,14 @@ func isHTTPS(r *http.Request) bool {
 	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 }
 
+// origem é o endereço do pad como quem pediu o vê, para links que a pessoa leva para fora.
+func origem(r *http.Request) string {
+	if isHTTPS(r) {
+		return "https://" + r.Host
+	}
+	return "http://" + r.Host
+}
+
 // --- convites ---
 
 func (a *app) invite(w http.ResponseWriter, r *http.Request, u user) {
@@ -505,11 +558,7 @@ func (a *app) invite(w http.ResponseWriter, r *http.Request, u user) {
 			serverError(w, err)
 			return
 		}
-		scheme := "http"
-		if isHTTPS(r) {
-			scheme = "https"
-		}
-		data.Link = scheme + "://" + r.Host + "/_join/" + token
+		data.Link = origem(r) + "/_join/" + token
 	}
 	render(w, http.StatusOK, "invite", data)
 }
@@ -534,8 +583,8 @@ func (a *app) join(w http.ResponseWriter, r *http.Request) {
 	}
 	name, pass := normUser(r.FormValue("name")), r.FormValue("pass")
 	bad := func(msg string) { render(w, http.StatusBadRequest, "join", joinData{name, msg}) }
-	if !validUserName(name) {
-		bad("nome: de 2 a 40 letras minúsculas, números, - ou _, sem acento nem espaço (e não pode ser \"publico\")")
+	if err := checkUserName(name); err != nil {
+		bad(err.Error())
 		return
 	}
 	if err := checkPassword(pass); err != nil {
@@ -596,35 +645,67 @@ func (a *app) join(w http.ResponseWriter, r *http.Request) {
 func normUser(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
 func checkPassword(p string) error {
-	if len(p) < 8 || len(p) > 72 {
-		return errors.New("a senha precisa ter de 8 a 72 caracteres")
+	if len(p) < senhaMin || len(p) > senhaMax {
+		return fmt.Errorf("a senha precisa ter de %d a %d caracteres", senhaMin, senhaMax)
 	}
 	return nil
 }
 
 func (a *app) logout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie("sid"); err == nil {
+	if c, err := r.Cookie(cookieSessao); err == nil {
 		a.db.Exec(`DELETE FROM sessions WHERE token = ?`, c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: "sid", Path: "/", MaxAge: -1})
+	apagarCookieSessao(w)
 	http.Redirect(w, r, "/_login", http.StatusSeeOther)
 }
 
 // --- documentos ---
 
-// access diz se o documento existe, se u pode abri-lo/editá-lo, se u é o dono e se
-// qualquer um pode lê-lo. uid 0 é o visitante sem login.
-func (a *app) access(doc string, uid int64) (exists, allowed, owner, public bool, err error) {
+// acesso é o que alguém pode num documento; página, POST, WebSocket e MCP decidem todos por ele.
+type acesso struct {
+	Existe, Dono bool // fora da área aberta, onde não há linha em docs
+	Publico      bool // o dono abriu para leitura sem login
+	Aberto       bool // área /publico: sem dono, qualquer um lê e edita
+	Ver, Editar  bool
+	Criar        bool // não existe e fica no espaço de quem pede: a primeira gravação o cria
+}
+
+// acesso decide o que u pode em name; o user zero é o visitante sem login.
+func (a *app) acesso(name string, u user) (acesso, error) {
+	if isPublico(name) {
+		return acesso{Aberto: true, Ver: true, Editar: true}, nil
+	}
+	var ac acesso
 	var ownerID int64
-	err = a.db.QueryRow(`SELECT owner_id, public, owner_id = ?2
+	err := a.db.QueryRow(`SELECT owner_id, public, owner_id = ?2
 		OR EXISTS (SELECT 1 FROM user_shares WHERE doc = ?1 AND user_id = ?2)
 		OR EXISTS (SELECT 1 FROM group_shares g JOIN members m ON m.group_id = g.group_id
 			WHERE g.doc = ?1 AND m.user_id = ?2)
-		FROM docs WHERE name = ?1`, doc, uid).Scan(&ownerID, &public, &allowed)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, false, false, false, nil
+		FROM docs WHERE name = ?1`, name, u.ID).Scan(&ownerID, &ac.Publico, &ac.Editar)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		ac.Criar = u.ID != 0 && strings.HasPrefix(name, u.Name+"/")
+	case err != nil:
+		return acesso{}, err
+	default:
+		ac.Existe, ac.Dono = true, ownerID == u.ID
 	}
-	return err == nil, allowed, ownerID == uid, public, err
+	ac.Editar = ac.Editar || ac.Criar
+	ac.Ver = ac.Editar || ac.Publico
+	return ac, nil
+}
+
+// limiteDoc é o tamanho máximo de name, em bytes UTF-8, e o erro de quem passa dele.
+func limiteDoc(name string) (int, error) {
+	if isPublico(name) {
+		return maxPublicoDoc, msgErr{errTooBig, "documento da área pública passa de " + tamanho(maxPublicoDoc)}
+	}
+	return maxDoc, errTooBig
+}
+
+// normalizaQuebras faz o que o textarea faz com as quebras de linha: sem isso os comprimentos divergem nas abas.
+func normalizaQuebras(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
 }
 
 func (a *app) docPath(name string) string {
@@ -664,14 +745,44 @@ func (a *app) writeDoc(name string, body []byte) error {
 	return os.Rename(f.Name(), path)
 }
 
-func docName(w http.ResponseWriter, r *http.Request) (string, bool) {
-	name := r.PathValue("name")
+// criarDoc (com writeMu) cria a linha do documento no espaço de uid; se já existe, nada muda.
+func (a *app) criarDoc(name string, uid int64) error {
+	_, err := a.db.Exec(`INSERT INTO docs (name, owner_id, updated) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
+		name, uid, time.Now().Unix())
+	return err
+}
+
+// persistir (com writeMu) grava o texto de name: na área pública, mantendo os totais dela; fora dela, só se a linha
+// ainda existe, para um documento apagado enquanto alguém entrava não ganhar arquivo sem dono.
+func (a *app) persistir(name string, body []byte) error {
+	if isPublico(name) {
+		return a.gravarPublico(name, body)
+	}
+	res, err := a.db.Exec(`UPDATE docs SET updated = ? WHERE name = ?`, time.Now().Unix(), name)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil
+	}
+	return a.writeDoc(name, body)
+}
+
+// checkDocName é a regra do nome de documento, para a página e para o agente.
+func checkDocName(name string) error {
 	if len(name) > 200 || !validName.MatchString(name) {
-		fail(w, http.StatusNotFound, "nome de documento inválido (use letras, números, - e _ separados por /)")
-		return "", false
+		return falha("nome de documento inválido (use letras, números, - e _ separados por /)")
 	}
 	if strings.Count(name, "/") > maxDepth {
-		fail(w, http.StatusNotFound, fmt.Sprintf("no máximo %d níveis de pasta", maxDepth))
+		return falha(fmt.Sprintf("no máximo %d níveis de pasta", maxDepth))
+	}
+	return nil
+}
+
+func docName(w http.ResponseWriter, r *http.Request) (string, bool) {
+	name := r.PathValue("name")
+	if err := checkDocName(name); err != nil {
+		fail(w, http.StatusNotFound, err.Error())
 		return "", false
 	}
 	return name, true
@@ -823,14 +934,6 @@ type colunaData struct {
 	Atual          string
 }
 
-func (a *app) coluna(u user, atual string) (*colunaData, error) {
-	docs, err := a.userDocs(u)
-	if err != nil {
-		return nil, err
-	}
-	return colunaDe(docs, u, atual), nil
-}
-
 // colunaDe monta a coluna a partir dos documentos já lidos (a entrada usa os mesmos para os blocos).
 func colunaDe(docs []docRow, u user, atual string) *colunaData {
 	c := &colunaData{Arvore: arvore(docs, u.Name), Atual: atual}
@@ -877,60 +980,44 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// a coluna só depois de decidido o acesso: o caminho do 404 não consulta nada a mais
-	mostrar := func(tpl string, p docPage) {
-		if logged {
-			var err error
-			if p.Coluna, err = a.coluna(u, name); err != nil {
-				serverError(w, err)
-				return
-			}
-		}
-		render(w, http.StatusOK, tpl, p)
-	}
-	if isPublico(name) {
-		body, err := a.readDoc(name)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		mostrar("doc", docPage{Name: name, Label: name, Body: body, Me: u.Name, Admin: u.Admin, Moderar: u.Admin, Aberto: true, Exists: body != ""})
-		return
-	}
-	exists, allowed, owner, public, err := a.access(name, u.ID)
+	ac, err := a.acesso(name, u)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	switch {
-	case allowed, logged && !exists && strings.HasPrefix(name, u.Name+"/"):
-		// editor, logo abaixo (documento novo só dentro do próprio usuário)
-	case public:
-		body, err := a.readDoc(name)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		mostrar("public", docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Body: body, Me: u.Name, Admin: u.Admin})
-		return
-	case !logged:
-		// mesma resposta para privado e inexistente: visitante não descobre quais nomes existem
+	// mesma resposta para privado e inexistente: ninguém descobre os nomes dos outros
+	if !ac.Ver && !logged {
 		toLogin(w, r)
 		return
-	default:
-		// mesma resposta para privado e inexistente: ninguém descobre os nomes dos outros
+	}
+	if !ac.Ver {
 		render(w, http.StatusNotFound, "msg", msgPage{"documento não encontrado ou sem acesso. Seus documentos ficam em /" + u.Name + "/...", u.Name, name})
 		return
 	}
 	p := docPage{Name: name, Label: strings.TrimPrefix(name, u.Name+"/"), Me: u.Name, Admin: u.Admin,
-		Exists: exists, Owner: owner, Public: public, NotFound: r.URL.Query().Has("erro")}
-	if exists {
-		if p.Body, err = a.readDoc(name); err != nil {
+		Moderar: ac.Aberto && u.Admin, Aberto: ac.Aberto, Exists: ac.Existe, Owner: ac.Dono, Public: ac.Publico,
+		NotFound: r.URL.Query().Has("erro")}
+	if p.Body, err = a.readDoc(name); err != nil {
+		serverError(w, err)
+		return
+	}
+	if ac.Aberto {
+		p.Label, p.Exists = name, p.Body != ""
+	}
+	// a coluna só depois de decidido o acesso: o caminho do 404 não consulta nada a mais
+	if logged {
+		docs, err := a.userDocs(u)
+		if err != nil {
 			serverError(w, err)
 			return
 		}
+		p.Coluna = colunaDe(docs, u, name)
 	}
-	if owner {
+	if !ac.Editar {
+		render(w, http.StatusOK, "public", p)
+		return
+	}
+	if ac.Dono {
 		if p.Users, err = names(a.db, `SELECT u.name FROM user_shares s JOIN users u ON u.id = s.user_id
 			WHERE s.doc = ? ORDER BY 1`, name); err != nil {
 			serverError(w, err)
@@ -942,7 +1029,7 @@ func (a *app) view(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	mostrar("doc", p)
+	render(w, http.StatusOK, "doc", p)
 }
 
 func (a *app) save(w http.ResponseWriter, r *http.Request) {
@@ -950,32 +1037,22 @@ func (a *app) save(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// freia e confere a sessão antes de ler o corpo: sem isso qualquer um faz o servidor guardar 2 MB por pedido
-	limiteCorpo, grande := int64(maxDoc), "documento grande demais"
-	if isPublico(name) {
-		if !a.limPublico.permite(clientIP(r), time.Now()) {
-			http.Error(w, "gravações demais, tente de novo mais tarde", http.StatusTooManyRequests)
-			return
-		}
-		limiteCorpo, grande = maxPublicoDoc, "documento da área pública passa de 256 KB"
-	} else {
-		_, logged, err := a.currentUser(w, r)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		if !logged {
-			http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
-			return
-		}
+	if isPublico(name) && !a.limPublico.permite(clientIP(r), time.Now()) {
+		http.Error(w, "gravações demais, tente de novo mais tarde", http.StatusTooManyRequests)
+		return
 	}
+	// confere antes de ler o corpo: sem isso qualquer um faz o servidor guardar 2 MB por pedido
+	if _, _, ok := a.podeGravar(w, r, name); !ok {
+		return
+	}
+	limite, grande := limiteDoc(name)
 	// aqui e não no servidor: um prazo global cortaria as esperas longas do MCP
 	http.NewResponseController(w).SetReadDeadline(time.Now().Add(30 * time.Second))
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limiteCorpo))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, int64(limite)))
 	if err != nil {
 		var demais *http.MaxBytesError
 		if errors.As(err, &demais) {
-			http.Error(w, grande, http.StatusRequestEntityTooLarge)
+			http.Error(w, grande.Error(), http.StatusRequestEntityTooLarge)
 		} else {
 			http.Error(w, "o documento demorou demais para chegar", http.StatusRequestTimeout)
 		}
@@ -983,50 +1060,23 @@ func (a *app) save(w http.ResponseWriter, r *http.Request) {
 	}
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
-	if isPublico(name) {
-		a.savePublico(w, name, body)
+	// de novo: a sessão ou o acesso podem ter mudado enquanto o corpo chegava
+	u, ac, ok := a.podeGravar(w, r, name)
+	if !ok {
 		return
 	}
-	// de novo: a sessão pode ter caído enquanto o corpo chegava
-	u, logged, err := a.currentUser(w, r)
-	if err != nil {
-		serverError(w, err)
-		return
-	}
-	if !logged {
-		http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
-		return
-	}
-	// dentro do próprio usuário tenta criar; fora dele, ou se já existe, confere a permissão
-	var created int64
-	if strings.HasPrefix(name, u.Name+"/") {
-		res, err := a.db.Exec(`INSERT INTO docs (name, owner_id, updated) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
-			name, u.ID, time.Now().Unix())
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		created, _ = res.RowsAffected()
-	}
-	if created == 0 {
-		_, allowed, _, _, err := a.access(name, u.ID)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		if !allowed {
-			http.Error(w, "sem acesso", http.StatusForbidden)
-			return
-		}
-		if _, err := a.db.Exec(`UPDATE docs SET updated = ? WHERE name = ?`, time.Now().Unix(), name); err != nil {
+	if ac.Criar {
+		if err := a.criarDoc(name, u.ID); err != nil {
 			serverError(w, err)
 			return
 		}
 	}
-	if a.liveConflict(w, name) {
+	// a aba aberta gravaria o texto dela por cima deste
+	if a.hub.connected(name) {
+		http.Error(w, "documento aberto na edição ao vivo: recarregue a página", http.StatusConflict)
 		return
 	}
-	if err := a.writeDoc(name, body); err != nil {
+	if err := a.persistir(name, body); err != nil {
 		serverError(w, err)
 		return
 	}
@@ -1034,14 +1084,24 @@ func (a *app) save(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// liveConflict (com writeMu, depois de conferir o acesso) recusa o POST num
-// documento aberto: a aba gravaria o texto dela por cima deste.
-func (a *app) liveConflict(w http.ResponseWriter, name string) bool {
-	if !a.hub.connected(name) {
-		return false
+// podeGravar responde 401 ou 403 a quem não edita name.
+func (a *app) podeGravar(w http.ResponseWriter, r *http.Request, name string) (user, acesso, bool) {
+	u, logged, err := a.currentUser(w, r)
+	var ac acesso
+	if err == nil {
+		ac, err = a.acesso(name, u)
 	}
-	http.Error(w, "documento aberto na edição ao vivo: recarregue a página", http.StatusConflict)
-	return true
+	switch {
+	case err != nil:
+		serverError(w, err)
+	case ac.Editar:
+		return u, ac, true
+	case !logged:
+		http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
+	default:
+		http.Error(w, "sem acesso", http.StatusForbidden)
+	}
+	return u, ac, false
 }
 
 // share atende /_share e /_unshare; só o dono mexe nos compartilhamentos.
@@ -1116,28 +1176,18 @@ var (
 
 func isPublico(name string) bool { return name == publico || strings.HasPrefix(name, publico+"/") }
 
-// validUserName barra "publico", que é a área aberta e não pode virar espaço de alguém.
-func validUserName(s string) bool { return validUser.MatchString(s) && s != publico }
-
-func (a *app) savePublico(w http.ResponseWriter, name string, body []byte) {
-	if a.liveConflict(w, name) {
-		return
+// checkUserName barra também "publico", que é a área aberta e não pode virar espaço de alguém.
+func checkUserName(s string) error {
+	if !validUser.MatchString(s) || s == publico {
+		return fmt.Errorf("nome: de %d a %d letras minúsculas, números, - ou _, sem acento nem espaço (e não pode ser \"publico\")", minUser, maxUser)
 	}
-	if err := a.gravarPublico(name, body); err != nil {
-		serverError(w, err)
-		return
-	}
-	a.hub.forget(name)
-	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
 // gravarPublico (com writeMu) abre espaço, grava e mantém os totais em dia: percorrer a pasta a cada documento novo
 // deixaria todo mundo esperando o writeMu.
 func (a *app) gravarPublico(name string, body []byte) error {
-	if !a.pubMedido {
-		a.pubItens, a.pubBytes = countEntries(filepath.Join(a.docsDir, publico))
-		a.pubMedido = true
-	}
+	a.medirPublico()
 	if err := a.roomPublico(name, int64(len(body))); err != nil {
 		return err
 	}
@@ -1148,14 +1198,25 @@ func (a *app) gravarPublico(name string, body []byte) error {
 		a.pubMedido = false // as pastas podem ter ficado: a próxima gravação mede de novo
 		return err
 	}
-	if name == publico { // o arquivo fica ao lado da pasta, fora dos totais
-		return nil
-	}
 	if !existia {
 		a.pubItens += 1 + pastas
 	}
 	a.pubBytes += int64(len(body)) - antes
 	return nil
+}
+
+// medirPublico (com writeMu) conta a área na primeira vez; depois os totais andam a cada gravação e remoção.
+func (a *app) medirPublico() {
+	if a.pubMedido {
+		return
+	}
+	a.pubItens, a.pubBytes = countEntries(filepath.Join(a.docsDir, publico))
+	// o documento /publico mora ao lado da pasta, e não dentro dela
+	if size, ok := tamanhoDe(a.docPath(publico)); ok {
+		a.pubItens++
+		a.pubBytes += size
+	}
+	a.pubMedido = true
 }
 
 func tamanhoDe(path string) (int64, bool) {
@@ -1183,10 +1244,6 @@ func pastasFaltando(dir, root string) (n int) {
 func (a *app) roomPublico(name string, size int64) error {
 	path := a.docPath(name)
 	antes, existia := tamanhoDe(path)
-	if name == publico {
-		antes, existia = 0, true // fora dos totais: não abre espaço por ele
-		size = 0
-	}
 	estoura := func() bool {
 		return !existia && a.pubItens >= maxPublicoItems || a.pubBytes-antes+size > maxPublicoBytes
 	}
@@ -1287,19 +1344,8 @@ func (a *app) apagarPublico(w http.ResponseWriter, r *http.Request, name string,
 	}
 	a.hub.kill(name, "documento apagado")
 	path := a.docPath(name)
-	size, existe := tamanhoDe(path)
-	switch {
-	case !existe:
-	case name == publico:
-		if err := os.Remove(path); err != nil {
-			serverError(w, err)
-			return
-		}
-	default:
-		if !a.pubMedido {
-			a.pubItens, a.pubBytes = countEntries(filepath.Join(a.docsDir, publico))
-			a.pubMedido = true
-		}
+	if size, existe := tamanhoDe(path); existe {
+		a.medirPublico()
 		if err := a.removerPublico(path, size); err != nil {
 			serverError(w, err)
 			return
@@ -1309,12 +1355,12 @@ func (a *app) apagarPublico(w http.ResponseWriter, r *http.Request, name string,
 }
 
 func (a *app) mustOwn(w http.ResponseWriter, name string, u user) bool {
-	exists, _, owner, _, err := a.access(name, u.ID)
+	ac, err := a.acesso(name, u)
 	if err != nil {
 		serverError(w, err)
 		return false
 	}
-	if !exists || !owner {
+	if !ac.Dono {
 		fail(w, http.StatusForbidden, "só o dono do documento pode fazer isso")
 		return false
 	}
@@ -1329,7 +1375,7 @@ func names(db *sql.DB, q string, args ...any) ([]string, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []string
+	out := []string{} // lista vazia sai [] no JSON
 	for rows.Next() {
 		var s string
 		if err := rows.Scan(&s); err != nil {
@@ -1338,6 +1384,16 @@ func names(db *sql.DB, q string, args ...any) ([]string, error) {
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// falha é um erro que a pessoa (ou o agente) pode ler; os outros vão para o log e chegam como "erro interno".
+type falha string
+
+func (f falha) Error() string { return string(f) }
+
+func ehFalha(err error) bool {
+	var f falha
+	return errors.As(err, &f)
 }
 
 func render(w http.ResponseWriter, status int, name string, data any) {

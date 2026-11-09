@@ -55,17 +55,13 @@ test('localStorage que lança exceção: listas vazias, sem lançar', () => {
   assert.deepStrictEqual(S.abas.ler('ana'), []);
 });
 
-test('linha e coluna do cursor, a partir de 1', () => {
-  assert.deepStrictEqual(S.linhaColuna('', 0), [1, 1]);
-  assert.deepStrictEqual(S.linhaColuna('ab\ncd', 2), [1, 3]);
-  assert.deepStrictEqual(S.linhaColuna('ab\ncd', 3), [2, 1]);
-  assert.deepStrictEqual(S.linhaColuna('ab\ncd', 5), [2, 3]);
-});
-
-test('quem está editando, para o visitante', () => {
-  const p = (id, key, name, reading) => ({ id, key, name, reading });
-  assert.strictEqual(S.editando([p('1', 'v', 'gato', true)], '1'), '');
-  assert.strictEqual(S.editando([p('1', 'v', 'gato', true), p('2', 'u:ana', 'ana', false), p('3', 'u:ana', 'ana', false)], '1'), 'Ana está editando agora');
-  assert.strictEqual(S.editando([p('2', 'u:ana', 'ana', false), p('4', 'u:bia', 'bia', false)], '1'), 'Ana e Bia estão editando agora');
-  assert.strictEqual(S.editando([p('2', 'a', 'ana', false), p('4', 'b', 'bia', false), p('5', 'c', 'caio', false)], '1'), '3 pessoas editando agora');
+test('teclas do menu', () => {
+  assert.strictEqual(S.nextIndex(0, 3, 'ArrowDown'), 1);
+  assert.strictEqual(S.nextIndex(2, 3, 'ArrowDown'), 0);
+  assert.strictEqual(S.nextIndex(0, 3, 'ArrowUp'), 2);
+  assert.strictEqual(S.nextIndex(-1, 3, 'ArrowUp'), 2); // foco ainda no botão das bolinhas
+  assert.strictEqual(S.nextIndex(-1, 3, 'ArrowDown'), 0);
+  assert.strictEqual(S.nextIndex(1, 3, 'Home'), 0);
+  assert.strictEqual(S.nextIndex(1, 3, 'End'), 2);
+  assert.strictEqual(S.nextIndex(1, 3, 'a'), -1);
 });

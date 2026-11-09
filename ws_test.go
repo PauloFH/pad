@@ -33,7 +33,7 @@ func wsApp(t *testing.T) (*app, *httptest.Server, func(string) *http.Client) {
 		t.Fatal(err)
 	}
 	for _, n := range []string{"ana", "bia", "caio"} {
-		if err := runCLI(a.db, []string{"useradd", n}, strings.NewReader("senha-forte\n")); err != nil {
+		if err := runCLI(a, []string{"useradd", n}, strings.NewReader("senha-forte\n")); err != nil {
 			t.Fatal(err)
 		}
 	}

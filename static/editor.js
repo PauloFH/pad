@@ -28,7 +28,8 @@
   const t = document.getElementById('t'), st = document.getElementById('st'), salvo = document.getElementById('salvo');
   const lockMsg = document.getElementById('trava'), fim = document.getElementById('fim');
   const canEditPage = t.dataset.canEdit === 'true';
-  // o cid vale a vida da aba, entre reconexões: o servidor reconhece a op cujo ack se perdeu
+  // o cid vale a vida da aba, entre reconexões: o servidor reconhece a op cujo ack se perdeu.
+  // getRandomValues funciona também fora de contexto seguro (http), ao contrário de randomUUID
   const cid = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
   const pad = (window.pad = { sync: null, undo: new PadSync.UndoStack(), socket: null, peers: [], me: null });
   let prev = t.value; // texto que o sync conhece; o textarea difere dele só no meio de um input
@@ -163,7 +164,7 @@
     pad.me = m.me;
     delay = 500;
     let msg = null;
-    if (!pad.sync) pad.sync = new PadSync.SyncClient(m.rev, m.text, cid);
+    if (!pad.sync) pad.sync = new PadSync.SyncClient(m.rev, m.text);
     else if (resetNext) {
       pad.sync.reset(m.rev, m.text);
       pad.undo.clear();

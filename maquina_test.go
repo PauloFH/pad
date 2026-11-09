@@ -15,7 +15,7 @@ func appComUsuarios(t *testing.T, names ...string) *app {
 		t.Fatal(err)
 	}
 	for _, n := range names {
-		if err := runCLI(a.db, []string{"useradd", n}, strings.NewReader("senha-forte\n")); err != nil {
+		if err := runCLI(a, []string{"useradd", n}, strings.NewReader("senha-forte\n")); err != nil {
 			t.Fatal(n, err)
 		}
 	}

@@ -282,7 +282,7 @@ func (h *hub) flush(d *liveDoc) error {
 	if !dirty {
 		return nil
 	}
-	err := h.persist(d.name, body)
+	err := h.a.persistir(d.name, []byte(body))
 	if err != nil {
 		d.mu.Lock()
 		d.dirty = true
@@ -291,18 +291,18 @@ func (h *hub) flush(d *liveDoc) error {
 	return err
 }
 
-func (h *hub) persist(name, body string) error {
-	if isPublico(name) {
-		return h.a.gravarPublico(name, []byte(body))
+// criar grava a linha do documento novo aberto em d, sob writeMu e só se p (nil: o agente) ainda segue nele:
+// um del entre a abertura e a primeira gravação não é desfeito. segue false diz que ele já saiu.
+func (h *hub) criar(d *liveDoc, p *peer, uid int64) (segue bool, err error) {
+	h.a.writeMu.Lock()
+	defer h.a.writeMu.Unlock()
+	d.mu.Lock()
+	segue = d.gone == (closeReq{}) && (p == nil || d.peers[p])
+	d.mu.Unlock()
+	if !segue {
+		return false, nil
 	}
-	res, err := h.a.db.Exec(`UPDATE docs SET updated = ? WHERE name = ?`, time.Now().Unix(), name)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return nil // apagado enquanto alguém entrava: não recria um arquivo sem dono
-	}
-	return h.a.writeDoc(name, []byte(body))
+	return true, h.a.criarDoc(d.name, uid)
 }
 
 // flushName grava já o documento, se estiver aberto ao vivo (o exportar lê o disco).

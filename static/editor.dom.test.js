@@ -61,7 +61,7 @@ test('init, op local, remota com pendente e ack', () => {
   assert.strictEqual(p.t.value, 'olá');
   assert.strictEqual(p.t.readOnly, false);
   p.type('olá!');
-  assert.deepStrictEqual(p.ops().at(-1), { t: 'op', rev: 3, op: [3, '!'], cid: p.ws().url.slice(-24), seq: 1, a: 4, h: 4 });
+  assert.deepStrictEqual(p.ops().at(-1), { t: 'op', rev: 3, op: [3, '!'], seq: 1, a: 4, h: 4 });
   p.recv({ t: 'op', rev: 4, op: ['>', 3], by: 'p2' });
   assert.strictEqual(p.t.value, '>olá!');
   assert.strictEqual(p.t.selectionStart, 5);

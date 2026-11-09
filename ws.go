@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -52,13 +51,13 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	// mesmas regras do view, decididas antes do upgrade
-	canView, canEdit, create, err := a.liveAccess(name, u, logged)
+	// decidido antes do upgrade
+	ac, err := a.acesso(name, u)
 	switch {
 	case err != nil:
 		serverError(w, err)
 		return
-	case canView:
+	case ac.Ver:
 	case !logged:
 		http.Error(w, "sessão expirada, entre de novo", http.StatusUnauthorized)
 		return
@@ -66,6 +65,7 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "documento não encontrado ou sem acesso", http.StatusNotFound)
 		return
 	}
+	canEdit, create := ac.Editar, ac.Criar
 	vaga := vagaDoc(name, canEdit)
 	if !a.hub.admitDoc(vaga) {
 		http.Error(w, "conexões demais, tente de novo mais tarde", http.StatusTooManyRequests)
@@ -79,14 +79,12 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		vid, vname, fresh = a.newVisitor()
 	}
 	p := &peer{id: rand.Text(), key: "v:" + vid, visitor: vname, cid: cid, canEdit: canEdit,
-		active: time.Now(), send: make(chan []byte, 256), kick: make(chan closeReq, 1), u: u, logged: logged}
+		active: time.Now(), send: make(chan []byte, 256), kick: make(chan closeReq, 1), u: u}
 	// 7x: um init escapado pode ter 6x o documento (\u003c), e ainda sobra para o que já está na fila
-	p.teto = int64(7 * maxPublicoDoc)
-	if !isPublico(name) {
-		p.teto = 7 * maxDoc
-	}
+	limite, _ := limiteDoc(name)
+	p.teto = int64(7 * limite)
 	if logged {
-		ck, _ := r.Cookie("sid") // logged garante o cookie
+		ck, _ := r.Cookie(cookieSessao) // logged garante o cookie
 		p.sid = ck.Value
 	}
 	if canEdit && logged {
@@ -131,18 +129,8 @@ func (a *app) liveWS(w http.ResponseWriter, r *http.Request) {
 		var m liveIn
 		bad := json.Unmarshal(b, &m) != nil
 		if m.T == "op" && create && !bad {
-			// mesmo INSERT do save: a primeira op cria o documento no espaço do usuário.
-			// Sob writeMu e só se a aba segue no documento: um del não é desfeito.
-			a.writeMu.Lock()
-			d.mu.Lock()
-			in := d.peers[p]
-			d.mu.Unlock()
-			if in {
-				_, err = a.db.Exec(`INSERT INTO docs (name, owner_id, updated) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
-					name, u.ID, time.Now().Unix())
-			}
-			a.writeMu.Unlock()
-			if !in {
+			segue, err := a.hub.criar(d, p, u.ID)
+			if !segue {
 				<-written // o escritor fecha com o motivo
 				return
 			}
@@ -246,53 +234,31 @@ func writeLoop(ctx context.Context, c *websocket.Conn, p *peer) {
 	}
 }
 
-// liveAccess decide, como o view, se a aba abre o documento, se edita e se a
-// primeira op o cria. A conexão e as reconferências usam esta mesma função.
-func (a *app) liveAccess(name string, u user, logged bool) (canView, canEdit, create bool, err error) {
-	if isPublico(name) {
-		return true, true, false, nil
-	}
-	exists, allowed, _, public, err := a.access(name, u.ID)
-	switch {
-	case err != nil:
-		return false, false, false, err
-	case allowed:
-		return true, true, false, nil
-	case logged && !exists && strings.HasPrefix(name, u.Name+"/"):
-		return true, true, true, nil
-	}
-	return public, false, false, nil
-}
-
 // recheckPeer fecha a aba com 4000 se a sessão caiu ou se o acesso mudou desde a conexão.
 func (a *app) recheckPeer(d *liveDoc, p *peer) {
-	if isPublico(d.name) {
-		return // aberto a todos: nada a mudar
-	}
-	u, logged := p.u, p.logged
+	u := p.u
 	if p.sid != "" {
 		err := a.db.QueryRow(`SELECT 1 FROM sessions WHERE token = ? AND expires > ?`, p.sid, time.Now().Unix()).Scan(new(int))
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			u, logged = user{}, false
+			u = user{}
 		case err != nil:
 			log.Print(err)
 			return
 		}
 	}
-	canView, canEdit, _, err := a.liveAccess(d.name, u, logged)
+	ac, err := a.acesso(d.name, u)
 	if err != nil {
 		log.Print(err)
 		return
 	}
-	if !canView || canEdit != p.canEdit {
+	if !ac.Ver || ac.Editar != p.canEdit {
 		d.mu.Lock()
 		d.kick(p, closeReq{4000, accessChanged})
 		d.mu.Unlock()
 	}
 }
 
-// recheckLoop reconfere a aba a cada every, até a conexão terminar.
 func (a *app) recheckLoop(ctx context.Context, d *liveDoc, p *peer, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()

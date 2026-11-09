@@ -17,7 +17,7 @@ func TestPainelCompartilhar(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range [][]string{{"useradd", "ana"}, {"useradd", "bia"}, {"groupadd", "time"}} {
-		if err := runCLI(a.db, c, strings.NewReader("senha-forte\n")); err != nil {
+		if err := runCLI(a, c, strings.NewReader("senha-forte\n")); err != nil {
 			t.Fatal(c, err)
 		}
 	}

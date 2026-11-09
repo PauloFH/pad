@@ -2,7 +2,6 @@ package main
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -27,12 +26,12 @@ var palette = [...]string{
 }
 
 var (
-	errReadOnly  = errors.New("documento só para leitura")
-	errStale     = errors.New("revisão velha demais")
-	errLocked    = errors.New("trecho travado")
-	errTooBig    = errors.New("documento passa de 2 MB")
-	errInvalid   = errors.New("operação inválida")
-	errDuplicate = errors.New("operação já aplicada")
+	errReadOnly  = falha("documento só para leitura")
+	errStale     = falha("revisão velha demais")
+	errLocked    = falha("trecho travado")
+	errTooBig    = falha("documento passa de " + tamanho(maxDoc))
+	errInvalid   = falha("operação inválida")
+	errDuplicate = falha("operação já aplicada")
 )
 
 // msgErr troca a mensagem e continua respondendo a errors.Is(err, base).
@@ -41,8 +40,8 @@ type msgErr struct {
 	msg  string
 }
 
-func (e msgErr) Error() string        { return e.msg }
-func (e msgErr) Is(target error) bool { return target == e.base }
+func (e msgErr) Error() string { return e.msg }
+func (e msgErr) Unwrap() error { return e.base }
 
 // peer é uma aba conectada. key agrupa as abas da mesma identidade
 // ("u:"+uid para editor logado, inclusive no /publico; "v:"+visitante no resto).
@@ -57,10 +56,9 @@ type peer struct {
 	filaBytes                      atomic.Int64 // bytes em send: 256 mensagens podem ser 256 documentos inteiros
 	teto                           int64        // de filaBytes; passando disso a aba é tratada como lenta
 	// usados pelo ws.go: quem conectou (para reconferir o acesso) e o pedido de fechamento
-	u      user
-	logged bool
-	sid    string // sessão do cookie, se havia
-	kick   chan closeReq
+	u    user
+	sid  string // sessão do cookie, se havia
+	kick chan closeReq
 }
 
 // Os métodos não travam d.mu: quem chama segura o lock, para juntar a
@@ -69,7 +67,8 @@ type liveDoc struct {
 	mu       sync.Mutex
 	name     string
 	publico  bool
-	max      int
+	max      int   // bytes UTF-8
+	grande   error // de quem passa de max
 	text     []uint16
 	rev      int
 	log      []Op // log[i] levou o documento à revisão rev-len(log)+i+1
@@ -98,15 +97,11 @@ type peerView struct {
 }
 
 func newLiveDoc(name, text string) *liveDoc {
-	// o textarea normaliza as quebras; sem isso os comprimentos divergem
-	text = strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
 	d := &liveDoc{
-		name: name, publico: isPublico(name), max: maxDoc, text: utf16Of(text),
+		name: name, publico: isPublico(name), text: utf16Of(normalizaQuebras(text)),
 		peers: map[*peer]bool{}, colors: map[string]string{}, aliases: map[string]string{}, seqs: map[string]int{},
 	}
-	if d.publico {
-		d.max = maxPublicoDoc
-	}
+	d.max, d.grande = limiteDoc(name)
 	return d
 }
 
@@ -143,7 +138,6 @@ func (d *liveDoc) remove(p *peer) {
 
 func (d *liveDoc) lastSeq(cid string) int { return d.seqs[cid] }
 
-// since devolve as operações do log posteriores a rev.
 func (d *liveDoc) since(rev int) ([]Op, error) {
 	if rev < d.rev-len(d.log) || rev > d.rev {
 		return nil, errStale
@@ -203,10 +197,7 @@ func (d *liveDoc) aplicar(from *peer, rev int, op Op, sel ...*int) (Op, error) {
 	}
 	// documento que já veio do disco acima do limite ainda pode encolher
 	if n := utf8Len(text); n > d.max && n > utf8Len(d.text) {
-		if d.publico {
-			return nil, msgErr{errTooBig, "documento da área pública passa de 256 KB"}
-		}
-		return nil, errTooBig
+		return nil, d.grande
 	}
 	d.text = text
 	d.rev++
@@ -242,7 +233,6 @@ func (d *liveDoc) guardarNoLog(op Op) {
 	}
 }
 
-// custoOp é o tamanho do Comp na memória mais o texto inserido.
 func custoOp(op Op) int {
 	n := len(op) * 32 // tamanho de um Comp em 64 bits
 	for _, c := range op {

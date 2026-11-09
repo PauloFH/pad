@@ -28,7 +28,7 @@ func TestAcessoECompartilhamento(t *testing.T) {
 		{"useradd", "ana"}, {"useradd", "bia"}, {"useradd", "caio"},
 		{"groupadd", "time"}, {"join", "time", "caio"},
 	} {
-		if err := runCLI(a.db, c, strings.NewReader("senha-forte\n")); err != nil {
+		if err := runCLI(a, c, strings.NewReader("senha-forte\n")); err != nil {
 			t.Fatal(c, err)
 		}
 	}
@@ -186,13 +186,13 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	}
 	check(status(anon, "POST", "/_delete/publico/recado", ""), 401, "anônimo apaga em /publico")
 	check(status(ana, "POST", "/_delete/publico/recado", ""), 403, "ninguém é dono de /publico")
-	if err := runCLI(a.db, []string{"useradd", "publico"}, strings.NewReader("senha-forte\n")); err == nil {
+	if err := runCLI(a, []string{"useradd", "publico"}, strings.NewReader("senha-forte\n")); err == nil {
 		t.Error("criou usuário publico")
 	}
 
 	// convites: só admin gera; o link cria uma conta, uma vez só
 	check(status(ana, "POST", "/_convite", ""), 403, "não admin convida")
-	if err := runCLI(a.db, []string{"admin", "ana"}, nil); err != nil {
+	if err := runCLI(a, []string{"admin", "ana"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	res, err = ana.Post(srv.URL+"/_convite", "", nil)
@@ -232,7 +232,7 @@ func TestAcessoECompartilhamento(t *testing.T) {
 	}
 	check(status(davi, "GET", join, ""), 404, "convite reusado")
 
-	if err := runCLI(a.db, []string{"userdel", "ana"}, nil); err == nil {
+	if err := runCLI(a, []string{"userdel", "ana"}, nil); err == nil {
 		t.Error("apagou usuária que ainda é dona de documento")
 	}
 }
@@ -283,7 +283,7 @@ func TestPaginaCarregaScripts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := runCLI(a.db, []string{"useradd", "ana"}, strings.NewReader("senha-forte\n")); err != nil {
+	if err := runCLI(a, []string{"useradd", "ana"}, strings.NewReader("senha-forte\n")); err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(a.routes())
@@ -332,10 +332,10 @@ func TestTelasSimplesUsamCartao(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := runCLI(a.db, []string{"useradd", "ana"}, strings.NewReader("senha-forte\n")); err != nil {
+	if err := runCLI(a, []string{"useradd", "ana"}, strings.NewReader("senha-forte\n")); err != nil {
 		t.Fatal(err)
 	}
-	if err := runCLI(a.db, []string{"admin", "ana"}, nil); err != nil {
+	if err := runCLI(a, []string{"admin", "ana"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(a.routes())
@@ -722,7 +722,7 @@ func TestPasswdRevogaMaquinas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := runCLI(a.db, []string{"passwd", "ana"}, strings.NewReader("outra-senha\n")); err != nil {
+	if err := runCLI(a, []string{"passwd", "ana"}, strings.NewReader("outra-senha\n")); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, ok, err := a.maquinaDaChave(chave); ok || err != nil {
@@ -736,7 +736,7 @@ func TestPasswdRevogaMaquinas(t *testing.T) {
 // /publico não tem dono: só admin apaga, a aba aberta cai e os totais acompanham.
 func TestAdminApagaPublico(t *testing.T) {
 	a, srv, login := wsApp(t)
-	if err := runCLI(a.db, []string{"admin", "ana"}, nil); err != nil {
+	if err := runCLI(a, []string{"admin", "ana"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	ana, bia, anon := login("ana"), login("bia"), &http.Client{}

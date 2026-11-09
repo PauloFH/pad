@@ -43,7 +43,7 @@ func resumo(ags []agenteView) string {
 	partes := make([]string, len(tipos))
 	for i, t := range tipos {
 		nome := t
-		if t == "claude" || t == "codex" {
+		if slices.Contains(tiposConhecidos, t) {
 			nome = maiuscula(t)
 		}
 		partes[i] = fmt.Sprintf("%d %s", por[t], nome)
@@ -101,7 +101,7 @@ func (a *app) mcpRoutes() *http.ServeMux {
 
 // daConta exige a sessão e que {usuario} seja quem está logado; a área de outro usuário dá 404 (simples nas rotas JSON).
 func (a *app) daConta(json bool, h func(http.ResponseWriter, *http.Request, user)) http.HandlerFunc {
-	return a.auth(func(w http.ResponseWriter, r *http.Request, u user) {
+	return a.exigeSessao(!json, func(w http.ResponseWriter, r *http.Request, u user) {
 		switch {
 		case r.PathValue("usuario") == u.Name:
 			h(w, r, u)
@@ -126,7 +126,7 @@ func (a *app) novaMaquina(w http.ResponseWriter, r *http.Request, u user) {
 	chave, err := a.criarMaquina(u.ID, r.FormValue("nome"))
 	w.Header().Set("Cache-Control", "no-store") // a página mostra a chave, que não aparece de novo
 	status := http.StatusOK
-	if errors.Is(err, errNomeInvalido) || errors.Is(err, errMaquinaExiste) {
+	if ehFalha(err) {
 		status = http.StatusBadRequest
 	} else if err != nil {
 		serverError(w, err)
@@ -148,11 +148,7 @@ func (a *app) novaMaquina(w http.ResponseWriter, r *http.Request, u user) {
 
 // comandos monta o que a pessoa cola na máquina; a base vem da própria requisição.
 func comandos(r *http.Request, usuario, nome, chave string) *novaChave {
-	scheme := "http"
-	if isHTTPS(r) {
-		scheme = "https"
-	}
-	base := scheme + "://" + r.Host + "/" + usuario + "/_mcp"
+	base := origem(r) + "/" + usuario + "/_mcp"
 	return &novaChave{
 		Nome:   nome,
 		Chave:  chave,
@@ -204,7 +200,7 @@ func (a *app) novaConversa(w http.ResponseWriter, r *http.Request, u user) {
 		http.Redirect(w, r, "/"+u.Name+"/_mcp/c/"+nome, http.StatusSeeOther)
 		return
 	}
-	if !errors.Is(err, errNomeInvalido) && !errors.Is(err, errConversaExiste) && !errors.Is(err, errMsgVazia) && !errors.Is(err, errMsgGrande) {
+	if !ehFalha(err) {
 		serverError(w, err)
 		return
 	}

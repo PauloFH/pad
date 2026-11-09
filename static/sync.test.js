@@ -76,19 +76,17 @@ test('dois clientes e um servidor simulado convergem', () => {
   }
 });
 
-test('local e ack numeram as operações por cid', () => {
-  const c = new SyncClient(0, '', 'aba1');
-  assert.deepStrictEqual(c.local(['a']), { t: 'op', rev: 0, op: ['a'], cid: 'aba1', seq: 1 });
+test('local e ack numeram as operações', () => {
+  const c = new SyncClient(0, '');
+  assert.deepStrictEqual(c.local(['a']), { t: 'op', rev: 0, op: ['a'], seq: 1 });
   assert.strictEqual(c.local([1, 'b']), null);
-  assert.deepStrictEqual(c.ack(1), { t: 'op', rev: 1, op: [1, 'b'], cid: 'aba1', seq: 2 });
+  assert.deepStrictEqual(c.ack(1), { t: 'op', rev: 1, op: [1, 'b'], seq: 2 });
   assert.strictEqual(c.ack(2), null);
-  const outro = new SyncClient(0, '');
-  assert.ok(outro.cid && outro.cid !== new SyncClient(0, '').cid);
 });
 
 test('rebase preserva pendente após reinício', () => {
-  const c = new SyncClient(5, 'abc', 'aba1');
-  assert.deepStrictEqual(c.local([3, 'X']), { t: 'op', rev: 5, op: [3, 'X'], cid: 'aba1', seq: 1 });
+  const c = new SyncClient(5, 'abc');
+  assert.deepStrictEqual(c.local([3, 'X']), { t: 'op', rev: 5, op: [3, 'X'], seq: 1 });
   assert.strictEqual(c.local([4, 'Y']), null);
   const old = c.text;
   const { msg, op } = c.rebase(0, 'abc!', 0);
@@ -101,7 +99,7 @@ test('rebase preserva pendente após reinício', () => {
 });
 
 test('rebase não duplica inflight já aplicado', () => {
-  const c = new SyncClient(5, 'abc', 'aba1');
+  const c = new SyncClient(5, 'abc');
   c.local([3, 'X']);
   const r = c.rebase(9, 'abcX', 1);
   assert.strictEqual(c.text, 'abcX');
@@ -109,12 +107,12 @@ test('rebase não duplica inflight já aplicado', () => {
   assert.deepStrictEqual(r, { msg: null, op: null });
 
   // com buffer: só ele vai, como operação nova
-  const d = new SyncClient(5, 'abc', 'aba1');
+  const d = new SyncClient(5, 'abc');
   d.local([3, 'X']);
   d.local([4, 'Y']);
   const { msg, op } = d.rebase(9, 'abcX', 1);
   assert.strictEqual(d.text, 'abcXY');
-  assert.deepStrictEqual(msg, { t: 'op', rev: 9, op: [4, 'Y'], cid: 'aba1', seq: 2 });
+  assert.deepStrictEqual(msg, { t: 'op', rev: 9, op: [4, 'Y'], seq: 2 });
   assert.strictEqual(op, null);
 });
 
