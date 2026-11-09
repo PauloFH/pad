@@ -216,8 +216,8 @@ func TestEscreverDocumentoApagado(t *testing.T) {
 	post(t, ana, srv.URL+"/ana/notas", "text/plain", "um")
 	v, _ := versaoLida(t, ag, "/ana/notas")
 	post(t, ana, srv.URL+"/_delete/ana/notas", "application/x-www-form-urlencoded", "")
-	// o registro sumiu, então o acesso já barra antes de abrir o documento
-	ag.quer("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "dois", "versao": v}, true, "documento não encontrado ou sem acesso")
+	// o registro sumiu, então o acesso já barra antes de abrir o documento (no próprio espaço, diz que não existe)
+	ag.quer("escrever_documento", map[string]any{"caminho": "/ana/notas", "texto": "dois", "versao": v}, true, "documento não existe; para criar, use escrever_documento com versao vazia")
 	var n int
 	if a.db.QueryRow(`SELECT COUNT(*) FROM docs WHERE name = 'ana/notas'`).Scan(&n); n != 0 {
 		t.Fatal("o registro voltou")
@@ -340,7 +340,7 @@ func TestAvisoDeTextoDeTerceiros(t *testing.T) {
 	a, srv, _, login := docApp(t)
 	ana := login("ana")
 	post(t, ana, srv.URL+"/ana/notas", "text/plain", "um")
-	s := &sessao{login: "ana"}
+	s := &sessao{u: user{Name: "ana"}}
 	if got := a.avisoTerceiros(s, "ana/notas"); got != "" {
 		t.Errorf("documento próprio com aviso: %q", got)
 	}

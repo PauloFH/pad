@@ -4,7 +4,7 @@ set -eu
 
 DADOS=${PAD_DADOS:-/srv/pad}
 BACKUPS=${PAD_BACKUPS:-$HOME/pad-backups}
-MANTER=7
+MANTER=7 # igual a backupsGuardados em conta.go: a política de privacidade promete esse número
 
 compose() { docker compose -f compose.yaml -f compose.traefik.yaml "$@"; }
 

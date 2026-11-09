@@ -7,7 +7,6 @@ import (
 	"math"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -28,40 +27,12 @@ type conversaRow struct {
 }
 
 var (
-	errConversaExiste = errors.New("já existe uma conversa com esse nome")
-	errSemConversa    = errors.New("conversa não encontrada")
-	errMsgGrande      = errors.New("mensagem passa de 64 KB")
-	errMsgVazia       = errors.New("mensagem vazia")
-	errNomeInvalido   = errors.New("nome inválido (use minúsculas, números, - e _)")
+	errConversaExiste = falha("já existe uma conversa com esse nome")
+	errSemConversa    = falha("conversa não encontrada")
+	errMsgGrande      = falha("mensagem passa de " + tamanho(maxMensagem))
+	errMsgVazia       = falha("mensagem vazia")
+	errNomeInvalido   = falha("nome inválido (use minúsculas, números, - e _)")
 )
-
-// mcpState é o que o MCP mantém em memória entre chamadas.
-type mcpState struct {
-	mu       sync.Mutex
-	novidade chan struct{}      // fecha quando chega mensagem nova
-	sessoes  map[string]*sessao // por id
-	fim      chan struct{}      // fecha no desligamento do servidor, para nenhum esperar segurá-lo
-	fimOnce  sync.Once
-}
-
-func newMcpState() *mcpState {
-	return &mcpState{novidade: make(chan struct{}), sessoes: map[string]*sessao{}, fim: make(chan struct{})}
-}
-
-// sinal deve ser pego antes de consultar o banco: assim uma mensagem que chega
-// entre a consulta e a espera ainda acorda quem espera.
-func (m *mcpState) sinal() <-chan struct{} {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.novidade
-}
-
-func (m *mcpState) avisar() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	close(m.novidade)
-	m.novidade = make(chan struct{})
-}
 
 type consulta interface {
 	QueryRow(query string, args ...any) *sql.Row
@@ -160,8 +131,7 @@ func lerMensagens(q consulta, cid, depois int64, outrosDe string) ([]mensagem, e
 }
 
 // mensagensAntes devolve as n mensagens anteriores a antes (0: as mais recentes), em ordem, e se há outras mais antigas.
-// É a página do chat no navegador: uma conversa longa não chega inteira de uma vez. Ignora autor vazio, como o
-// lerMensagens que o navegador usava antes.
+// É a página do chat no navegador: uma conversa longa não chega inteira de uma vez.
 func (a *app) mensagensAntes(uid int64, conversa string, antes int64, n int) ([]mensagem, bool, error) {
 	cid, err := conversaID(a.db, uid, conversa)
 	if err != nil {
@@ -171,7 +141,7 @@ func (a *app) mensagensAntes(uid int64, conversa string, antes int64, n int) ([]
 		antes = math.MaxInt64
 	}
 	ms, err := escanear(a.db.Query(`SELECT id, autor, rotulo, humano, em, texto FROM mcp_mensagens
-		WHERE conversa_id = ? AND id < ? AND autor <> '' ORDER BY id DESC LIMIT ?`, cid, antes, n+1))
+		WHERE conversa_id = ? AND id < ? ORDER BY id DESC LIMIT ?`, cid, antes, n+1))
 	mais := len(ms) > n
 	if mais {
 		ms = ms[:n]
@@ -216,7 +186,6 @@ func (a *app) lidoPor(uid int64, conversa, login string) error {
 	return marcarLido(a.db, cid, login)
 }
 
-// marcarLido grava ate = maior id da conversa.
 func marcarLido(q consulta, cid int64, apelido string) error {
 	_, err := q.Exec(`INSERT INTO mcp_lido (conversa_id, apelido, ate)
 		VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM mcp_mensagens WHERE conversa_id = ?))

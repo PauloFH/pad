@@ -5,10 +5,14 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
 )
+
+// maxCurto é o tamanho máximo dos nomes de conversa, apelido e máquina.
+const maxCurto = 60
 
 type maquina struct {
 	ID            int64
@@ -17,8 +21,8 @@ type maquina struct {
 }
 
 var (
-	validCurto       = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,59}$`)
-	errMaquinaExiste = errors.New("já existe uma máquina com esse nome")
+	validCurto       = regexp.MustCompile(fmt.Sprintf(`^[a-z0-9][a-z0-9_-]{0,%d}$`, maxCurto-1))
+	errMaquinaExiste = falha("já existe uma máquina com esse nome")
 )
 
 // curto normaliza nomes de conversa, apelido e máquina e diz se são válidos.
@@ -84,7 +88,7 @@ func (a *app) revogarMaquina(uid, id int64) error {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
-		a.mcp.derrubar(id) // os agentes da máquina caem na hora, inclusive um esperar em curso
+		a.mcp.derrubar(func(s *sessao) bool { return s.maquinaID == id })
 	}
 	return nil
 }

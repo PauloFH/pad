@@ -12,19 +12,21 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
 )
+
+// backupsGuardados é o MANTER do deploy.sh: a política de privacidade e o apagar conta prometem esse número.
+const backupsGuardados = 7
 
 // apagarTudo atende o pedido de eliminação (LGPD, art. 18, VI): a conta, os documentos dela e, em cascata,
 // sessões, compartilhamentos, participação em grupos, convites gerados, máquinas e conversas. Ficam os grupos,
 // os documentos dos outros e o que a pessoa escreveu em /publico, que não guarda autor. Devolve quantos documentos saíram.
 func (a *app) apagarTudo(uid int64, nome string) (int, error) {
 	// o nome vira caminho no RemoveAll: uma conta "publico" de antes da regra levaria a área pública junto
-	if !validUserName(nome) {
+	if checkUserName(nome) != nil {
 		return 0, fmt.Errorf("nome de conta %q fora do formato: apague à mão", nome)
 	}
 	a.writeMu.Lock()
@@ -54,6 +56,7 @@ func (a *app) apagarTudo(uid int64, nome string) (int, error) {
 	for _, d := range docs {
 		a.hub.kill(d, "documento apagado")
 	}
+	a.mcp.derrubar(func(s *sessao) bool { return s.u.ID == uid })
 	// documento novo só nasce em /<nome>/... (view), então todos moram em docs/<nome>/. A conta já saiu: uma falha
 	// aqui não tem como ser repetida pela tela nem pelo CLI, então fica no log para a limpeza à mão.
 	pasta := filepath.Join(a.docsDir, nome)
@@ -63,21 +66,29 @@ func (a *app) apagarTudo(uid int64, nome string) (int, error) {
 	return len(docs), nil
 }
 
+// doConta é o que o apagarTudo leva; a tela e o CLI mostram antes de confirmar.
+type doConta struct{ Docs, Maquinas, Conversas int }
+
+func (a *app) contarDaConta(uid int64) (c doConta, err error) {
+	err = a.db.QueryRow(`SELECT (SELECT count(*) FROM docs WHERE owner_id = ?1),
+		(SELECT count(*) FROM mcp_maquinas WHERE user_id = ?1), (SELECT count(*) FROM mcp_conversas WHERE user_id = ?1)`,
+		uid).Scan(&c.Docs, &c.Maquinas, &c.Conversas)
+	return c, err
+}
+
 type apagarContaPage struct {
-	Me                        string
-	Docs, Maquinas, Conversas int
-	Err                       string
+	Me string
+	doConta
+	Err string
 }
 
 func (a *app) apagarContaTela(w http.ResponseWriter, status int, u user, msg string) {
-	p := apagarContaPage{Me: u.Name, Err: msg}
-	if err := a.db.QueryRow(`SELECT (SELECT count(*) FROM docs WHERE owner_id = ?1),
-		(SELECT count(*) FROM mcp_maquinas WHERE user_id = ?1), (SELECT count(*) FROM mcp_conversas WHERE user_id = ?1)`,
-		u.ID).Scan(&p.Docs, &p.Maquinas, &p.Conversas); err != nil {
+	c, err := a.contarDaConta(u.ID)
+	if err != nil {
 		serverError(w, err)
 		return
 	}
-	render(w, status, "apagar-conta", p)
+	render(w, status, "apagar-conta", apagarContaPage{u.Name, c, msg})
 }
 
 // apagarConta é a exclusão pelo próprio titular, confirmada com a senha.
@@ -86,61 +97,32 @@ func (a *app) apagarConta(w http.ResponseWriter, r *http.Request, u user) {
 		a.apagarContaTela(w, http.StatusOK, u, "")
 		return
 	}
-	// tamanho e prazo como no login: a senha passa pela mesma fila do bcrypt
-	http.NewResponseController(w).SetReadDeadline(time.Now().Add(prazoLogin))
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	ok, err := a.confereSenha(r, u, r.FormValue("pass"))
+	formularioDeSenha(w, r)
+	var hash []byte
+	if err := a.db.QueryRow(`SELECT hash FROM users WHERE id = ?`, u.ID).Scan(&hash); err != nil {
+		serverError(w, err)
+		return
+	}
+	err := a.confereSenha(r, u.Name, hash, r.FormValue("pass"))
 	switch {
 	case errors.Is(err, errTentativas):
 		a.apagarContaTela(w, http.StatusTooManyRequests, u, err.Error())
 		return
-	case err != nil:
-		serverError(w, err)
+	case errors.Is(err, errOcupado):
+		a.apagarContaTela(w, http.StatusServiceUnavailable, u, err.Error())
 		return
-	case !ok:
-		a.apagarContaTela(w, http.StatusUnauthorized, u, "senha incorreta")
+	case errors.Is(err, errSenha):
+		a.apagarContaTela(w, http.StatusUnauthorized, u, err.Error())
+		return
+	case err != nil: // a conexão caiu na fila: ninguém lê a resposta
 		return
 	}
 	if _, err := a.apagarTudo(u.ID, u.Name); err != nil {
 		serverError(w, err)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: "sid", Path: "/", MaxAge: -1})
-	render(w, http.StatusOK, "msg", msgPage{Msg: "Sua conta e seus documentos foram apagados. As cópias de segurança são trocadas a cada atualização do pad: seus dados somem delas depois das próximas 7."})
-}
-
-var errTentativas = errors.New("tentativas demais, espere alguns minutos")
-
-// confereSenha usa a fila do bcrypt e os limites do login (senhaBloqueada): a tela de apagar não vira atalho
-// para adivinhar a senha de quem deixou a sessão aberta.
-func (a *app) confereSenha(r *http.Request, u user, pass string) (bool, error) {
-	ip := clientIP(r)
-	if a.senhaBloqueada(ip, u.Name, time.Now()) {
-		return false, errTentativas
-	}
-	var hash []byte
-	if err := a.db.QueryRow(`SELECT hash FROM users WHERE id = ?`, u.ID).Scan(&hash); err != nil {
-		return false, err
-	}
-	select {
-	case a.vagasBcrypt <- struct{}{}:
-	case <-r.Context().Done():
-		return false, r.Context().Err()
-	case <-time.After(10 * time.Second):
-		return false, errors.New("servidor ocupado, tente de novo")
-	}
-	// de novo com a vaga: numa rajada, todos passam pela primeira conferência antes de o primeiro erro contar
-	if a.senhaBloqueada(ip, u.Name, time.Now()) {
-		<-a.vagasBcrypt
-		return false, errTentativas
-	}
-	errSenha := bcrypt.CompareHashAndPassword(hash, []byte(pass))
-	<-a.vagasBcrypt
-	if errSenha != nil {
-		a.senhaErrada(ip, u.Name, time.Now())
-		return false, nil
-	}
-	return true, nil
+	apagarCookieSessao(w)
+	render(w, http.StatusOK, "msg", msgPage{Msg: "Sua conta e seus documentos foram apagados. As cópias de segurança são trocadas a cada atualização do pad: seus dados somem delas depois das próximas " + strconv.Itoa(backupsGuardados) + "."})
 }
 
 // travaDados segura o pad.lock da pasta de dados. O servidor o segura enquanto roda (espera=true: um servidor novo
@@ -164,8 +146,8 @@ func travaDados(dir string, espera bool) (*os.File, error) {
 
 // apagarTudoCLI é o caminho do pedido por e-mail. O servidor no ar guarda documentos abertos na memória e não
 // veria a exclusão feita por outro processo, então aqui o pad tem de estar parado.
-func apagarTudoCLI(a *app, dataDir, nome string, stdin io.Reader) error {
-	trava, err := travaDados(dataDir, false)
+func apagarTudoCLI(a *app, nome string, stdin io.Reader) error {
+	trava, err := travaDados(a.dataDir, false)
 	if errors.Is(err, syscall.EWOULDBLOCK) {
 		return errors.New("o pad está no ar: pare o serviço (docker compose stop) e rode com docker compose run --rm")
 	}
@@ -174,18 +156,19 @@ func apagarTudoCLI(a *app, dataDir, nome string, stdin io.Reader) error {
 	}
 	defer trava.Close() // fechar solta o flock; segurá-lo até o fim impede o servidor de subir no meio
 	var uid int64
-	var docs, maquinas, conversas int
-	err = a.db.QueryRow(`SELECT id, (SELECT count(*) FROM docs WHERE owner_id = u.id),
-		(SELECT count(*) FROM mcp_maquinas WHERE user_id = u.id), (SELECT count(*) FROM mcp_conversas WHERE user_id = u.id)
-		FROM users u WHERE name = ?`, nome).Scan(&uid, &docs, &maquinas, &conversas)
+	err = a.db.QueryRow(`SELECT id FROM users WHERE name = ?`, nome).Scan(&uid)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("usuário %q não existe", nome)
 	}
 	if err != nil {
 		return err
 	}
+	c, err := a.contarDaConta(uid)
+	if err != nil {
+		return err
+	}
 	fmt.Fprintf(os.Stderr, "apaga %s com %d documentos, %d máquinas e %d conversas, sem volta.\ndigite o nome de novo para confirmar: ",
-		nome, docs, maquinas, conversas)
+		nome, c.Docs, c.Maquinas, c.Conversas)
 	linha, _ := bufio.NewReader(stdin).ReadString('\n')
 	if strings.TrimSpace(linha) != nome {
 		return errors.New("nome diferente: nada foi apagado")
@@ -194,7 +177,7 @@ func apagarTudoCLI(a *app, dataDir, nome string, stdin io.Reader) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s apagado com %d documentos. Os 7 backups em ~/pad-backups ainda têm os dados até saírem da rotação.\n", nome, n)
+	fmt.Printf("%s apagado com %d documentos. Os %d backups em ~/pad-backups ainda têm os dados até saírem da rotação.\n", nome, n, backupsGuardados)
 	return nil
 }
 
@@ -304,18 +287,13 @@ func (a *app) contaJSON(u user) (any, error) {
 		if err := rows.Scan(&d.Documento, &d.Publico, &com); err != nil {
 			return nil, err
 		}
-		if com != "" { // sem compartilhamento fica o [] do começo
+		if com != "" {
 			d.Com = strings.Split(com, "\n")
 		}
 		c.Documentos = append(c.Documentos, d)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
-	}
-	for _, l := range []*[]string{&c.Grupos, &c.CompartilhadosComigo} {
-		if *l == nil {
-			*l = []string{}
-		}
 	}
 	ms, err := a.db.Query(`SELECT nome, criada, vista FROM mcp_maquinas WHERE user_id = ? ORDER BY nome`, u.ID)
 	if err != nil {

@@ -30,6 +30,20 @@ func quando(t, agora time.Time) string {
 	return fmt.Sprintf("%d %s %d", t.Day(), meses[t.Month()-1], t.Year())
 }
 
+// tamanho escreve um limite em bytes como as mensagens mostram: 2 MB, 256 KB.
+func tamanho(b int64) string {
+	switch {
+	case b >= 1<<30 && b%(1<<30) == 0:
+		return fmt.Sprintf("%d GB", b>>30)
+	case b >= 1<<20 && b%(1<<20) == 0:
+		return fmt.Sprintf("%d MB", b>>20)
+	}
+	return fmt.Sprintf("%d KB", b>>10)
+}
+
+// segundos escreve uma espera como as mensagens mostram: 50 s.
+func segundos(d time.Duration) string { return fmt.Sprintf("%d s", int(d/time.Second)) }
+
 // maiuscula põe a inicial de um login em maiúscula, só para exibir.
 func maiuscula(s string) string { return strings.ToUpper(s[:1]) + s[1:] }
 

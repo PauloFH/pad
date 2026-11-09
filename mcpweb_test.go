@@ -320,13 +320,13 @@ func TestChatMCP(t *testing.T) {
 	if left, _ := a.mensagens(1, "login", 0); len(left) != 1 {
 		t.Fatalf("a bia mexeu na conversa da ana: %+v", left)
 	}
-	// sem login: vai para o login
+	// sem login: 401, sem redirecionar para o login (rota JSON)
 	res, err = (&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}).Get(srv.URL + "/ana/_mcp/c/login/msgs")
 	if err != nil {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if res.StatusCode != 303 && res.StatusCode != 302 {
+	if res.StatusCode != 401 {
 		t.Errorf("sem login: %d", res.StatusCode)
 	}
 
@@ -515,6 +515,10 @@ func TestEnderecoPorUsuario(t *testing.T) {
 	}
 	if st, _, _ := status(semLogin, "POST", "/ana/_mcp/maquinas"); st != 401 {
 		t.Errorf("POST sem login: %d", st)
+	}
+	// rota JSON não leva ao login: o chat.js reconhece a sessão vencida pelo 401
+	if st, _, _ := status(semLogin, "GET", "/ana/_mcp/conectados"); st != 401 {
+		t.Errorf("JSON sem login: %d", st)
 	}
 	if err := a.criarConversa(1, "tarefa", humana(user{Name: "ana"}, "oi")); err != nil {
 		t.Fatal(err)
