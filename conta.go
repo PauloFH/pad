@@ -279,7 +279,9 @@ func (a *app) contaJSON(u user) (any, error) {
 		Documentos           []compartilhamento
 		CompartilhadosComigo []string
 		Maquinas             []maquina
-	}{Usuario: u.Name, Administrador: u.Admin, ExportadoEm: quandoISO(time.Now().Unix())}
+	}{Usuario: u.Name, Administrador: u.Admin, ExportadoEm: quandoISO(time.Now().Unix()),
+		// lista vazia sai [] e não null: o arquivo é para pessoas lerem
+		Documentos: []compartilhamento{}, Maquinas: []maquina{}}
 	var err error
 	if c.Grupos, err = names(a.db, `SELECT g.name FROM groups g JOIN members m ON m.group_id = g.id WHERE m.user_id = ? ORDER BY 1`, u.ID); err != nil {
 		return nil, err
@@ -297,18 +299,23 @@ func (a *app) contaJSON(u user) (any, error) {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var d compartilhamento
+		d := compartilhamento{Com: []string{}}
 		var com string
 		if err := rows.Scan(&d.Documento, &d.Publico, &com); err != nil {
 			return nil, err
 		}
-		if com != "" {
+		if com != "" { // sem compartilhamento fica o [] do começo
 			d.Com = strings.Split(com, "\n")
 		}
 		c.Documentos = append(c.Documentos, d)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	for _, l := range []*[]string{&c.Grupos, &c.CompartilhadosComigo} {
+		if *l == nil {
+			*l = []string{}
+		}
 	}
 	ms, err := a.db.Query(`SELECT nome, criada, vista FROM mcp_maquinas WHERE user_id = ? ORDER BY nome`, u.ID)
 	if err != nil {

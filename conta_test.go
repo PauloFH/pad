@@ -269,6 +269,15 @@ func TestExportarDados(t *testing.T) {
 			t.Errorf("conversas.json sem %s:\n%s", s, arq["conversas.json"])
 		}
 	}
+	// bia não tem grupo nem máquina: as listas vazias saem [], não null
+	jar, _ := cookiejar.New(nil)
+	bia := &http.Client{Jar: jar}
+	if _, err := bia.PostForm(srv.URL+"/_login", url.Values{"name": {"bia"}, "pass": {"senha-forte"}}); err != nil {
+		t.Fatal(err)
+	}
+	if c := baixarZip(t, bia, srv)["conta.json"]; strings.Contains(c, "null") || !strings.Contains(c, `"Grupos": []`) {
+		t.Errorf("conta.json de bia com null ou sem lista vazia:\n%s", c)
+	}
 	// sem sessão, vai para o login
 	if res, err := http.Get(srv.URL + "/_conta/exportar"); err != nil || res.Request.URL.Path != "/_login" {
 		t.Errorf("exportar sem login não levou ao login: %v", err)
